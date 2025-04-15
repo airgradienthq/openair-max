@@ -60,10 +60,16 @@ void AirgradientUART::print(const char *str) {
   }
 }
 
-void AirgradientUART::write(const uint8_t *data, int len) {
+int AirgradientUART::write(const uint8_t *data, int len) {
   if (is_open && data && len > 0) {
-    uart_write_bytes(_port_num, data, len);
+    int sent = uart_write_bytes(_port_num, data, len);
+    if (sent <= 0) {
+      return 0;
+    }
+    return sent;
   }
+
+  return 0;
 }
 
 uint8_t AirgradientUART::read() {

@@ -8,6 +8,7 @@
 #ifndef AIRGRADIENT_SERIAL_H
 #define AIRGRADIENT_SERIAL_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 class AirgradientSerial {
@@ -19,7 +20,7 @@ public:
   virtual void close();
   virtual int available();
   virtual void print(const char *str);
-  virtual void write(const uint8_t *data, int len);
+  virtual int write(const uint8_t *data, int len);
   virtual uint8_t read();
 
 protected:

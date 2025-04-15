@@ -20,7 +20,7 @@ public:
   void close();
   int available();
   void print(const char *str);
-  void write(const uint8_t *data, int len);
+  int write(const uint8_t *data, int len);
   uint8_t read();
 
 private:

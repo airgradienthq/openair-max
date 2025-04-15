@@ -12,6 +12,6 @@ int AirgradientSerial::available() { return 0; }
 
 void AirgradientSerial::print(const char *str) {}
 
-void AirgradientSerial::write(const uint8_t *data, int len) {}
+int AirgradientSerial::write(const uint8_t *data, int len) { return 0; }
 
 uint8_t AirgradientSerial::read() { return 0; }
