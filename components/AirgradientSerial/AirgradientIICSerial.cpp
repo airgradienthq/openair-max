@@ -593,21 +593,20 @@ void AirgradientIICSerial::writeReg(uint8_t reg, const void *pBuf, size_t size) 
 
   const uint8_t *data = (const uint8_t *)pBuf;
 
+  // Compile transmit payload
+  uint8_t *txBuf = new uint8_t[size + 1];
+  txBuf[0] = reg;                // Register
+  memcpy(&txBuf[1], data, size); // data
+
   // Transmit reg byte first, then data in a single call
-  esp_err_t err = i2c_master_transmit(dev_handle, &reg, 1, -1); // Send register
+  esp_err_t err = i2c_master_transmit(dev_handle, txBuf, (size + 1), -1); // Send register
   if (err != ESP_OK) {
-    ESP_LOGV(TAG, "i2c transmit register failed");
+    ESP_LOGV(TAG, "writeReg() i2c transmit failed");
+    delete[] txBuf;
     return;
   }
 
-  if (size > 0) {
-    err = i2c_master_transmit(dev_handle, data, size, -1); // Send data
-    if (err != ESP_OK)
-      ESP_LOGV(TAG, "i2c transmit data failed");
-    return;
-  }
-
-  // return ESP_OK;
+  delete[] txBuf;
 }
 
 uint8_t AirgradientIICSerial::readReg(uint8_t reg, void *pBuf, size_t size) {
