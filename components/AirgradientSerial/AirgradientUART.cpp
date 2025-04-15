@@ -37,14 +37,14 @@ bool AirgradientUART::open(int port, int baud, int rx, int tx) {
   }
 
   ESP_LOGI(TAG, "Success initialize UART");
-  is_open = true;
+  isOpen = true;
   return true;
 }
 
 void AirgradientUART::close() {
-  if (is_open) {
+  if (isOpen) {
     uart_driver_delete(_port_num);
-    is_open = false;
+    isOpen = false;
   }
 }
 
@@ -55,13 +55,13 @@ int AirgradientUART::available() {
 }
 
 void AirgradientUART::print(const char *str) {
-  if (is_open && str) {
+  if (isOpen && str) {
     uart_write_bytes(_port_num, str, strlen(str));
   }
 }
 
 int AirgradientUART::write(const uint8_t *data, int len) {
-  if (is_open && data && len > 0) {
+  if (isOpen && data && len > 0) {
     int sent = uart_write_bytes(_port_num, data, len);
     if (sent <= 0) {
       return 0;
@@ -72,12 +72,15 @@ int AirgradientUART::write(const uint8_t *data, int len) {
   return 0;
 }
 
-uint8_t AirgradientUART::read() {
-  uint8_t data = 0;
-  if (is_open) {
-    int len = uart_read_bytes(_port_num, &data, 1, 10 / portTICK_PERIOD_MS);
-    if (len <= 0)
-      return 0;
+int AirgradientUART::read() {
+  if (!isOpen) {
+    return -1;
+  }
+
+  int data;
+  int len = uart_read_bytes(_port_num, &data, 1, 10 / portTICK_PERIOD_MS);
+  if (len <= 0) {
+    return -1;
   }
   return data;
 }

@@ -79,8 +79,6 @@ int AirgradientIICSerial::begin(long unsigned baud, uint8_t format, eCommunicati
                                 eLineBreakOutput_t opt) {
   esp_log_level_set("AGSerial", ESP_LOG_VERBOSE);
 
-
-
   _rx_buffer_head = _rx_buffer_tail;
   uint8_t val = 0;
   uint8_t channel = subSerialChnnlSwitch(SUBUART_CHANNEL_1);
@@ -119,9 +117,10 @@ int AirgradientIICSerial::available(void) {
       index = 256;
     }
   }
-  int result = (index + ((unsigned int)(SERIAL_RX_BUFFER_SIZE + _rx_buffer_head - _rx_buffer_tail)) %
-                      SERIAL_RX_BUFFER_SIZE);
-  return result; 
+  int result =
+      (index + ((unsigned int)(SERIAL_RX_BUFFER_SIZE + _rx_buffer_head - _rx_buffer_tail)) %
+                   SERIAL_RX_BUFFER_SIZE);
+  return result;
 }
 
 int AirgradientIICSerial::peek(void) {
@@ -145,7 +144,7 @@ int AirgradientIICSerial::peek(void) {
   return _rx_buffer[_rx_buffer_tail];
 }
 
-uint8_t AirgradientIICSerial::read(void) {
+int AirgradientIICSerial::read(void) {
   int num =
       available() - ((unsigned int)(SERIAL_RX_BUFFER_SIZE + _rx_buffer_head - _rx_buffer_tail)) %
                         SERIAL_RX_BUFFER_SIZE;

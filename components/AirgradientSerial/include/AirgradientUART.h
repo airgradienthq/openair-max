@@ -21,7 +21,7 @@ public:
   int available();
   void print(const char *str);
   int write(const uint8_t *data, int len);
-  uint8_t read();
+  int read();
 
 private:
   static constexpr int BUF_SIZE = 1024;

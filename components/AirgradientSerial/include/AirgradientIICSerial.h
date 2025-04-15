@@ -52,7 +52,7 @@ typedef uint16_t rx_buffer_index_t;
 typedef uint8_t rx_buffer_index_t;
 #endif
 
-class AirgradientIICSerial : AirgradientSerial {
+class AirgradientIICSerial : public AirgradientSerial {
 public:
 #define MAX_WK2132_ADDR 8
 /**
@@ -313,7 +313,7 @@ public:
    * @brief Read 1 byte in receive buffer, this operation will delete the data in the buffer.
    * @return Return the readings
    */
-  uint8_t read(void);
+  int read(void);
 
   /**
    * @fn read(void *pBuf, size_t size)
