@@ -41,13 +41,13 @@ bool PMS::read(Data &data) { return _loop(data); }
 bool PMS::readUntil(Data &data, uint16_t timeoutMs) {
   uint32_t start = MILLIS();
 
-  // empty buffer first
-  int bytesCleared = 0;
-  while (uint8_t bb = agSerial_->read() != -1) {
-    ESP_LOGD(TAG, "%.2x", bb);
-    bytesCleared++;
-  }
-  ESP_LOGD(TAG, "Cleared %d byte(s)", bytesCleared);
+  // // empty buffer first
+  // int bytesCleared = 0;
+  // while (uint8_t bb = agSerial_->read() != -1) {
+  //   ESP_LOGD(TAG, "%.2x", bb);
+  //   bytesCleared++;
+  // }
+  // ESP_LOGD(TAG, "Cleared %d byte(s)", bytesCleared);
 
   bool newData = false;
   do {

@@ -36,6 +36,7 @@ void reset() {
 extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Hello world");
 
+  // Enable Both PM
   gpio_reset_pin(EN_PM1);
   gpio_set_direction(EN_PM1, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_PM1, 1);
@@ -43,23 +44,17 @@ extern "C" void app_main(void) {
   gpio_set_direction(EN_PM2, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_PM2, 1);
 
+  // Enable Sunlight
+  gpio_reset_pin(EN_CO2);
+  gpio_set_direction(EN_CO2, GPIO_MODE_OUTPUT);
+  gpio_set_level(EN_CO2, 1);
+
   // watchdog
   gpio_reset_pin(IO_WDT);
   gpio_set_direction(IO_WDT, GPIO_MODE_OUTPUT);
   gpio_set_level(IO_WDT, 0);
 
-  // // Enable Sunlight
-  // gpio_reset_pin(EN_CO2);
-  // gpio_set_direction(EN_CO2, GPIO_MODE_OUTPUT);
-  // gpio_set_level(EN_CO2, 1);
-  //
-  // AirgradientSerial *agSerial = new AirgradientUART;
-  // if (!agSerial->open(0, 9600, 0, 1)) {
-  //   ESP_LOGE(TAG, "Failed open ag serial");
-  //   while (1) {
-  //     vTaskDelay(pdMS_TO_TICKS(1000));
-  //   }
-  // }
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -70,56 +65,79 @@ extern "C" void app_main(void) {
       .glitch_ignore_cnt = 7,
       // .flags.enable_internal_pullup = true,
   };
-
   bus_cfg.flags.enable_internal_pullup = true;
-
   i2c_master_bus_handle_t bus_handle;
   ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &bus_handle));
   vTaskDelay(pdMS_TO_TICKS(2000));
 
-  AirgradientSerial *agSerial = new AirgradientIICSerial(bus_handle, SUBUART_CHANNEL_1, 0, 1);
-  if (agSerial->begin(9600) != 0) {
-    ESP_LOGE(TAG, "Failed open ag serial");
+  // Sunlight sensor
+  AirgradientSerial *agsCO2 = new AirgradientUART;
+  if (!agsCO2->open(0, 9600, 0, 1)) {
+    ESP_LOGE(TAG, "Failed open serial for Sunlight");
     while (1) {
       vTaskDelay(pdMS_TO_TICKS(1000));
     }
   }
+  Sunlight co2(*agsCO2);
+  vTaskDelay(pdMS_TO_TICKS(100));
+  co2.read_sensor_id(CO2_SUNLIGHT_ADDR);
 
-  // Sunlight co2(*agSerial);
-  // vTaskDelay(pdMS_TO_TICKS(5000));
-  // co2.read_sensor_id(CO2_SUNLIGHT_ADDR);
+
+  // PMS 1
+  AirgradientSerial *agsPM1 = new AirgradientIICSerial(bus_handle, SUBUART_CHANNEL_1, 0, 1);
+  if (agsPM1->begin(9600) != 0) {
+    ESP_LOGE(TAG, "Failed open serial for PMS2");
+    while (1) {
+      vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  }
+  PMS pms1(agsPM1);
+
+  // PMS 2
+  AirgradientSerial *agsPM2 = new AirgradientIICSerial(bus_handle, SUBUART_CHANNEL_2, 0, 1);
+  if (agsPM2->begin(9600) != 0) {
+    ESP_LOGE(TAG, "Failed open serial for PMS2");
+    while (1) {
+      vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  }
+  PMS pms2(agsPM2);
 
   // vTaskDelay(pdMS_TO_TICKS(1000));
-
-  PMS pms(agSerial);
-
-  vTaskDelay(pdMS_TO_TICKS(1000));
   ESP_LOGI(TAG, "Forever loop");
   bool warmup = true;
   if (warmup) {
     for (int i = 10; i >= 0; i--) {
       ESP_LOGI(TAG, "Warming up PMS sensors %d", i);
       vTaskDelay(pdMS_TO_TICKS(1000));
-      pms.passiveMode();
+      pms1.passiveMode();
+      pms2.passiveMode();
     }
   }
 
-  // agSerial->flush();
-
   while (1) {
-    // auto measures = co2.read_sensor_measurements(CO2_SUNLIGHT_ADDR);
-    // ESP_LOGI(TAG, "CO2: %d", measures);
-    // vTaskDelay(pdMS_TO_TICKS(5000));
+    auto co2Value = co2.read_sensor_measurements(CO2_SUNLIGHT_ADDR);
+    ESP_LOGI(TAG, "CO2: %d", co2Value);
 
-    pms.requestRead();
+    pms1.requestRead();
     PMS::Data data;
-    if (pms.readUntil(data, 3000)) {
-      ESP_LOGI(TAG, "PM1.0 = %d", data.pm_ae_1_0);
-      ESP_LOGI(TAG, "PM2.5 = %d", data.pm_ae_2_5);
-      ESP_LOGI(TAG, "PM10.0 = %d", data.pm_ae_10_0);
-      ESP_LOGI(TAG, "PM 0.3 count = %d", data.pm_raw_0_3);
+    if (pms1.readUntil(data, 3000)) {
+      ESP_LOGI(TAG, "{1} PM1.0 = %d", data.pm_ae_1_0);
+      ESP_LOGI(TAG, "{1} PM2.5 = %d", data.pm_ae_2_5);
+      ESP_LOGI(TAG, "{1} PM10.0 = %d", data.pm_ae_10_0);
+      ESP_LOGI(TAG, "{1} PM 0.3 count = %d", data.pm_raw_0_3);
     } else {
-      ESP_LOGW(TAG, "No data");
+      ESP_LOGW(TAG, "{1} No data");
+    }
+
+    pms2.requestRead();
+    if (pms2.readUntil(data, 3000)) {
+      ESP_LOGI(TAG, "{2} PM1.0 = %d", data.pm_ae_1_0);
+      ESP_LOGI(TAG, "{2} PM2.5 = %d", data.pm_ae_2_5);
+      ESP_LOGI(TAG, "{2} PM10.0 = %d", data.pm_ae_10_0);
+      ESP_LOGI(TAG, "{2} PM 0.3 count = %d", data.pm_raw_0_3);
+    } else {
+      ESP_LOGW(TAG, "{2} No data");
     }
     reset();
     vTaskDelay(pdMS_TO_TICKS(5000));
