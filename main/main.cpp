@@ -13,6 +13,7 @@
 #include "driver/gpio.h"
 #include "Sunlight.h"
 #include "PMS.h"
+#include "sht4x.h"
 
 static const gpio_num_t EN_CO2 = GPIO_NUM_15;
 static const gpio_num_t EN_PM1 = GPIO_NUM_3;
@@ -82,6 +83,16 @@ extern "C" void app_main(void) {
   vTaskDelay(pdMS_TO_TICKS(100));
   co2.read_sensor_id(CO2_SUNLIGHT_ADDR);
 
+  // initialize i2c device configuration
+  sht4x_config_t sht_cfg = I2C_SHT4X_CONFIG_DEFAULT;
+  sht4x_handle_t sht_dev_hdl;
+
+  // init device
+  sht4x_init(bus_handle, &sht_cfg, &sht_dev_hdl);
+  if (sht_dev_hdl == NULL) {
+    ESP_LOGE(TAG, "sht4x handle init failed");
+    assert(sht_dev_hdl);
+  }
 
   // PMS 1
   AirgradientSerial *agsPM1 = new AirgradientIICSerial(bus_handle, SUBUART_CHANNEL_1, 0, 1);
@@ -118,6 +129,15 @@ extern "C" void app_main(void) {
   while (1) {
     auto co2Value = co2.read_sensor_measurements(CO2_SUNLIGHT_ADDR);
     ESP_LOGI(TAG, "CO2: %d", co2Value);
+
+    float temperature, humidity;
+    esp_err_t result = sht4x_get_measurement(sht_dev_hdl, &temperature, &humidity);
+    if (result != ESP_OK) {
+      ESP_LOGE(TAG, "sht4x device read failed (%s)", esp_err_to_name(result));
+    } else {
+      ESP_LOGI(TAG, "Temperature: %.2f °C", temperature);
+      ESP_LOGI(TAG, "Relative humidity: %.2f %c", humidity, '%');
+    }
 
     pms1.requestRead();
     PMS::Data data;
