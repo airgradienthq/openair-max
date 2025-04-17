@@ -1,0 +1,25 @@
+{
+  "name": "esp_sgp4x",
+  "keywords": "esp32, espressif, espidf, gas, sgp40, sgp41, i2c, sgp4x, sensirion",
+  "description": "ESP32 espressif IoT development framework (esp-idf) compatible component for Sensirion SGP40 and SGP41 I2C gas sensors.",
+  "authors": [
+    {
+      "name": "Eric Gionet",
+      "email": "gionet.c.eric@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/K0I05/ESP32-S3_ESP-IDF_COMPONENTS/tree/main/components/peripherals/i2c/esp_sgp4x"
+  },
+  "homepage": "https://github.com/K0I05/ESP32-S3_ESP-IDF_COMPONENTS",
+  "version": "1.2.6",
+  "license": "MIT",
+  "frameworks": "espidf",
+  "platforms": "espressif32",
+  "headers": "sgp4x.h",
+  "dependencies": {
+    "k0i05/esp_type_utils": ">=1.0.0"
+  }
+}

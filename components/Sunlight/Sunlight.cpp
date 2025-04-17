@@ -472,7 +472,7 @@ int16_t Sunlight::read_sensor_measurements(uint8_t target) {
     co2Value = (int16_t)values[3];
 
     /* Read error status */
-    ESP_LOGI(TAG, "Error Status: (0x%04x)", values[0]);
+    ESP_LOGD(TAG, "Error Status: (0x%04x)", values[0]);
   }
 
   return co2Value;
