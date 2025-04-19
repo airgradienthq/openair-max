@@ -19,6 +19,7 @@
 #include "sgp4x.h"
 #include "sensirion_gas_index_algorithm.h"
 #include "BQ25672.h"
+#include "StatusLed.h"
 
 static const gpio_num_t EN_CO2 = GPIO_NUM_15;
 static const gpio_num_t EN_PM1 = GPIO_NUM_3;
@@ -34,7 +35,7 @@ static const uint8_t CO2_SUNLIGHT_ADDR = 0x68;
 #define I2C_MASTER_FREQ_HZ 100000
 #define I2C_MASTER_PORT 0
 
-#define MILLIS() ((uint64_t)(esp_timer_get_time() / 1000))
+#define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 
 void reset() {
   gpio_set_level(IO_WDT, 1);
@@ -44,6 +45,10 @@ void reset() {
 
 extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Hello world");
+
+  StatusLed statusLed(GPIO_NUM_10);
+  statusLed.start();
+  statusLed.set(StatusLed::On);
 
   // Enable Both PM
   gpio_reset_pin(EN_PM1);
@@ -178,6 +183,8 @@ extern "C" void app_main(void) {
   }
   PMS pms2(agsPM2);
 
+  statusLed.set(StatusLed::Blink, 5000, 1000);
+
   // vTaskDelay(pdMS_TO_TICKS(1000));
   ESP_LOGI(TAG, "Forever loop");
   bool warmup = true;
@@ -195,7 +202,9 @@ extern "C" void app_main(void) {
   float temperature, humidity;
 
   while (1) {
-    if ((MILLIS() - readCycleTime) > 5000) {
+    if ((MILLIS() - readCycleTime) > 10000) {
+      statusLed.set(StatusLed::Blink, 0, 500);
+
       // SUNLIGHT
       auto co2Value = co2.read_sensor_measurements(CO2_SUNLIGHT_ADDR);
       ESP_LOGI(TAG, "CO2: %d", co2Value);
@@ -266,6 +275,8 @@ extern "C" void app_main(void) {
       reset();
 
       readCycleTime = MILLIS();
+
+      statusLed.set(StatusLed::Off);
     }
 
     charger.update();
@@ -283,6 +294,7 @@ extern "C" void app_main(void) {
       dev_self_tested = true;
     }
     if (dev_conditioned == false) {
+      statusLed.set(StatusLed::Blink, 0, 250);
       for (int i = 0; i < 10; i++) {
         uint16_t sraw_voc;
         // NOTE: Use sgp4x_execute_compensated_conditioning() to pass rhum and atmp
@@ -294,6 +306,7 @@ extern "C" void app_main(void) {
         }
         vTaskDelay(pdMS_TO_TICKS(1000)); // 1-second * 10 iterations = 10-seconds
       }
+      statusLed.set(StatusLed::Off);
       dev_conditioned = true;
     } else {
       uint16_t sraw_voc;
