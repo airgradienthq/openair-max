@@ -10,7 +10,7 @@
  * @https://github.com/DFRobot/AirgradientIICSerial
  */
 
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+// #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 
 #include <cstdint>
 #include <cstring>
@@ -77,7 +77,7 @@ AirgradientIICSerial::~AirgradientIICSerial() {}
 
 int AirgradientIICSerial::begin(long unsigned baud, uint8_t format, eCommunicationMode_t mode,
                                 eLineBreakOutput_t opt) {
-  esp_log_level_set("AGSerial", ESP_LOG_VERBOSE);
+  // esp_log_level_set(TAG, ESP_LOG_VERBOSE);
 
   _rx_buffer_head = _rx_buffer_tail;
   uint8_t val = 0;

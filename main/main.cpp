@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <stdio.h>
 #include <inttypes.h>
 #include <string>
@@ -17,11 +18,13 @@
 #include "sht4x.h"
 #include "sgp4x.h"
 #include "sensirion_gas_index_algorithm.h"
+#include "BQ25672.h"
 
 static const gpio_num_t EN_CO2 = GPIO_NUM_15;
 static const gpio_num_t EN_PM1 = GPIO_NUM_3;
 static const gpio_num_t EN_PM2 = GPIO_NUM_11;
 static const gpio_num_t IO_WDT = GPIO_NUM_2;
+static const gpio_num_t IO_CE_CARD = GPIO_NUM_22;
 
 static const char *const TAG = "APP";
 static const uint8_t CO2_SUNLIGHT_ADDR = 0x68;
@@ -31,7 +34,7 @@ static const uint8_t CO2_SUNLIGHT_ADDR = 0x68;
 #define I2C_MASTER_FREQ_HZ 100000
 #define I2C_MASTER_PORT 0
 
-#define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
+#define MILLIS() ((uint64_t)(esp_timer_get_time() / 1000))
 
 void reset() {
   gpio_set_level(IO_WDT, 1);
@@ -60,7 +63,24 @@ extern "C" void app_main(void) {
   gpio_set_direction(IO_WDT, GPIO_MODE_OUTPUT);
   gpio_set_level(IO_WDT, 0);
 
+  // Cellular card
+  gpio_reset_pin(IO_CE_CARD);
+  gpio_set_direction(IO_CE_CARD, GPIO_MODE_OUTPUT);
+  gpio_set_level(IO_CE_CARD, 1);
+
   vTaskDelay(pdMS_TO_TICKS(100));
+
+  // Sunlight sensor
+  AirgradientSerial *agsCO2 = new AirgradientUART;
+  if (!agsCO2->open(0, 9600, 0, 1)) {
+    ESP_LOGE(TAG, "Failed open serial for Sunlight");
+    while (1) {
+      vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  }
+  Sunlight co2(*agsCO2);
+  vTaskDelay(pdMS_TO_TICKS(100));
+  co2.read_sensor_id(CO2_SUNLIGHT_ADDR);
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -76,22 +96,9 @@ extern "C" void app_main(void) {
   ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &bus_handle));
   vTaskDelay(pdMS_TO_TICKS(2000));
 
-  // Sunlight sensor
-  AirgradientSerial *agsCO2 = new AirgradientUART;
-  if (!agsCO2->open(0, 9600, 0, 1)) {
-    ESP_LOGE(TAG, "Failed open serial for Sunlight");
-    while (1) {
-      vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-  }
-  Sunlight co2(*agsCO2);
-  vTaskDelay(pdMS_TO_TICKS(100));
-  co2.read_sensor_id(CO2_SUNLIGHT_ADDR);
-
-  // initialize i2c device configuration
+  // initialize i2c SHT configuration
   sht4x_config_t sht_cfg = I2C_SHT4X_CONFIG_DEFAULT;
   sht4x_handle_t sht_dev_hdl;
-
   // SHT40
   sht4x_init(bus_handle, &sht_cfg, &sht_dev_hdl);
   if (sht_dev_hdl == NULL) {
@@ -99,7 +106,7 @@ extern "C" void app_main(void) {
     assert(sht_dev_hdl);
   }
 
-  // initialize i2c device configuration
+  // initialize i2c SGP configuration
   sgp4x_config_t sgp_cfg = I2C_SGP41_CONFIG_DEFAULT;
   sgp4x_handle_t sgp_dev_hdl;
   bool dev_self_tested = false;
@@ -139,6 +146,17 @@ extern "C" void app_main(void) {
     ESP_LOGE(TAG, "sgp4x handle init failed");
     assert(sgp_dev_hdl);
   }
+
+  // BQ25672
+  BQ25672 charger;
+  if (charger.begin(bus_handle) != ESP_OK) {
+    ESP_LOGE(TAG, "Failed init charger");
+    while (1) {
+      vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  }
+  charger.printSystemStatus();
+  charger.printControlAndConfiguration();
 
   // PMS 1
   AirgradientSerial *agsPM1 = new AirgradientIICSerial(bus_handle, SUBUART_CHANNEL_1, 0, 1);
@@ -213,11 +231,44 @@ extern "C" void app_main(void) {
         ESP_LOGW(TAG, "{2} No data");
       }
 
+      // Serial.println("=== ADC Measurement Registers ===");
+      uint16_t resultRaw, result_uint;
+      int16_t result_int;
+      float result_float;
+      if (charger.getVBUSRaw(&resultRaw) == ESP_OK && charger.getVBUS(&result_uint) == ESP_OK) {
+        ESP_LOGI(TAG, "VBUS Raw (Hex): 0x%04X | VBUS: %d mV", resultRaw, result_uint);
+      }
+
+      // ESP_LOGI(TAG, "IBUS RaW (Hex): 0x%04C | IBUS: %d mA\n", charger.readRegister(0x31, 2),
+      //          charger.readRegister(0x31, 2));
+
+      if (charger.getVBATRaw(&resultRaw) == ESP_OK && charger.getVBAT(&result_uint) == ESP_OK) {
+        ESP_LOGI(TAG, "VBAT Raw (Hex): 0x%04X | VBAT: %d mV", resultRaw, result_uint);
+      }
+      if (charger.getIBATRaw(&resultRaw) == ESP_OK &&
+          charger.getBatteryCurrent(&result_int) == ESP_OK) {
+        ESP_LOGI(TAG, "IBAT Raw (Hex): 0x%04X | IBAT: %d mA", resultRaw, result_int);
+      }
+      if (charger.getVSYSRaw(&resultRaw) == ESP_OK && charger.getVSYS(&result_uint) == ESP_OK) {
+        ESP_LOGI(TAG, "VSYS Raw (Hex): 0x%04X | VSYS: %d mV", resultRaw, result_uint);
+      }
+      if (charger.getBatteryPercentage(&result_float) == ESP_OK) {
+        ESP_LOGI(TAG, "Battery %%: %.2f %%", result_float);
+      }
+      if (charger.getTemperatureRaw(&resultRaw) == ESP_OK &&
+          charger.getTemperature(&result_float) == ESP_OK) {
+        ESP_LOGI(TAG, "Temp Raw (Hex): 0x%04X | Temp: %.2f C", resultRaw, result_float);
+      }
+
+      charger.getChargingStatus();
+
       // Feed watchdog
       reset();
 
       readCycleTime = MILLIS();
     }
+
+    charger.update();
 
     // SGP41
     if (dev_self_tested == false) {
