@@ -36,8 +36,6 @@
 #define REG_CHARGE_STATUS 0x0C
 #define REG_INPUT_STATUS 0x0D
 
-#define DEFAULT_INVALID_VALUE 1000
-
 BQ25672::BQ25672() {}
 BQ25672::~BQ25672() {}
 
@@ -105,7 +103,6 @@ esp_err_t BQ25672::update() {
 }
 
 esp_err_t BQ25672::getVBAT(uint16_t *output) {
-  // return getVBATRaw() * 1.0;
   uint16_t result;
   ESP_RETURN_ON_ERROR(getVBATRaw(&result), TAG, "Failed get VBAT");
   *output = result * 1.0;
@@ -113,7 +110,6 @@ esp_err_t BQ25672::getVBAT(uint16_t *output) {
 }
 
 esp_err_t BQ25672::getVSYS(uint16_t *output) {
-  // return getVSYSRaw() * 1.0;
   uint16_t result;
   ESP_RETURN_ON_ERROR(getVSYSRaw(&result), TAG, "Failed get VSYS");
   *output = result * 1.0;
@@ -121,7 +117,6 @@ esp_err_t BQ25672::getVSYS(uint16_t *output) {
 }
 
 esp_err_t BQ25672::getBatteryPercentage(float *output) {
-  // uint16_t vbat_adc = readRegister(REG3B_VBAT_ADC, 2);
   uint16_t vbatAdc;
   ESP_RETURN_ON_ERROR(writeReadRegister(REG3B_VBAT_ADC, 2, &vbatAdc), TAG,
                       "Failed get battery percentage");
@@ -140,7 +135,6 @@ esp_err_t BQ25672::getBatteryPercentage(float *output) {
 }
 
 esp_err_t BQ25672::getTemperature(float *output) {
-  // return readRegister(REG3F_TEMP_ADC, 2);
   uint16_t temp;
   ESP_RETURN_ON_ERROR(writeReadRegister(REG3F_TEMP_ADC, 2, &temp), TAG, "Failed get temperature");
   *output = (float)temp;
@@ -148,7 +142,6 @@ esp_err_t BQ25672::getTemperature(float *output) {
 }
 
 esp_err_t BQ25672::getVBUS(uint16_t *output) {
-  // return getVBUSRaw() * 1.0;
   uint16_t result;
   ESP_RETURN_ON_ERROR(getVBUSRaw(&result), TAG, "Failed get VBUS");
   *output = result * 1.0;
@@ -171,9 +164,8 @@ esp_err_t BQ25672::getBatteryCurrent(int16_t *output) {
 
 BQ25672::ChargingStatus BQ25672::getChargingStatus() {
   // Read Charger Status 0
-  // uint8_t chg_stat = readRegister(REG1B_CHG_STAT, 1);
   uint16_t result;
-  if (writeReadRegister(REG3B_VBAT_ADC, 1, &result) != ESP_OK) {
+  if (writeReadRegister(REG1B_CHG_STAT, 1, &result) != ESP_OK) {
     ESP_LOGE(TAG, "Failed get charging status raw");
     return ChargingStatus::Unknown;
   }
