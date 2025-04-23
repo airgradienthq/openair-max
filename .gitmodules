@@ -1,0 +1,3 @@
+[submodule "components/AirgradientClient"]
+	path = components/AirgradientClient
+	url = git@github.com:airgradienthq/airgradient-client.git

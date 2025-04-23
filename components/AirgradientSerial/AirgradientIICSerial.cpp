@@ -178,6 +178,10 @@ int AirgradientIICSerial::read(void) {
 //   return 1;
 // }
 
+void AirgradientIICSerial::print(const char *str) {
+  write((const uint8_t *)str, strlen(str));
+}
+
 int AirgradientIICSerial::write(const uint8_t *pBuf, int size) {
   if (pBuf == NULL) {
     ESP_LOGV(TAG, "pBuf ERROR!! : null pointer");

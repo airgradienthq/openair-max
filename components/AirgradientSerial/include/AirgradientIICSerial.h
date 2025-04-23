@@ -331,6 +331,8 @@ public:
    */
   void flush(void);
 
+  void print(const char *str);
+
   /**
    * @fn write
    * @brief Write data into transmit FIFO cache

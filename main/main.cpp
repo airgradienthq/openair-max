@@ -21,11 +21,17 @@
 #include "BQ25672.h"
 #include "StatusLed.h"
 
+// #define CONFIG_EXCLUDE_INTERNAL_AG_SERIAL
+#include "AirgradientClient.h"
+
 static const gpio_num_t EN_CO2 = GPIO_NUM_15;
 static const gpio_num_t EN_PM1 = GPIO_NUM_3;
 static const gpio_num_t EN_PM2 = GPIO_NUM_11;
 static const gpio_num_t IO_WDT = GPIO_NUM_2;
-static const gpio_num_t IO_CE_CARD = GPIO_NUM_22;
+static const gpio_num_t EN_CE_CARD = GPIO_NUM_22;
+static const gpio_num_t IO_CE_POWER = GPIO_NUM_23;
+static const gpio_num_t IO_IIC_RESET = GPIO_NUM_21;
+static const gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 
 static const char *const TAG = "APP";
 static const uint8_t CO2_SUNLIGHT_ADDR = 0x68;
@@ -46,9 +52,30 @@ void reset() {
 extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Hello world");
 
-  StatusLed statusLed(GPIO_NUM_10);
+  StatusLed statusLed(IO_LED_INDICATOR);
   statusLed.start();
   statusLed.set(StatusLed::On);
+
+  AirgradientSerial agSerial = AirgradientIICSerial(bus_handle, SUBUART_CHANNEL_1, 0, 1);
+  agSerial->init(GPIO_IIC_RESET);
+  if (agSerial->open()) {
+    Serial.println("Cellular module found");
+    // Initialize cellular module and use cellular as agClient 
+    cellularCard = new CellularModuleA7672XX(agSerial, GPIO_POWER_MODULE_PIN);
+    agClient = new AirgradientCellularClient(cellularCard);
+    networkOption = UseCellular;
+  } else {
+    Serial.println("Cellular module not available, using wifi");
+    delete agSerial;
+    agSerial = nullptr;
+    // Use wifi as agClient
+    agClient = new AirgradientWifiClient;
+    networkOption = UseWifi;
+  } 
+
+  while(1) {
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
 
   // Enable Both PM
   gpio_reset_pin(EN_PM1);
