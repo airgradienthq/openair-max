@@ -17,17 +17,20 @@ public:
   virtual ~AirgradientSerial();
 
 
-  virtual int begin(long unsigned baud);
-  virtual bool open(int port, int baud, int rx, int tx);
-  virtual void close();
+  virtual bool begin(long unsigned baud);
+  virtual bool begin(int baud, int iicResetIO);
+  virtual bool begin(int port, int baud, int rx, int tx);
+  virtual void end();
   virtual int available();
   virtual void print(const char *str);
   virtual int write(const uint8_t *data, int len);
   virtual int read();
+  void setDebug(bool debug);
 
 protected:
   const char *const TAG = "AGSerial";
-  bool isOpen = false;
+  bool isInitialized = false;
+  bool isDebug = false;
 };
 
 #endif // !AIRGRADIENT_SERIAL_H

@@ -3,7 +3,12 @@
 #include "esp_log.h"
 #include <string.h>
 
-bool AirgradientUART::open(int port, int baud, int rx, int tx) {
+bool AirgradientUART::begin(int port, int baud, int rx, int tx) {
+  if (isInitialized) {
+    ESP_LOGW(TAG, "UART already initialized");
+    return true;
+  }
+
   uart_config_t uart_config = {
       .baud_rate = baud,
       .data_bits = UART_DATA_8_BITS,
@@ -37,14 +42,14 @@ bool AirgradientUART::open(int port, int baud, int rx, int tx) {
   }
 
   ESP_LOGI(TAG, "Success initialize UART");
-  isOpen = true;
+  isInitialized = true;
   return true;
 }
 
-void AirgradientUART::close() {
-  if (isOpen) {
+void AirgradientUART::end() {
+  if (isInitialized) {
     uart_driver_delete(_port_num);
-    isOpen = false;
+    isInitialized = false;
   }
 }
 
@@ -55,13 +60,21 @@ int AirgradientUART::available() {
 }
 
 void AirgradientUART::print(const char *str) {
-  if (isOpen && str) {
+  if (isDebug) {
+#ifdef ARDUINO
+    Serial.print(str);
+#else
+    printf("%s", str);
+#endif
+  }
+
+  if (isInitialized && str) {
     uart_write_bytes(_port_num, str, strlen(str));
   }
 }
 
 int AirgradientUART::write(const uint8_t *data, int len) {
-  if (isOpen && data && len > 0) {
+  if (isInitialized && data && len > 0) {
     int sent = uart_write_bytes(_port_num, data, len);
     if (sent <= 0) {
       return 0;
@@ -73,7 +86,7 @@ int AirgradientUART::write(const uint8_t *data, int len) {
 }
 
 int AirgradientUART::read() {
-  if (!isOpen) {
+  if (!isInitialized) {
     return -1;
   }
 

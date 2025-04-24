@@ -16,8 +16,8 @@ public:
   AirgradientUART() {};
   ~AirgradientUART() {};
 
-  bool open(int port_num, int baud, int rx, int tx);
-  void close();
+  bool begin(int port_num, int baud, int rx, int tx);
+  void end();
   int available();
   void print(const char *str);
   int write(const uint8_t *data, int len);
