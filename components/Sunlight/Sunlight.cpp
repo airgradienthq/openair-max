@@ -3,6 +3,8 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
+#define CO2_SUNLIGHT_ADDR 0x68
+
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 #define DBG(...)
 
@@ -341,11 +343,11 @@ uint16_t Sunlight::_generate_crc(uint8_t pdu[], int len) {
   return crc;
 }
 
-void Sunlight::read_sensor_config(uint8_t target) {
+void Sunlight::read_sensor_config() {
   /* Function variables */
   uint16_t numReg = 0x0003;
 
-  if (read_holding_registers(target, MEASUREMENT_MODE, numReg) != 0) {
+  if (read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg) != 0) {
     ESP_LOGE(TAG, "Failed to read Sensor Configurations");
     return;
   }
@@ -359,7 +361,7 @@ void Sunlight::read_sensor_config(uint8_t target) {
   ESP_LOGI(TAG, "Number of samples: %d", measSamples);
 }
 
-bool Sunlight::set_measurement_mode(uint8_t target, uint8_t mode) {
+bool Sunlight::set_measurement_mode(uint8_t mode) {
   /* Function variables */
   uint16_t numReg = 0x0001;
   uint16_t change[] = {CONTINUOUS};
@@ -368,7 +370,7 @@ bool Sunlight::set_measurement_mode(uint8_t target, uint8_t mode) {
     change[0] = SINGLE;
   }
 
-  if (read_holding_registers(target, MEASUREMENT_MODE, numReg) != 0) {
+  if (read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg) != 0) {
     ESP_LOGE(TAG, "Failed to read Measurement Mode");
     ESP_LOGE(TAG, "Failed to change Measurement Mode");
     // TODO: handle better
@@ -384,7 +386,7 @@ bool Sunlight::set_measurement_mode(uint8_t target, uint8_t mode) {
       ESP_LOGI(TAG, "Changing Measurement Mode to Single...");
     }
 
-    if (write_multiple_registers(target, MEASUREMENT_MODE, numReg, change) != 0) {
+    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg, change) != 0) {
       ESP_LOGE(TAG, "Failed to change measurement mode");
       // TODO: handle better
       /* FATAL ERROR */
@@ -397,12 +399,12 @@ bool Sunlight::set_measurement_mode(uint8_t target, uint8_t mode) {
   return false;
 }
 
-bool Sunlight::set_measurement_period(uint8_t target, uint16_t seconds) {
+bool Sunlight::set_measurement_period(uint16_t seconds) {
   /* Function variables */
   uint16_t numReg = 0x0001;
   uint16_t change[] = {seconds};
 
-  int error = read_holding_registers(target, MEASUREMENT_PERIOD, numReg);
+  int error = read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_PERIOD, numReg);
 
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read measurement period (%d)", error);
@@ -415,7 +417,7 @@ bool Sunlight::set_measurement_period(uint8_t target, uint16_t seconds) {
 
   if (values[0] != seconds) {
     ESP_LOGI(TAG, "Changing measurement period to %ds", seconds);
-    if (write_multiple_registers(target, MEASUREMENT_PERIOD, numReg, change) != 0) {
+    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_PERIOD, numReg, change) != 0) {
       ESP_LOGE(TAG, "Failed to change measurement period");
       /* FATAL ERROR */
       while (true)
@@ -427,12 +429,12 @@ bool Sunlight::set_measurement_period(uint8_t target, uint16_t seconds) {
   return false;
 }
 
-bool Sunlight::set_measurement_samples(uint8_t target, uint16_t number) {
+bool Sunlight::set_measurement_samples(uint16_t number) {
   /* Function variables */
   uint16_t numReg = 0x0001;
   uint16_t change[] = {number};
 
-  int error = read_holding_registers(target, MEASUREMENT_SAMPLES, numReg);
+  int error = read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg);
 
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read measurement samples (%d)", error);
@@ -445,7 +447,7 @@ bool Sunlight::set_measurement_samples(uint8_t target, uint16_t number) {
 
   if (values[0] != number) {
     ESP_LOGI(TAG, "Changing measurement samples to %d", number);
-    if (write_multiple_registers(target, MEASUREMENT_SAMPLES, numReg, change) != 0) {
+    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg, change) != 0) {
       ESP_LOGE(TAG, "Failed to change Measurement samples");
       /* FATAL ERROR */
       while (true)
@@ -458,14 +460,14 @@ bool Sunlight::set_measurement_samples(uint8_t target, uint16_t number) {
   return false;
 }
 
-int16_t Sunlight::read_sensor_measurements(uint8_t target) {
+int16_t Sunlight::read_sensor_measurements() {
   /* Function variables */
   int error;
   uint16_t numReg = 0x0004;
   uint16_t co2Value = 0;
 
   /* Read values */
-  if ((error = read_input_registers(target, ERROR_STATUS, numReg)) != 0) {
+  if ((error = read_input_registers(CO2_SUNLIGHT_ADDR, ERROR_STATUS, numReg)) != 0) {
     ESP_LOGE(TAG, "Failed to read input register (%d)", error);
   } else {
     /* Read CO2 concentration */
@@ -478,9 +480,9 @@ int16_t Sunlight::read_sensor_measurements(uint8_t target) {
   return co2Value;
 }
 
-void Sunlight::read_sensor_id(uint8_t target) {
+void Sunlight::read_sensor_id() {
   /* Vendor Name */
-  if (read_device_id(target, 0) != 0) {
+  if (read_device_id(CO2_SUNLIGHT_ADDR, 0) != 0) {
     ESP_LOGE(TAG, "Failed to read vendor name");
     return;
   }
@@ -488,7 +490,7 @@ void Sunlight::read_sensor_id(uint8_t target) {
   ESP_LOGI(TAG, "Vendor name: %s", device);
 
   /* ProductCode */
-  if (read_device_id(target, 1) != 0) {
+  if (read_device_id(CO2_SUNLIGHT_ADDR, 1) != 0) {
     ESP_LOGE(TAG, "Failed to read product code");
     return;
   }
@@ -496,7 +498,7 @@ void Sunlight::read_sensor_id(uint8_t target) {
   ESP_LOGI(TAG, "Product code: %s", device);
 
   /* MajorMinorRevision */
-  if (read_device_id(target, 2) != 0) {
+  if (read_device_id(CO2_SUNLIGHT_ADDR, 2) != 0) {
     ESP_LOGE(TAG, "Failed to read MajorMinorRevision");
     return;
   }
@@ -504,11 +506,11 @@ void Sunlight::read_sensor_id(uint8_t target) {
   ESP_LOGI(TAG, "MajorMinorRevision: %s", device);
 }
 
-bool Sunlight::isABCEnabled(uint8_t target) {
+bool Sunlight::isABCEnabled() {
   /* Function variables */
   uint16_t numReg = 0x0001;
 
-  int error = read_holding_registers(target, METER_CONTROL, numReg);
+  int error = read_holding_registers(CO2_SUNLIGHT_ADDR, METER_CONTROL, numReg);
 
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read meter control (%d)", error);
@@ -558,13 +560,13 @@ bool Sunlight::setMeterControlBit(uint8_t target, bool newValue, uint8_t bit) {
   return false;
 }
 
-void Sunlight::setABC(uint8_t target, bool enable) {
-  if (!this->setMeterControlBit(target, enable, 1)) {
+void Sunlight::setABC(bool enable) {
+  if (!this->setMeterControlBit(CO2_SUNLIGHT_ADDR, enable, 1)) {
     DBG("ABC value change not needed");
   }
 }
-void Sunlight::setNRDY(uint8_t target, bool enable) {
-  if (!this->setMeterControlBit(target, enable, 0)) {
+void Sunlight::setNRDY(bool enable) {
+  if (!this->setMeterControlBit(CO2_SUNLIGHT_ADDR, enable, 0)) {
     DBG("nRDY value change not needed");
   }
 }

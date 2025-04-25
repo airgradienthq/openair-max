@@ -57,62 +57,60 @@ public:
    * @brief  Reads and prints the sensor's current measurement mode,
    *         measurement period and number of samples.
    *
-   * @param  target: The sensor's communication address
    * @note   This example shows a simple way to read the sensor's
    *         measurement configurations.
    * @retval None
    */
-  void read_sensor_config(uint8_t target);
+  void read_sensor_config();
 
   /**
    * @brief  Reads and prints the sensor's current CO2 value and
    *         error status.
    *
-   * @param  target: The sensor's communication address
    * @note   This example shows a simple way to read the sensor's
    *         CO2 measurement and error status.
    * @retval co2
    */
-  int16_t read_sensor_measurements(uint8_t target);
+  int16_t read_sensor_measurements();
 
   /**
    * @brief  Reads and prints the sensor's device identification.
    *
-   * @param  target: The sensor's communication address.
    * @note   This example shows a simple way to read and print the
    *         sensor's Vendor Name, ProductCode and MajorMinorRevision.
    * @retval None
    */
-  void read_sensor_id(uint8_t target);
+  void read_sensor_id();
 
   /**
    * @brief  Changes the sensor's current measurement mode
    *
-   * @param  target: The sensor's communication address
    * @param  mode:
    * @note   This example shows a simple way to change the sensor's
    *         measurement mode. The sensor has to be manually restarted after the
    *         changes.
    * @retval true, device restart required
    */
-  bool set_measurement_mode(uint8_t target, uint8_t mode);
+  bool set_measurement_mode(uint8_t mode);
+
   /**
    * @retval true, device restart required
    */
-  bool set_measurement_period(uint8_t target, uint16_t seconds);
+  bool set_measurement_period(uint16_t seconds);
+
   /**
    * @retval true, device restart required
    */
-  bool set_measurement_samples(uint8_t target, uint16_t number);
+  bool set_measurement_samples(uint16_t number);
 
   /**
    * @retval true, ABC calibration is enabled on device
    */
-  bool isABCEnabled(uint8_t target);
+  bool isABCEnabled();
 
-  void setABC(uint8_t target, bool enable);
+  void setABC(bool enable);
 
-  void setNRDY(uint8_t target, bool enable);
+  void setNRDY(bool enable);
 
 private:
   const char *const TAG = "Sunlight";

@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <string>
+
+#include "config.h"
 #include "AirgradientSerial.h"
 #include "airgradientCellularClient.h"
 #include "cellularModuleA7672xx.h"
@@ -22,18 +24,7 @@
 #include "sensirion_gas_index_algorithm.h"
 #include "BQ25672.h"
 #include "StatusLed.h"
-
-// #define CONFIG_EXCLUDE_INTERNAL_AG_SERIAL
 #include "airgradientClient.h"
-
-static const gpio_num_t EN_CO2 = GPIO_NUM_15;
-static const gpio_num_t EN_PM1 = GPIO_NUM_3;
-static const gpio_num_t EN_PM2 = GPIO_NUM_11;
-static const gpio_num_t IO_WDT = GPIO_NUM_2;
-static const gpio_num_t EN_CE_CARD = GPIO_NUM_22;
-static const gpio_num_t IO_CE_POWER = GPIO_NUM_23;
-static const gpio_num_t IO_IIC_RESET = GPIO_NUM_21;
-static const gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 
 static const char *const TAG = "APP";
 static const uint8_t CO2_SUNLIGHT_ADDR = 0x68;
@@ -45,11 +36,10 @@ static const uint8_t CO2_SUNLIGHT_ADDR = 0x68;
 
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 
-void reset() {
-  gpio_set_level(IO_WDT, 1);
-  vTaskDelay(pdMS_TO_TICKS(20));
-  gpio_set_level(IO_WDT, 0);
-}
+// Prototype functions
+static void resetExtWatchdog();
+static void measure(AirgradientClient::MeasuresOpenAirMax data);
+static void goSleep();
 
 extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Hello world");
@@ -83,6 +73,10 @@ extern "C" void app_main(void) {
 
   vTaskDelay(pdMS_TO_TICKS(100));
 
+
+  resetExtWatchdog();
+
+
   AirgradientUART agSerial = AirgradientUART();
   if (!agSerial.begin(1, 115200, 17, 16)) {
     ESP_LOGW(TAG, "Cellular module not found");
@@ -115,7 +109,7 @@ extern "C" void app_main(void) {
   }
   Sunlight co2(*agsCO2);
   vTaskDelay(pdMS_TO_TICKS(100));
-  co2.read_sensor_id(CO2_SUNLIGHT_ADDR);
+  co2.read_sensor_id();
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -236,7 +230,7 @@ extern "C" void app_main(void) {
       statusLed.set(StatusLed::Blink, 0, 500);
 
       // SUNLIGHT
-      auto co2Value = co2.read_sensor_measurements(CO2_SUNLIGHT_ADDR);
+      auto co2Value = co2.read_sensor_measurements();
       ESP_LOGI(TAG, "CO2: %d", co2Value);
 
       // SHT40
@@ -302,7 +296,7 @@ extern "C" void app_main(void) {
       charger.getChargingStatus();
 
       // Feed watchdog
-      reset();
+      resetExtWatchdog();
 
       readCycleTime = MILLIS();
 
@@ -358,4 +352,19 @@ extern "C" void app_main(void) {
 
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
+}
+
+void resetExtWatchdog() {
+  ESP_LOGI(TAG, "Watchdog reset");
+  gpio_set_level(IO_WDT, 1);
+  vTaskDelay(pdMS_TO_TICKS(20));
+  gpio_set_level(IO_WDT, 0);
+}
+
+void measure(AirgradientClient::MeasuresOpenAirMax data) {
+
+}
+
+void goSleep() {
+  // TODO
 }
