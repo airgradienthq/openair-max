@@ -95,5 +95,15 @@ int AirgradientUART::read() {
   if (len <= 0) {
     return -1;
   }
+
+
+  if (isDebug) {
+#ifdef ARDUINO
+    Serial.print(str);
+#else
+    printf("%c", data);
+#endif
+  }
+
   return data;
 }

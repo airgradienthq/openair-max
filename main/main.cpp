@@ -3,6 +3,8 @@
 #include <inttypes.h>
 #include <string>
 #include "AirgradientSerial.h"
+#include "airgradientCellularClient.h"
+#include "cellularModuleA7672xx.h"
 #include "esp_log_level.h"
 #include "esp_timer.h"
 #include "freertos/projdefs.h"
@@ -22,7 +24,7 @@
 #include "StatusLed.h"
 
 // #define CONFIG_EXCLUDE_INTERNAL_AG_SERIAL
-// #include "AirgradientClient.h"
+#include "airgradientClient.h"
 
 static const gpio_num_t EN_CO2 = GPIO_NUM_15;
 static const gpio_num_t EN_PM1 = GPIO_NUM_3;
@@ -56,27 +58,6 @@ extern "C" void app_main(void) {
   statusLed.start();
   statusLed.set(StatusLed::On);
 
-  // AirgradientSerial agSerial = AirgradientIICSerial(bus_handle, SUBUART_CHANNEL_1, 0, 1);
-  // agSerial->init(GPIO_IIC_RESET);
-  // if (agSerial->open()) {
-  //   Serial.println("Cellular module found");
-  //   // Initialize cellular module and use cellular as agClient 
-  //   cellularCard = new CellularModuleA7672XX(agSerial, GPIO_POWER_MODULE_PIN);
-  //   agClient = new AirgradientCellularClient(cellularCard);
-  //   networkOption = UseCellular;
-  // } else {
-  //   Serial.println("Cellular module not available, using wifi");
-  //   delete agSerial;
-  //   agSerial = nullptr;
-  //   // Use wifi as agClient
-  //   agClient = new AirgradientWifiClient;
-  //   networkOption = UseWifi;
-  // } 
-  //
-  // while(1) {
-  //   vTaskDelay(pdMS_TO_TICKS(1000));
-  // }
-
   // Enable Both PM
   gpio_reset_pin(EN_PM1);
   gpio_set_direction(EN_PM1, GPIO_MODE_OUTPUT);
@@ -96,11 +77,33 @@ extern "C" void app_main(void) {
   gpio_set_level(IO_WDT, 0);
 
   // Cellular card
-  // gpio_reset_pin(IO_CE_CARD);
-  // gpio_set_direction(IO_CE_CARD, GPIO_MODE_OUTPUT);
-  // gpio_set_level(IO_CE_CARD, 1);
+  gpio_reset_pin(EN_CE_CARD);
+  gpio_set_direction(EN_CE_CARD, GPIO_MODE_OUTPUT);
+  gpio_set_level(EN_CE_CARD, 1);
 
   vTaskDelay(pdMS_TO_TICKS(100));
+
+  AirgradientUART agSerial = AirgradientUART();
+  if (!agSerial.begin(1, 115200, 17, 16)) {
+    ESP_LOGW(TAG, "Cellular module not found");
+    // Initialize cellular module and use cellular as agClient
+    while (1) {
+      vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  }
+
+  agSerial.setDebug(true);
+  CellularModuleA7672XX cellularCard = CellularModuleA7672XX(&agSerial, IO_CE_POWER);
+  AirgradientCellularClient agClient(&cellularCard);
+
+  if (!agClient.begin("fdsafs")) {
+    ESP_LOGE(TAG, "Failed init ag client");
+    while (1) {
+      vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  } else {
+    ESP_LOGI(TAG, "Success init ag client");
+  }
 
   // Sunlight sensor
   AirgradientSerial *agsCO2 = new AirgradientUART;
