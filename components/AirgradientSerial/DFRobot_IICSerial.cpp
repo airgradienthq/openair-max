@@ -602,7 +602,7 @@ void DFRobot_IICSerial::writeReg(uint8_t reg, const void *pBuf, size_t size) {
   memcpy(&txBuf[1], data, size); // data
 
   // Transmit reg byte first, then data in a single call
-  esp_err_t err = i2c_master_transmit(dev_handle, txBuf, (size + 1), -1); // Send register
+  esp_err_t err = i2c_master_transmit(dev_handle, txBuf, (size + 1), 500); // Send register
   if (err != ESP_OK) {
     ESP_LOGV(TAG, "writeReg() i2c transmit failed");
     delete[] txBuf;
@@ -628,14 +628,14 @@ uint8_t DFRobot_IICSerial::readReg(uint8_t reg, void *pBuf, size_t size) {
   // uint8_t *_pBuf = (uint8_t *)pBuf;
 
   // Step 1: Write register address
-  esp_err_t err = i2c_master_transmit(dev_handle, &reg, 1, -1);
+  esp_err_t err = i2c_master_transmit(dev_handle, &reg, 1, 500);
   if (err != ESP_OK) {
     ESP_LOGV(TAG, "Failed to send reg 0x%02X to device 0x%02X", reg, _addr);
     return 0;
   }
 
   // Step 2: Read response
-  err = i2c_master_receive(dev_handle, (uint8_t *)pBuf, size, -1);
+  err = i2c_master_receive(dev_handle, (uint8_t *)pBuf, size, 500);
   if (err != ESP_OK) {
     ESP_LOGV(TAG, "Failed to read from device 0x%02X", _addr);
     return 0;
@@ -663,14 +663,14 @@ uint8_t DFRobot_IICSerial::readFIFO(void *pBuf, size_t size) {
     num = (left > IIC_BUFFER_SIZE) ? IIC_BUFFER_SIZE : left;
 
     // Dummy write (just beginTransmission + endTransmission in Arduino)
-    esp_err_t err = i2c_master_transmit(dev_handle, NULL, 0, -1);
+    esp_err_t err = i2c_master_transmit(dev_handle, NULL, 0, 500);
     if (err != ESP_OK) {
       ESP_LOGV(TAG, "Failed to initiate FIFO read from 0x%02X", _addr);
       return 0;
     }
 
     // Read num bytes
-    err = i2c_master_receive(dev_handle, buf, num, -1);
+    err = i2c_master_receive(dev_handle, buf, num, 500);
     if (err != ESP_OK) {
       ESP_LOGV(TAG, "Failed to read FIFO data from 0x%02X", _addr);
       return 0;
@@ -701,7 +701,7 @@ void DFRobot_IICSerial::writeFIFO(void *pBuf, size_t size) {
   while (left > 0) {
     chunk = (left > IIC_BUFFER_SIZE) ? IIC_BUFFER_SIZE : left;
 
-    esp_err_t err = i2c_master_transmit(dev_handle, buf, chunk, -1);
+    esp_err_t err = i2c_master_transmit(dev_handle, buf, chunk, 500);
     if (err != ESP_OK) {
       ESP_LOGV(TAG, "FIFO write failed to 0x%02X", _addr);
       return;
