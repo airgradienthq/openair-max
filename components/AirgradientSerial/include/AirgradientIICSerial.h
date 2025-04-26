@@ -19,6 +19,7 @@ public:
                        uint8_t IA0 = 1);
   ~AirgradientIICSerial() {};
 
+  bool begin(int baud);
   bool begin(int baud, int iicResetIO);
   void end();
   int available();

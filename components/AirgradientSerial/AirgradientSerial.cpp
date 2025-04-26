@@ -4,9 +4,9 @@ AirgradientSerial::AirgradientSerial() {}
 
 AirgradientSerial::~AirgradientSerial() {}
 
-bool AirgradientSerial::begin(long unsigned baud) { return 0; }
+bool AirgradientSerial::begin(int baud) { return false; }
 
-bool AirgradientSerial::begin(int baud, int iicResetIO) { return 0; }
+bool AirgradientSerial::begin(int baud, int iicResetIO) { return false; }
 
 bool AirgradientSerial::begin(int port, int baud, int rx, int tx) { return false; }
 

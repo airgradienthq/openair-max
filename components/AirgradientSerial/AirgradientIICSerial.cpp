@@ -9,6 +9,10 @@ AirgradientIICSerial::AirgradientIICSerial(i2c_master_bus_handle_t i2c_bus_handl
                                            uint8_t subUartChannel, uint8_t IA1, uint8_t IA0)
     : _iicSerial(i2c_bus_handle, subUartChannel, IA1, IA0) {}
 
+bool AirgradientIICSerial::begin(int baud) {
+  return begin(baud, -1);
+}
+
 bool AirgradientIICSerial::begin(int baud, int iicResetIO) {
   if (isInitialized) {
     // already initialized
@@ -16,11 +20,13 @@ bool AirgradientIICSerial::begin(int baud, int iicResetIO) {
     return true;
   }
 
-  // init iic serial
-  _iicResetIO = static_cast<gpio_num_t>(iicResetIO);
-  gpio_reset_pin(_iicResetIO); // IIC-UART reset
-  gpio_set_direction(_iicResetIO, GPIO_MODE_OUTPUT);
-  gpio_set_level(_iicResetIO, 1);
+  if (iicResetIO != -1) {
+    // init iic serial
+    _iicResetIO = static_cast<gpio_num_t>(iicResetIO);
+    gpio_reset_pin(_iicResetIO); // IIC-UART reset
+    gpio_set_direction(_iicResetIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(_iicResetIO, 1);
+  }
 
   int counter = 0;
   bool opened = false;

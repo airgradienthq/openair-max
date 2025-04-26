@@ -17,7 +17,7 @@ public:
   virtual ~AirgradientSerial();
 
 
-  virtual bool begin(long unsigned baud);
+  virtual bool begin(int baud);
   virtual bool begin(int baud, int iicResetIO);
   virtual bool begin(int port, int baud, int rx, int tx);
   virtual void end();
