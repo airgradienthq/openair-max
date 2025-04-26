@@ -4,12 +4,15 @@
 #include "BQ25672.h"
 #include "freertos/FreeRTOS.h"
 
-#include "config.h"
 #include "esp_log.h"
+
+#include "config.h"
 
 Sensor::Sensor(i2c_master_bus_handle_t busHandle) : _busHandle(busHandle) {}
 
 bool Sensor::init() {
+  ESP_LOGI(TAG, "Initializing sensor...");
+
   // Sunlight sensor
   agsCO2_ = new AirgradientUART();
   if (!agsCO2_->begin(UART_PORT_SUNLIGHT, UART_BAUD_SUNLIGHT, UART_RX_SUNLIGHT, UART_TX_SUNLIGHT)) {
@@ -52,7 +55,7 @@ bool Sensor::init() {
 
   // PMS 1
   agsPM1_ = new AirgradientIICSerial(_busHandle, SUBUART_CHANNEL_1, 0, 1);
-  if (agsPM1_->begin(9600) != 0) {
+  if (agsPM1_->begin(9600) == false) {
     ESP_LOGE(TAG, "Failed open serial for PM sensor 1");
     _pms1Available = false;
   } else {
@@ -62,7 +65,7 @@ bool Sensor::init() {
 
   // PMS 2
   agsPM2_ = new AirgradientIICSerial(_busHandle, SUBUART_CHANNEL_2, 0, 1);
-  if (agsPM2_->begin(9600) != 0) {
+  if (agsPM2_->begin(9600) == false) {
     ESP_LOGE(TAG, "Failed open serial for PM sensor 2");
     _pms2Available = false;
   } else {
@@ -71,6 +74,10 @@ bool Sensor::init() {
   }
 
   _warmUpPMS();
+
+  // TODO: Maybe combine warmup of PMS and SGP in 1 loop
+
+  ESP_LOGI(TAG, "Initialize finish");
 
   return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
           _tvocNoxAvailable && _tempHumAvailable);
@@ -89,23 +96,22 @@ bool Sensor::startMeasure(int signalStrength, int iterations, int intervalMs) {
 }
 
 void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
-  bool failedMeasureExist = false;
-
-  // Set measure data to invalid for indication if read sensor failed
+  // Set measure data to invalid for indication if respective sensor failed
   data.rco2 = DEFAULT_INVALID_CO2;
   data.atmp = DEFAULT_INVALID_TEMPERATURE;
   data.rhum = DEFAULT_INVALID_HUMIDITY;
   data.pm01 = DEFAULT_INVALID_PM;
   data.pm25 = DEFAULT_INVALID_PM;
   data.pm10 = DEFAULT_INVALID_PM;
+  data.particleCount03 = DEFAULT_INVALID_PM;
   data.tvocRaw = DEFAULT_INVALID_TVOC;
   data.noxRaw = DEFAULT_INVALID_NOX;
   data.vBatt = DEFAULT_INVALID_VBATT;
   data.vPanel = DEFAULT_INVALID_VPANEL;
 
   if (_co2Available) {
-    ESP_LOGD(TAG, "CO2: %d", data.rco2);
     data.rco2 = co2_->read_sensor_measurements();
+    ESP_LOGD(TAG, "CO2: %d", data.rco2);
   }
 
   if (_tempHumAvailable) {
@@ -124,7 +130,6 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   if (_tvocNoxAvailable) {
     uint16_t tvocRaw;
     uint16_t noxRaw;
-    // TODO: Check if temp and hum is valid first
     esp_err_t result =
         sgp4x_measure_compensated_signals(sgp_dev_hdl, data.atmp, data.rhum, &tvocRaw, &noxRaw);
     if (result != ESP_OK) {
@@ -138,6 +143,9 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   }
 
   if (_pms1Available || _pms2Available) {
+    // TODO: Somehow result takes too long, close to timeout
+
+    bool pms1ReadSuccess = false;
     pms1_->requestRead();
     PMS::Data pmData1;
     if (pms1_->readUntil(pmData1, 3000)) {
@@ -145,10 +153,12 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
       ESP_LOGD(TAG, "{1} PM2.5 : %d", pmData1.pm_ae_2_5);
       ESP_LOGD(TAG, "{1} PM10.0 : %d", pmData1.pm_ae_10_0);
       ESP_LOGD(TAG, "{1} PM 0.3 count : %d", pmData1.pm_raw_0_3);
+      pms1ReadSuccess = true;
     } else {
       ESP_LOGE(TAG, "{1} PMS no data");
     }
 
+    bool pms2ReadSuccess = false;
     pms2_->requestRead();
     PMS::Data pmData2;
     if (pms2_->readUntil(pmData2, 3000)) {
@@ -156,11 +166,28 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
       ESP_LOGD(TAG, "{2} PM2.5 : %d", pmData2.pm_ae_2_5);
       ESP_LOGD(TAG, "{2} PM10.0 : %d", pmData2.pm_ae_10_0);
       ESP_LOGD(TAG, "{2} PM 0.3 count : %d", pmData2.pm_raw_0_3);
+      pms2ReadSuccess = true;
     } else {
       ESP_LOGE(TAG, "{2} PMS no data");
     }
 
-    // TODO: Average the data first for PM, check each value, use 1 sensor if only 1 available, ignore if both not avail
+    // Average if both success, if not, use only 1 or no data both if both failed
+    if (pms1ReadSuccess && pms2ReadSuccess) {
+      data.pm01 = (pmData1.pm_ae_1_0 + pmData2.pm_ae_1_0) / 2.0f;
+      data.pm25 = (pmData1.pm_ae_2_5 + pmData2.pm_ae_2_5) / 2.0f;
+      data.pm10 = (pmData1.pm_ae_10_0 + pmData2.pm_ae_10_0) / 2.0f;
+      data.particleCount03 = (pmData1.pm_raw_0_3 + pmData2.pm_raw_0_3) / 2.0f;
+    } else if (pms1ReadSuccess) {
+      data.pm01 = pmData1.pm_ae_1_0;
+      data.pm25 = pmData1.pm_ae_2_5;
+      data.pm10 = pmData1.pm_ae_10_0;
+      data.particleCount03 = pmData1.pm_raw_0_3;
+    } else if (pms2ReadSuccess) {
+      data.pm01 = pmData2.pm_ae_1_0;
+      data.pm25 = pmData2.pm_ae_2_5;
+      data.pm10 = pmData2.pm_ae_10_0;
+      data.particleCount03 = pmData2.pm_raw_0_3;
+    }
   }
 
   if (_chargerAvailable) {

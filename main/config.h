@@ -25,12 +25,21 @@ constexpr gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 #define DEFAULT_INVALID_TEMPERATURE -1000
 #define DEFAULT_INVALID_HUMIDITY -1
 #define DEFAULT_INVALID_PM -1
-#define DEFAULT_INVALID_CO2 -1 
+#define DEFAULT_INVALID_CO2 -1
 #define DEFAULT_INVALID_TVOC -1
 #define DEFAULT_INVALID_NOX -1
 #define DEFAULT_INVALID_VBATT -1
 #define DEFAULT_INVALID_VPANEL -1
 
 // TODO: check if invalid value macro
+
+#define IS_PM_VALID(val) (val >= 0)
+#define IS_TEMPERATURE_VALID(val) ((val >= -40) && (val <= 125))
+#define IS_HUMIDITY_VALID(val) ((val >= 0) && (val <= 100))
+#define IS_CO2_VALID(val) ((val >= 0) && (val <= 10000))
+#define IS_TVOC_VALID(val) (val >= 0)
+#define IS_NOX_VALID(val) (val >= 0)
+#define IS_VCHARGER_VALID(val) (val >= 0)
+
 
 #endif

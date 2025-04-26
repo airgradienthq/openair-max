@@ -35,6 +35,7 @@ static void resetExtWatchdog();
 static void goSleep();
 
 extern "C" void app_main(void) {
+
   ESP_LOGI(TAG, "MAX!");
 
   StatusLed statusLed(IO_LED_INDICATOR);
@@ -42,11 +43,13 @@ extern "C" void app_main(void) {
   statusLed.set(StatusLed::On);
 
   // Initialize and enable all IO required
-  enableIO(false);
-  vTaskDelay(pdMS_TO_TICKS(100));
+  enableIO(true);
 
   // Reset external WDT
   resetExtWatchdog();
+
+  ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
+  vTaskDelay(pdMS_TO_TICKS(2000));
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -60,7 +63,6 @@ extern "C" void app_main(void) {
   bus_cfg.flags.enable_internal_pullup = true;
   i2c_master_bus_handle_t bus_handle;
   ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &bus_handle));
-  vTaskDelay(pdMS_TO_TICKS(200));
 
   Sensor sensor(bus_handle);
   if (!sensor.init()) {
@@ -72,10 +74,10 @@ extern "C" void app_main(void) {
 
   // TODO: Print out charging status
 
-  sensor.startMeasure(0, 0, 0);
 
   while (1) {
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    sensor.startMeasure(0, 0, 0);
+    vTaskDelay(pdMS_TO_TICKS(5000));
   }
 }
 
