@@ -24,18 +24,18 @@
 #include "StatusLed.h"
 #include "Sensor.h"
 
-#define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 
 // Global Vars
 static const char *const TAG = "APP";
+
 
 // Prototype functions
 static void enableIO(bool enableCECard);
 static void resetExtWatchdog();
 static void goSleep();
 
-extern "C" void app_main(void) {
 
+extern "C" void app_main(void) {
   ESP_LOGI(TAG, "MAX!");
 
   StatusLed statusLed(IO_LED_INDICATOR);
@@ -73,11 +73,14 @@ extern "C" void app_main(void) {
 
 
   // TODO: Print out charging status
+  // charger.getChargingStatus();
 
 
   while (1) {
-    sensor.startMeasure(0, 0, 0);
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    sensor.startMeasures(20, 2000);
+    sensor.printMeasures();
+    vTaskDelay(pdMS_TO_TICKS(3 * 60000));
+    resetExtWatchdog();
   }
 }
 
@@ -116,5 +119,6 @@ void enableIO(bool enableCECard) {
 }
 
 void goSleep() {
+  resetExtWatchdog();
   // TODO
 }

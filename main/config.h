@@ -1,7 +1,9 @@
 #ifndef MAX_CONFIG_H
 #define MAX_CONFIG_H
 
-#include "driver/gpio.h"
+#include "soc/gpio_num.h"
+
+#define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 
 constexpr gpio_num_t EN_CO2 = GPIO_NUM_15;
 constexpr gpio_num_t EN_PM1 = GPIO_NUM_3;
@@ -28,8 +30,7 @@ constexpr gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 #define DEFAULT_INVALID_CO2 -1
 #define DEFAULT_INVALID_TVOC -1
 #define DEFAULT_INVALID_NOX -1
-#define DEFAULT_INVALID_VBATT -1
-#define DEFAULT_INVALID_VPANEL -1
+#define DEFAULT_INVALID_VOLT -1
 
 // TODO: check if invalid value macro
 
@@ -39,7 +40,7 @@ constexpr gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 #define IS_CO2_VALID(val) ((val >= 0) && (val <= 10000))
 #define IS_TVOC_VALID(val) (val >= 0)
 #define IS_NOX_VALID(val) (val >= 0)
-#define IS_VCHARGER_VALID(val) (val >= 0)
+#define IS_VOLT_VALID(val) (val >= 0)
 
 
 #endif

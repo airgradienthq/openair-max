@@ -16,7 +16,8 @@ public:
   Sensor(i2c_master_bus_handle_t busHandle);
   ~Sensor(){}
   bool init();
-  bool startMeasure(int signalStrength, int iterations, int intervalMs);
+  bool startMeasures(int iterations, int intervalMs);
+  void printMeasures();
 
   // TODO: Caching
   // getMeasuresCachedSize()
@@ -27,9 +28,22 @@ private:
   const char *const TAG = "Sensor";
 
   void _measure(AirgradientClient::OpenAirMaxPayload &data);
+  void _applyIteration(AirgradientClient::OpenAirMaxPayload &data);
+  void _calculateMeasuresAverage();
   void _warmUpSGP41();
   void _warmUpPMS();
 
+  int _rco2IterationOkCount = 0;
+  int _atmpIterationOkCount = 0;
+  int _rhumIterationOkCount = 0;
+  int _pm01IterationOkCount = 0;
+  int _pm25IterationOkCount = 0;
+  int _pm10IterationOkCount = 0;
+  int _pm003CountIterationOkCount = 0;
+  int _tvocIterationOkCount = 0;
+  int _noxIterationOkCount = 0;
+  int _vbatIterationOkCount = 0;
+  int _vpanelIterationOkCount = 0;
   AirgradientClient::OpenAirMaxPayload _averageMeasure;
   i2c_master_bus_handle_t _busHandle;
 
@@ -53,7 +67,6 @@ private:
 
   bool _tvocNoxAvailable = true;
   sgp4x_handle_t sgp_dev_hdl;
-
 };
 
 #endif // !AG_SENSOR_H

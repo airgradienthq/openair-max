@@ -28,12 +28,13 @@ public:
   // Update function to prevent WD_RST (Call this in loop)
   esp_err_t update();
 
-  // Read VBAT, VSYS, %Battery, Temperature, and VBUS (Raw and Converted)
+  // Read VBAT, VSYS, VBUS in mV
   esp_err_t getVBAT(uint16_t *output);
   esp_err_t getVSYS(uint16_t *output);
+  esp_err_t getVBUS(uint16_t *output);
+
   esp_err_t getBatteryPercentage(float *output);
   esp_err_t getTemperature(float *output);
-  esp_err_t getVBUS(uint16_t *output);
   esp_err_t getBatteryCurrent(int16_t *output);
 
   ChargingStatus getChargingStatus();

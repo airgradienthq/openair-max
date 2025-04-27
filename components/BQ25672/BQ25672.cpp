@@ -85,7 +85,7 @@ esp_err_t BQ25672::update() {
   uint16_t value = 0;
   writeRegister(0x15, 0xAB);
   writeReadRegister(0x15, 1, &value);
-  ESP_LOGI(TAG, "MPPT Status (0x15): 0x%.2x", value);
+  ESP_LOGD(TAG, "MPPT Status (0x15): 0x%.2x", value);
 
   // Update REG2E every PERIOD_UPDATE_REG2E_MS
   esp_err_t err = ESP_OK;
@@ -179,35 +179,35 @@ BQ25672::ChargingStatus BQ25672::getChargingStatus() {
   switch (status) {
   case 0b000:
     cs = ChargingStatus::NotCharging;
-    ESP_LOGD(TAG, "Charging status: not charging");
+    ESP_LOGI(TAG, "Charging status: not charging");
     break;
   case 0b001:
     cs = ChargingStatus::TrickleCharge;
-    ESP_LOGD(TAG, "Charging status: trickle charge");
+    ESP_LOGI(TAG, "Charging status: trickle charge");
     break;
   case 0b010:
     cs = ChargingStatus::PreCharge;
-    ESP_LOGD(TAG, "Charging status: pre-charge");
+    ESP_LOGI(TAG, "Charging status: pre-charge");
     break;
   case 0b011:
     cs = ChargingStatus::FastCharge;
-    ESP_LOGD(TAG, "Charging status: fast charge (CC Mode)");
+    ESP_LOGI(TAG, "Charging status: fast charge (CC Mode)");
     break;
   case 0b100:
     cs = ChargingStatus::TaperCharge;
-    ESP_LOGD(TAG, "Charging status: taper charge (CV Mode)");
+    ESP_LOGI(TAG, "Charging status: taper charge (CV Mode)");
     break;
   case 0b110:
     cs = ChargingStatus::TopOffTimerActiveCharging;
-    ESP_LOGD(TAG, "Charging status: Top Off Timer Active Charging");
+    ESP_LOGI(TAG, "Charging status: Top Off Timer Active Charging");
     break;
   case 0b111:
     cs = ChargingStatus::ChargeTerminationDone;
-    ESP_LOGD(TAG, "Charging status: charge termination done");
+    ESP_LOGI(TAG, "Charging status: charge termination done");
     break;
   default:
     cs = ChargingStatus::Unknown;
-    ESP_LOGD(TAG, "Charging status: unknown");
+    ESP_LOGI(TAG, "Charging status: unknown");
     break;
   }
 

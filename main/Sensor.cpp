@@ -2,8 +2,13 @@
 
 #include "AirgradientUART.h"
 #include "BQ25672.h"
+#include "esp_log_level.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/projdefs.h"
+#include <cmath>
 
+#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "esp_log.h"
 
 #include "config.h"
@@ -12,6 +17,7 @@ Sensor::Sensor(i2c_master_bus_handle_t busHandle) : _busHandle(busHandle) {}
 
 bool Sensor::init() {
   ESP_LOGI(TAG, "Initializing sensor...");
+  esp_log_level_set(TAG, ESP_LOG_DEBUG);
 
   // Sunlight sensor
   agsCO2_ = new AirgradientUART();
@@ -51,6 +57,12 @@ bool Sensor::init() {
   } else {
     charger_->printSystemStatus();
     charger_->printControlAndConfiguration();
+    charger_->update();
+
+    float out;
+    charger_->getBatteryPercentage(&out);
+    ESP_LOGI(TAG, "Battery percentage %.1f%%", out);
+    charger_->getChargingStatus();
   }
 
   // PMS 1
@@ -75,6 +87,7 @@ bool Sensor::init() {
 
   _warmUpPMS();
 
+
   // TODO: Maybe combine warmup of PMS and SGP in 1 loop
 
   ESP_LOGI(TAG, "Initialize finish");
@@ -83,16 +96,67 @@ bool Sensor::init() {
           _tvocNoxAvailable && _tempHumAvailable);
 }
 
-bool Sensor::startMeasure(int signalStrength, int iterations, int intervalMs) {
-  ESP_LOGI(TAG, "Start measure with %d iterations and interval %d", iterations, intervalMs);
-  AirgradientClient::OpenAirMaxPayload iterationData;
-  _measure(iterationData);
+bool Sensor::startMeasures(int iterations, int intervalMs) {
+  ESP_LOGI(TAG, "Start measures with %d iterations and interval in between %dms", iterations,
+           intervalMs);
 
-  // TODO: Need to call charger update in iteration, if past schedule
-  // TODO: Iteration measure
-  // TODO: Printout what to cache basically the average
+  // When starting, set all measures average values to invalid
+  //  as indication no valid data from every iterations before saving to cache
+  _averageMeasure.rco2 = DEFAULT_INVALID_CO2;
+  _averageMeasure.atmp = DEFAULT_INVALID_TEMPERATURE;
+  _averageMeasure.rhum = DEFAULT_INVALID_HUMIDITY;
+  _averageMeasure.pm01 = DEFAULT_INVALID_PM;
+  _averageMeasure.pm25 = DEFAULT_INVALID_PM;
+  _averageMeasure.pm10 = DEFAULT_INVALID_PM;
+  _averageMeasure.particleCount003 = DEFAULT_INVALID_PM;
+  _averageMeasure.tvocRaw = DEFAULT_INVALID_TVOC;
+  _averageMeasure.noxRaw = DEFAULT_INVALID_NOX;
+  _averageMeasure.vBat = DEFAULT_INVALID_VOLT;
+  _averageMeasure.vPanel = DEFAULT_INVALID_VOLT;
+
+  AirgradientClient::OpenAirMaxPayload iterationData;
+
+  for (int i = 1; i <= iterations; i++) {
+    uint32_t startIteration = MILLIS();
+
+    // Call update schedule for BQ25672
+    charger_->update();
+  
+    // Attempt measure each sensor and sum each measures iteration
+    _measure(iterationData);
+    _applyIteration(iterationData);
+
+    int timeSpendMs = MILLIS() - startIteration;
+    int toDelay = intervalMs - timeSpendMs;
+    if (toDelay < 0) {
+      toDelay = 0;
+    }
+    ESP_LOGI(TAG, "Iteration %d takes %ums to finish, next iteration in %ums", i, timeSpendMs,
+             toDelay);
+    vTaskDelay(pdMS_TO_TICKS(toDelay));
+  }
+
+  // Now calculate the average based on total sum result of each measures iteration 
+  _calculateMeasuresAverage();
+
+  // TODO: _calculateMeasuresAverage should return if there's one or more measure data is invalid
 
   return true;
+}
+
+void Sensor::printMeasures() {
+  ESP_LOGI(TAG, "<<< Average Measures >>>");
+  ESP_LOGI(TAG, "CO2 : %d", _averageMeasure.rco2);
+  ESP_LOGI(TAG, "Temperature : %.1f", _averageMeasure.atmp);
+  ESP_LOGI(TAG, "Humidity : %.1f", _averageMeasure.rhum);
+  ESP_LOGI(TAG, "PM1.0 : %.1f", _averageMeasure.pm01);
+  ESP_LOGI(TAG, "PM2.5 : %.1f", _averageMeasure.pm25);
+  ESP_LOGI(TAG, "PM10.0 : %.1f", _averageMeasure.pm10);
+  ESP_LOGI(TAG, "PM 0.3 count : %d", _averageMeasure.particleCount003);
+  ESP_LOGI(TAG, "TVOC Raw : %d", _averageMeasure.tvocRaw);
+  ESP_LOGI(TAG, "NOx Raw : %d", _averageMeasure.noxRaw);
+  ESP_LOGI(TAG, "VBAT : %.2f", _averageMeasure.vBat);
+  ESP_LOGI(TAG, "VPanel : %.2f", _averageMeasure.vPanel);
 }
 
 void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
@@ -103,11 +167,11 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   data.pm01 = DEFAULT_INVALID_PM;
   data.pm25 = DEFAULT_INVALID_PM;
   data.pm10 = DEFAULT_INVALID_PM;
-  data.particleCount03 = DEFAULT_INVALID_PM;
+  data.particleCount003 = DEFAULT_INVALID_PM;
   data.tvocRaw = DEFAULT_INVALID_TVOC;
   data.noxRaw = DEFAULT_INVALID_NOX;
-  data.vBatt = DEFAULT_INVALID_VBATT;
-  data.vPanel = DEFAULT_INVALID_VPANEL;
+  data.vBat = DEFAULT_INVALID_VOLT;
+  data.vPanel = DEFAULT_INVALID_VOLT;
 
   if (_co2Available) {
     data.rco2 = co2_->read_sensor_measurements();
@@ -146,29 +210,33 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
     // TODO: Somehow result takes too long, close to timeout
 
     bool pms1ReadSuccess = false;
-    pms1_->requestRead();
     PMS::Data pmData1;
-    if (pms1_->readUntil(pmData1, 3000)) {
-      ESP_LOGD(TAG, "{1} PM1.0 : %d", pmData1.pm_ae_1_0);
-      ESP_LOGD(TAG, "{1} PM2.5 : %d", pmData1.pm_ae_2_5);
-      ESP_LOGD(TAG, "{1} PM10.0 : %d", pmData1.pm_ae_10_0);
-      ESP_LOGD(TAG, "{1} PM 0.3 count : %d", pmData1.pm_raw_0_3);
-      pms1ReadSuccess = true;
-    } else {
-      ESP_LOGE(TAG, "{1} PMS no data");
+    if (_pms1Available) {
+      pms1_->requestRead();
+      if (pms1_->readUntil(pmData1, 1000)) {
+        ESP_LOGD(TAG, "{1} PM1.0 : %d", pmData1.pm_ae_1_0);
+        ESP_LOGD(TAG, "{1} PM2.5 : %d", pmData1.pm_ae_2_5);
+        ESP_LOGD(TAG, "{1} PM10.0 : %d", pmData1.pm_ae_10_0);
+        ESP_LOGD(TAG, "{1} PM 0.3 count : %d", pmData1.pm_raw_0_3);
+        pms1ReadSuccess = true;
+      } else {
+        ESP_LOGE(TAG, "{1} PMS no data");
+      }
     }
 
     bool pms2ReadSuccess = false;
-    pms2_->requestRead();
     PMS::Data pmData2;
-    if (pms2_->readUntil(pmData2, 3000)) {
-      ESP_LOGD(TAG, "{2} PM1.0 : %d", pmData2.pm_ae_1_0);
-      ESP_LOGD(TAG, "{2} PM2.5 : %d", pmData2.pm_ae_2_5);
-      ESP_LOGD(TAG, "{2} PM10.0 : %d", pmData2.pm_ae_10_0);
-      ESP_LOGD(TAG, "{2} PM 0.3 count : %d", pmData2.pm_raw_0_3);
-      pms2ReadSuccess = true;
-    } else {
-      ESP_LOGE(TAG, "{2} PMS no data");
+    if (_pms2Available) {
+      pms2_->requestRead();
+      if (pms2_->readUntil(pmData2, 1000)) {
+        ESP_LOGD(TAG, "{2} PM1.0 : %d", pmData2.pm_ae_1_0);
+        ESP_LOGD(TAG, "{2} PM2.5 : %d", pmData2.pm_ae_2_5);
+        ESP_LOGD(TAG, "{2} PM10.0 : %d", pmData2.pm_ae_10_0);
+        ESP_LOGD(TAG, "{2} PM 0.3 count : %d", pmData2.pm_raw_0_3);
+        pms2ReadSuccess = true;
+      } else {
+        ESP_LOGE(TAG, "{2} PMS no data");
+      }
     }
 
     // Average if both success, if not, use only 1 or no data both if both failed
@@ -176,17 +244,17 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
       data.pm01 = (pmData1.pm_ae_1_0 + pmData2.pm_ae_1_0) / 2.0f;
       data.pm25 = (pmData1.pm_ae_2_5 + pmData2.pm_ae_2_5) / 2.0f;
       data.pm10 = (pmData1.pm_ae_10_0 + pmData2.pm_ae_10_0) / 2.0f;
-      data.particleCount03 = (pmData1.pm_raw_0_3 + pmData2.pm_raw_0_3) / 2.0f;
+      data.particleCount003 = (pmData1.pm_raw_0_3 + pmData2.pm_raw_0_3) / 2.0f;
     } else if (pms1ReadSuccess) {
       data.pm01 = pmData1.pm_ae_1_0;
       data.pm25 = pmData1.pm_ae_2_5;
       data.pm10 = pmData1.pm_ae_10_0;
-      data.particleCount03 = pmData1.pm_raw_0_3;
+      data.particleCount003 = pmData1.pm_raw_0_3;
     } else if (pms2ReadSuccess) {
       data.pm01 = pmData2.pm_ae_1_0;
       data.pm25 = pmData2.pm_ae_2_5;
       data.pm10 = pmData2.pm_ae_10_0;
-      data.particleCount03 = pmData2.pm_raw_0_3;
+      data.particleCount003 = pmData2.pm_raw_0_3;
     }
   }
 
@@ -196,17 +264,118 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Charger failed get VBAT");
     } else {
-      ESP_LOGD(TAG, "VBAT: %dmv", output);
-      data.vBatt = output;
+      data.vBat = output / 1000.0; // Convert from mV to V
+      ESP_LOGD(TAG, "VBAT: %.2fV", data.vBat);
     }
 
     err = charger_->getVBUS(&output);
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Charger failed get VBUS");
     } else {
-      ESP_LOGD(TAG, "VBUS: %dmv", output);
-      data.vPanel = output;
+      data.vPanel = output / 1000.0; // Convert from mV to V
+      ESP_LOGD(TAG, "VBUS: %.2fV", data.vPanel);
     }
+  }
+}
+
+void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
+  if (IS_CO2_VALID(data.rco2)) {
+    if (_averageMeasure.rco2 == DEFAULT_INVALID_CO2) {
+      _averageMeasure.rco2 = data.rco2;
+    } else {
+      _averageMeasure.rco2 = _averageMeasure.rco2 + data.rco2;
+    }
+    _rco2IterationOkCount = _rco2IterationOkCount + 1;
+  }
+
+  if (IS_TEMPERATURE_VALID(data.atmp)) {
+    if (_averageMeasure.atmp == DEFAULT_INVALID_TEMPERATURE) {
+      _averageMeasure.atmp = data.atmp;
+    } else {
+      _averageMeasure.atmp = _averageMeasure.atmp + data.atmp;
+    }
+    _atmpIterationOkCount = _atmpIterationOkCount + 1;
+  }
+
+  if (IS_HUMIDITY_VALID(data.rhum)) {
+    if (_averageMeasure.rhum == DEFAULT_INVALID_HUMIDITY) {
+      _averageMeasure.rhum = data.rhum;
+    } else {
+      _averageMeasure.rhum = _averageMeasure.rhum + data.rhum;
+    }
+    _rhumIterationOkCount = _rhumIterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.pm01)) {
+    if (_averageMeasure.pm01 == DEFAULT_INVALID_PM) {
+      _averageMeasure.pm01 = data.pm01;
+    } else {
+      _averageMeasure.pm01 = _averageMeasure.pm01 + data.pm01;
+    }
+    _pm01IterationOkCount = _pm01IterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.pm25)) {
+    if (_averageMeasure.pm25 == DEFAULT_INVALID_PM) {
+      _averageMeasure.pm25 = data.pm25;
+    } else {
+      _averageMeasure.pm25 = _averageMeasure.pm25 + data.pm25;
+    }
+    _pm25IterationOkCount = _pm25IterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.pm10)) {
+    if (_averageMeasure.pm10 == DEFAULT_INVALID_PM) {
+      _averageMeasure.pm10 = data.pm10;
+    } else {
+      _averageMeasure.pm10 = _averageMeasure.pm10 + data.pm10;
+    }
+    _pm10IterationOkCount = _pm10IterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.particleCount003)) {
+    if (_averageMeasure.particleCount003 == DEFAULT_INVALID_PM) {
+      _averageMeasure.particleCount003 = data.particleCount003;
+    } else {
+      _averageMeasure.particleCount003 = _averageMeasure.particleCount003 + data.particleCount003;
+    }
+    _pm003CountIterationOkCount = _pm003CountIterationOkCount + 1;
+  }
+
+  if (IS_TVOC_VALID(data.tvocRaw)) {
+    if (_averageMeasure.tvocRaw == DEFAULT_INVALID_TVOC) {
+      _averageMeasure.tvocRaw = data.tvocRaw;
+    } else {
+      _averageMeasure.tvocRaw = _averageMeasure.tvocRaw + data.tvocRaw;
+    }
+    _tvocIterationOkCount = _tvocIterationOkCount + 1;
+  }
+
+  if (IS_NOX_VALID(data.noxRaw)) {
+    if (_averageMeasure.noxRaw == DEFAULT_INVALID_NOX) {
+      _averageMeasure.noxRaw = data.noxRaw;
+    } else {
+      _averageMeasure.noxRaw = _averageMeasure.noxRaw + data.noxRaw;
+    }
+    _noxIterationOkCount = _noxIterationOkCount + 1;
+  }
+
+  if (IS_VOLT_VALID(data.vBat)) {
+    if (_averageMeasure.vBat == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.vBat = data.vBat;
+    } else {
+      _averageMeasure.vBat = _averageMeasure.vBat + data.vBat;
+    }
+    _vbatIterationOkCount = _vbatIterationOkCount + 1;
+  }
+
+  if (IS_VOLT_VALID(data.vPanel)) {
+    if (_averageMeasure.vPanel == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.vPanel = data.vPanel;
+    } else {
+      _averageMeasure.vPanel = _averageMeasure.vPanel + data.vPanel;
+    }
+    _vpanelIterationOkCount = _vpanelIterationOkCount + 1;
   }
 }
 
@@ -247,5 +416,52 @@ void Sensor::_warmUpPMS() {
     if (_pms2Available) {
       pms2_->passiveMode();
     }
+  }
+}
+
+void Sensor::_calculateMeasuresAverage() {
+  if (_rco2IterationOkCount > 0) {
+    _averageMeasure.rco2 = _averageMeasure.rco2 / _rco2IterationOkCount;
+  }
+
+  if (_atmpIterationOkCount > 0) {
+    _averageMeasure.atmp = _averageMeasure.atmp / _atmpIterationOkCount;
+  }
+
+  if (_rhumIterationOkCount > 0) {
+    _averageMeasure.rhum = _averageMeasure.rhum / _rhumIterationOkCount;
+  }
+
+  if (_pm01IterationOkCount > 0) {
+    _averageMeasure.pm01 = _averageMeasure.pm01 / _pm01IterationOkCount;
+  }
+
+  if (_pm25IterationOkCount > 0) {
+    _averageMeasure.pm25 = _averageMeasure.pm25 / _pm25IterationOkCount;
+  }
+
+  if (_pm10IterationOkCount > 0) {
+    _averageMeasure.pm10 = _averageMeasure.pm10 / _pm10IterationOkCount;
+  }
+
+  if (_pm003CountIterationOkCount > 0) {
+    _averageMeasure.particleCount003 =
+        _averageMeasure.particleCount003 / _pm003CountIterationOkCount;
+  }
+
+  if (_tvocIterationOkCount > 0) {
+    _averageMeasure.tvocRaw = _averageMeasure.tvocRaw / _tvocIterationOkCount;
+  }
+
+  if (_noxIterationOkCount > 0) {
+    _averageMeasure.noxRaw = _averageMeasure.noxRaw / _noxIterationOkCount;
+  }
+
+  if (_vbatIterationOkCount > 0) {
+    _averageMeasure.vBat = _averageMeasure.vBat / _vbatIterationOkCount;
+  }
+
+  if (_vpanelIterationOkCount > 0) {
+    _averageMeasure.vPanel = _averageMeasure.vPanel / _vpanelIterationOkCount;
   }
 }
