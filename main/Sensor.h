@@ -18,11 +18,7 @@ public:
   bool init();
   bool startMeasures(int iterations, int intervalMs);
   void printMeasures();
-
-  // TODO: Caching
-  // getMeasuresCachedSize()
-  // getMeasuresCached(pointer to a memory?)
-  // Save to cache, need to add itertion interval and signal strenght to pass here
+  AirgradientClient::OpenAirMaxPayload getLastAverageMeasure();
 
 private:
   const char *const TAG = "Sensor";

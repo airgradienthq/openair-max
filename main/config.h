@@ -3,6 +3,8 @@
 
 #include "soc/gpio_num.h"
 
+#define MAX_PAYLOAD_CACHE 10
+
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 
 constexpr gpio_num_t EN_CO2 = GPIO_NUM_15;

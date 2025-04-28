@@ -87,7 +87,6 @@ bool Sensor::init() {
 
   _warmUpPMS();
 
-
   // TODO: Maybe combine warmup of PMS and SGP in 1 loop
 
   ESP_LOGI(TAG, "Initialize finish");
@@ -121,7 +120,7 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
 
     // Call update schedule for BQ25672
     charger_->update();
-  
+
     // Attempt measure each sensor and sum each measures iteration
     _measure(iterationData);
     _applyIteration(iterationData);
@@ -136,8 +135,9 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
     vTaskDelay(pdMS_TO_TICKS(toDelay));
   }
 
-  // Now calculate the average based on total sum result of each measures iteration 
+  // Now calculate the average based on total sum result of each measures iteration
   _calculateMeasuresAverage();
+  // TODO: Validate the averaging always works!
 
   // TODO: _calculateMeasuresAverage should return if there's one or more measure data is invalid
 
@@ -158,6 +158,8 @@ void Sensor::printMeasures() {
   ESP_LOGI(TAG, "VBAT : %.2f", _averageMeasure.vBat);
   ESP_LOGI(TAG, "VPanel : %.2f", _averageMeasure.vPanel);
 }
+
+AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
 
 void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   // Set measure data to invalid for indication if respective sensor failed

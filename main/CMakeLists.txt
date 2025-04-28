@@ -2,6 +2,7 @@ set(srcs
   "main.cpp"
   "StatusLed.cpp"
   "Sensor.cpp"
+  "PayloadCache.cpp"
 )
 
 idf_component_register(SRCS "${srcs}"

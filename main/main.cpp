@@ -3,13 +3,15 @@
 #include <inttypes.h>
 #include <string>
 
-#include "esp_log_level.h"
 #include "nvs_flash.h"
+#include "esp_err.h"
+#include "esp_wifi.h"
 #include "esp_timer.h"
 #include "freertos/projdefs.h"
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_sleep.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
@@ -22,9 +24,11 @@
 // #include "cellularModuleA7672xx.h"
 
 #include "config.h"
+#include "PayloadCache.h"
 #include "StatusLed.h"
 #include "Sensor.h"
 
+RTC_DATA_ATTR unsigned long wakeUpCount = 0;
 
 // Global Vars
 static const char *const TAG = "APP";
@@ -33,10 +37,16 @@ static std::string g_serialNumber;
 // Prototype functions
 static void enableIO(bool enableCECard);
 static void resetExtWatchdog();
+static void printWakeupReason();
 static void goSleep();
-
+static std::string buildSerialNumber();
 
 extern "C" void app_main(void) {
+  // Give time for logs to initialized (solving wake up cycle no logs)
+  esp_log_level_set("*", ESP_LOG_INFO);
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  ESP_LOGI(TAG, "MAX!");
+
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -45,11 +55,12 @@ extern "C" void app_main(void) {
   }
   ESP_ERROR_CHECK(ret);
 
-  ESP_LOGI(TAG, "MAX!");
   // TODO: Print firmware version
 
   g_serialNumber = buildSerialNumber();
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
+
+  printWakeupReason();
 
   StatusLed statusLed(IO_LED_INDICATOR);
   statusLed.start();
@@ -84,16 +95,55 @@ extern "C" void app_main(void) {
         "One or more sensor were failed to initialize, will not measure those on this iteration");
   }
 
+  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
 
-  // TODO: Print out charging status
-  // charger.getChargingStatus();
+  statusLed.set(StatusLed::Blink, 0, 1000);
+  if (sensor.startMeasures(20, 2000)) {
+    sensor.printMeasures();
+    auto averageMeasures = sensor.getLastAverageMeasure();
+    payloadCache.push(&averageMeasures);
+  }
 
+  // Its finish measure, prepare to sleep
+  statusLed.set(StatusLed::Blink, 0, 250);
+
+  std::vector<AirgradientClient::OpenAirMaxPayload> payloads;
+  PayloadType tmp;
+  ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
+  if (payloadCache.getSize() >= 3) {
+    for (int i = 0; i < 3; i++) {
+      payloadCache.peekAtIndex(i, &tmp);
+      payloads.push_back(tmp);
+    }
+    payloadCache.clean();
+  }
+
+  for (auto &v : payloads) {
+    ESP_LOGI(TAG, "----------------------------");
+    ESP_LOGI(TAG, "CO2 : %d", v.rco2);
+    ESP_LOGI(TAG, "Temperature : %.1f", v.atmp);
+    ESP_LOGI(TAG, "Humidity : %.1f", v.rhum);
+    ESP_LOGI(TAG, "PM1.0 : %.1f", v.pm01);
+    ESP_LOGI(TAG, "PM2.5 : %.1f", v.pm25);
+    ESP_LOGI(TAG, "PM10.0 : %.1f", v.pm10);
+    ESP_LOGI(TAG, "PM 0.3 count : %d", v.particleCount003);
+    ESP_LOGI(TAG, "TVOC Raw : %d", v.tvocRaw);
+    ESP_LOGI(TAG, "NOx Raw : %d", v.noxRaw);
+    ESP_LOGI(TAG, "VBAT : %.2f", v.vBat);
+    ESP_LOGI(TAG, "VPanel : %.2f", v.vPanel);
+  }
+
+  resetExtWatchdog();
+
+  int toSleepMs = 1 * 60000;
+  ESP_LOGI(TAG, "Sleeping");
+  esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
+  statusLed.set(StatusLed::Off);
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  esp_deep_sleep_start();
 
   while (1) {
-    sensor.startMeasures(20, 2000);
-    sensor.printMeasures();
-    vTaskDelay(pdMS_TO_TICKS(3 * 60000));
-    resetExtWatchdog();
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 
@@ -129,6 +179,34 @@ void enableIO(bool enableCECard) {
     gpio_set_direction(EN_CE_CARD, GPIO_MODE_OUTPUT);
     gpio_set_level(EN_CE_CARD, 1);
   }
+}
+
+void printWakeupReason() {
+  esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+  switch (wakeup_reason) {
+  case ESP_SLEEP_WAKEUP_EXT0:
+    ESP_LOGI(TAG, "Wakeup caused by external signal using RTC_IO");
+    break;
+  case ESP_SLEEP_WAKEUP_EXT1:
+    ESP_LOGI(TAG, "Wakeup caused by external signal using RTC_CNTL");
+    break;
+  case ESP_SLEEP_WAKEUP_TIMER:
+    ESP_LOGI(TAG, "Wakeup caused by timer");
+    break;
+  case ESP_SLEEP_WAKEUP_TOUCHPAD:
+    ESP_LOGI(TAG, "Wakeup caused by touchpad");
+    break;
+  case ESP_SLEEP_WAKEUP_ULP:
+    ESP_LOGI(TAG, "Wakeup caused by ULP program");
+    break;
+  default:
+    ESP_LOGI(TAG, "Wakeup was not caused by deep sleep: %d", wakeup_reason);
+    ESP_LOGI(TAG, "Wakeup count: %lu", wakeUpCount);
+    return;
+  }
+
+  ++wakeUpCount;
+  ESP_LOGI(TAG, "Wakeup count: %lu", wakeUpCount);
 }
 
 void goSleep() {
