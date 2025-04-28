@@ -1,5 +1,5 @@
 set(srcs 
-  "main.cpp"
+  "max.cpp"
   "StatusLed.cpp"
   "Sensor.cpp"
   "PayloadCache.cpp"
