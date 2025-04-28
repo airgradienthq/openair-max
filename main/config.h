@@ -21,6 +21,11 @@ constexpr gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 #define UART_BAUD_SUNLIGHT 9600
 #define UART_PORT_SUNLIGHT 0
 
+#define UART_RX_CE_CARD 17
+#define UART_TX_CE_CARD 16
+#define UART_BAUD_CE_CARD 115200
+#define UART_BAUD_PORT_CE_CARD 1
+
 #define I2C_MASTER_SCL_IO 6
 #define I2C_MASTER_SDA_IO 7
 #define I2C_MASTER_FREQ_HZ 100000
@@ -34,8 +39,6 @@ constexpr gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 #define DEFAULT_INVALID_NOX -1
 #define DEFAULT_INVALID_VOLT -1
 
-// TODO: check if invalid value macro
-
 #define IS_PM_VALID(val) (val >= 0)
 #define IS_TEMPERATURE_VALID(val) ((val >= -40) && (val <= 125))
 #define IS_HUMIDITY_VALID(val) ((val >= 0) && (val <= 100))
@@ -44,5 +47,7 @@ constexpr gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 #define IS_NOX_VALID(val) (val >= 0)
 #define IS_VOLT_VALID(val) (val >= 0)
 
+#define TRANSMIT_MEASUREMENTS_CYCLES 3
+#define MEASURE_CYCLE_INTERVAL_SECONDS 180
 
 #endif

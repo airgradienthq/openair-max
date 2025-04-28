@@ -16,30 +16,37 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 
-// #include "AirgradientSerial.h"
-// #include "AirgradientUART.h"
-// #include "AirgradientIICSerial.h"
-// #include "airgradientClient.h"
-// #include "airgradientCellularClient.h"
-// #include "cellularModuleA7672xx.h"
-
 #include "config.h"
 #include "PayloadCache.h"
 #include "StatusLed.h"
 #include "Sensor.h"
+#include "AirgradientSerial.h"
+#include "AirgradientUART.h"
+#include "airgradientClient.h"
+#include "cellularModule.h"
+#include "airgradientCellularClient.h"
+#include "cellularModuleA7672xx.h"
 
-RTC_DATA_ATTR unsigned long wakeUpCount = 0;
+RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
 
 // Global Vars
 static const char *const TAG = "APP";
 static std::string g_serialNumber;
+static AirgradientSerial *g_ceAgSerial = nullptr;
+static CellularModule *g_cellularCard = nullptr;
+static AirgradientClient *g_agClient = nullptr;
 
 // Prototype functions
+// TODO: Add comment docs
 static void enableIO(bool enableCECard);
 static void resetExtWatchdog();
 static void printWakeupReason();
 static void goSleep();
 static std::string buildSerialNumber();
+static bool initializeCellularNetwork();
+
+// Return false if failed init network or failed send
+static bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 
 extern "C" void app_main(void) {
   // Give time for logs to initialized (solving wake up cycle no logs)
@@ -67,7 +74,7 @@ extern "C" void app_main(void) {
   statusLed.set(StatusLed::On);
 
   // Initialize and enable all IO required
-  enableIO(true);
+  enableIO(false);
 
   // Reset external WDT
   resetExtWatchdog();
@@ -95,9 +102,9 @@ extern "C" void app_main(void) {
         "One or more sensor were failed to initialize, will not measure those on this iteration");
   }
 
+  // TODO: Describe this paragraph
   PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
-
-  statusLed.set(StatusLed::Blink, 0, 1000);
+  statusLed.set(StatusLed::Blink, 4000, 1000);
   if (sensor.startMeasures(20, 2000)) {
     sensor.printMeasures();
     auto averageMeasures = sensor.getLastAverageMeasure();
@@ -105,43 +112,31 @@ extern "C" void app_main(void) {
   }
 
   // Its finish measure, prepare to sleep
-  statusLed.set(StatusLed::Blink, 0, 250);
+  statusLed.set(StatusLed::Blink, 1000, 100);
 
-  std::vector<AirgradientClient::OpenAirMaxPayload> payloads;
-  PayloadType tmp;
-  ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
-  if (payloadCache.getSize() >= 3) {
-    for (int i = 0; i < 3; i++) {
-      payloadCache.peekAtIndex(i, &tmp);
-      payloads.push_back(tmp);
-    }
-    payloadCache.clean();
-  }
+  // Optimization: copy from rtc memory so will not always call from LP memory
+  int wakeUpCounter = xWakeUpCounter;
 
-  for (auto &v : payloads) {
-    ESP_LOGI(TAG, "----------------------------");
-    ESP_LOGI(TAG, "CO2 : %d", v.rco2);
-    ESP_LOGI(TAG, "Temperature : %.1f", v.atmp);
-    ESP_LOGI(TAG, "Humidity : %.1f", v.rhum);
-    ESP_LOGI(TAG, "PM1.0 : %.1f", v.pm01);
-    ESP_LOGI(TAG, "PM2.5 : %.1f", v.pm25);
-    ESP_LOGI(TAG, "PM10.0 : %.1f", v.pm10);
-    ESP_LOGI(TAG, "PM 0.3 count : %d", v.particleCount003);
-    ESP_LOGI(TAG, "TVOC Raw : %d", v.tvocRaw);
-    ESP_LOGI(TAG, "NOx Raw : %d", v.noxRaw);
-    ESP_LOGI(TAG, "VBAT : %.2f", v.vBat);
-    ESP_LOGI(TAG, "VPanel : %.2f", v.vPanel);
-  }
+  statusLed.set(StatusLed::Blink, 3000, 100);
+  sendMeasuresWhenReady(wakeUpCounter, payloadCache);
+  // NOTE: Other transmission (ota, config)
 
+  // NOTE: Don't de-initialize ce client if its already initialize
+
+  // Reset external watchdog before sleep to make sure its not trigger while in sleep
+  //   before system wakeup
   resetExtWatchdog();
 
-  int toSleepMs = 1 * 60000;
+  // TODO: Turn off everything
+
+  int toSleepMs = MEASURE_CYCLE_INTERVAL_SECONDS * 1000;
   ESP_LOGI(TAG, "Sleeping");
   esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
   statusLed.set(StatusLed::Off);
   vTaskDelay(pdMS_TO_TICKS(1000));
   esp_deep_sleep_start();
 
+  // NOTE: Will never go here onwards
   while (1) {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
@@ -201,12 +196,12 @@ void printWakeupReason() {
     break;
   default:
     ESP_LOGI(TAG, "Wakeup was not caused by deep sleep: %d", wakeup_reason);
-    ESP_LOGI(TAG, "Wakeup count: %lu", wakeUpCount);
+    ESP_LOGI(TAG, "Wakeup counter: %lu", xWakeUpCounter);
     return;
   }
 
-  ++wakeUpCount;
-  ESP_LOGI(TAG, "Wakeup count: %lu", wakeUpCount);
+  ++xWakeUpCounter;
+  ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
 }
 
 void goSleep() {
@@ -236,4 +231,73 @@ std::string buildSerialNumber() {
   esp_wifi_deinit();
 
   return sn;
+}
+
+bool initializeCellularNetwork() {
+  if (g_ceAgSerial != nullptr || g_cellularCard != nullptr || g_agClient != nullptr) {
+    ESP_LOGW(
+        TAG,
+        "Give up cellular initialization on this wakeup cycle since previous attempt is failed");
+    return false;
+  }
+
+  // Enable CE card power
+  enableIO(true);
+
+  g_ceAgSerial = new AirgradientUART();
+  if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD, UART_RX_CE_CARD,
+                           UART_TX_CE_CARD)) {
+    ESP_LOGI(TAG, "Failed initialize serial communication for cellular card");
+    return false;
+  }
+
+  // Enable debugging when CE card initializing
+  g_ceAgSerial->setDebug(true);
+
+  // Initialize cellular card and client
+  g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
+  g_agClient = new AirgradientCellularClient(g_cellularCard);
+  if (!g_agClient->begin(g_serialNumber)) {
+    ESP_LOGE(TAG, "Failed initialize airgradient client");
+    return false;
+  }
+
+  // Disable again
+  g_ceAgSerial->setDebug(false);
+
+  return true;
+}
+
+bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
+  // Check if pass criteria to post measures
+  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
+    ESP_LOGI(TAG, "Data not ready to send");
+    return true;
+  }
+
+  if (!initializeCellularNetwork()) {
+    ESP_LOGI(TAG, "Cannot connect to cellular network skip send measures");
+    return false;
+  }
+
+  // Retrieve measurements from the cache
+  std::vector<AirgradientClient::OpenAirMaxPayload> payloads;
+  PayloadType tmp;
+  ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
+  for (int i = 0; i < payloadCache.getSize(); i++) {
+    payloadCache.peekAtIndex(i, &tmp);
+    payloads.push_back(tmp);
+  }
+
+  // Attempt to send
+  bool success = g_agClient->httpPostMeasures(MEASURE_CYCLE_INTERVAL_SECONDS, payloads);
+  if (!success) {
+    // Consider network has a problem, retry in next schedule
+    ESP_LOGE(TAG, "send measures failed, retry in next schedule");
+    return false;
+  }
+
+  payloadCache.clean();
+
+  return true;
 }
