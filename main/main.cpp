@@ -4,6 +4,7 @@
 #include <string>
 
 #include "esp_log_level.h"
+#include "nvs_flash.h"
 #include "esp_timer.h"
 #include "freertos/projdefs.h"
 #include "sdkconfig.h"
@@ -27,7 +28,7 @@
 
 // Global Vars
 static const char *const TAG = "APP";
-
+static std::string g_serialNumber;
 
 // Prototype functions
 static void enableIO(bool enableCECard);
@@ -36,7 +37,19 @@ static void goSleep();
 
 
 extern "C" void app_main(void) {
+  // Initialize NVS
+  esp_err_t ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_ERROR_CHECK(nvs_flash_erase());
+    ret = nvs_flash_init();
+  }
+  ESP_ERROR_CHECK(ret);
+
   ESP_LOGI(TAG, "MAX!");
+  // TODO: Print firmware version
+
+  g_serialNumber = buildSerialNumber();
+  ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
 
   StatusLed statusLed(IO_LED_INDICATOR);
   statusLed.start();
@@ -121,4 +134,28 @@ void enableIO(bool enableCECard) {
 void goSleep() {
   resetExtWatchdog();
   // TODO
+}
+
+std::string buildSerialNumber() {
+  // Initialize Wi-Fi driver
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+  uint8_t mac_address[6];
+  esp_err_t err = esp_wifi_get_mac(WIFI_IF_STA, mac_address); // Get MAC address of Wi-Fi interface
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed build serial number, get wifi mac addr failed (%s)",
+             esp_err_to_name(err));
+    return {};
+  }
+
+  char result[13] = {0};
+  snprintf(result, sizeof(result), "%02x%02x%02x%02x%02x%02x", mac_address[0], mac_address[1],
+           mac_address[2], mac_address[3], mac_address[4], mac_address[5]);
+  std::string sn = std::string(result);
+
+  // Deinitialize Wi-Fi after use
+  esp_wifi_deinit();
+
+  return sn;
 }
