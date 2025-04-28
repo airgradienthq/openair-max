@@ -38,7 +38,8 @@ static AirgradientClient *g_agClient = nullptr;
 
 // Prototype functions
 // TODO: Add comment docs
-static void enableIO(bool enableCECard);
+static void enableIO();
+static void disableIO();
 static void resetExtWatchdog();
 static void printWakeupReason();
 static void goSleep();
@@ -74,7 +75,7 @@ extern "C" void app_main(void) {
   statusLed.set(StatusLed::On);
 
   // Initialize and enable all IO required
-  enableIO(false);
+  enableIO();
 
   // Reset external WDT
   resetExtWatchdog();
@@ -111,30 +112,24 @@ extern "C" void app_main(void) {
     payloadCache.push(&averageMeasures);
   }
 
-  // Its finish measure, prepare to sleep
-  statusLed.set(StatusLed::Blink, 1000, 100);
-
   // Optimization: copy from rtc memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
-  statusLed.set(StatusLed::Blink, 3000, 100);
+  statusLed.set(StatusLed::Blink, 2000, 100);
+  // NOTE: Don't de-initialize/poweroff ce client if its already initialize so other transmission can use it if needed
   sendMeasuresWhenReady(wakeUpCounter, payloadCache);
   // NOTE: Other transmission (ota, config)
 
-  // NOTE: Don't de-initialize ce client if its already initialize
+  if (g_cellularCard != nullptr) {
+    g_cellularCard->powerOff();
+  }
 
-  // Reset external watchdog before sleep to make sure its not trigger while in sleep
-  //   before system wakeup
-  resetExtWatchdog();
-
-  // TODO: Turn off everything
-
-  int toSleepMs = MEASURE_CYCLE_INTERVAL_SECONDS * 1000;
-  ESP_LOGI(TAG, "Sleeping");
-  esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
+  // Disable un-needed peripherals
+  // TODO: Is there any periphrals that level needs to be kept when sleep?
+  disableIO();
   statusLed.set(StatusLed::Off);
-  vTaskDelay(pdMS_TO_TICKS(1000));
-  esp_deep_sleep_start();
+
+  goSleep();
 
   // NOTE: Will never go here onwards
   while (1) {
@@ -149,7 +144,7 @@ void resetExtWatchdog() {
   gpio_set_level(IO_WDT, 0);
 }
 
-void enableIO(bool enableCECard) {
+void enableIO() {
   // watchdog
   gpio_reset_pin(IO_WDT);
   gpio_set_direction(IO_WDT, GPIO_MODE_OUTPUT);
@@ -168,12 +163,17 @@ void enableIO(bool enableCECard) {
   gpio_set_direction(EN_CO2, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_CO2, 1);
 
-  // Cellular card
-  if (enableCECard) {
-    gpio_reset_pin(EN_CE_CARD);
-    gpio_set_direction(EN_CE_CARD, GPIO_MODE_OUTPUT);
-    gpio_set_level(EN_CE_CARD, 1);
-  }
+  // init CE card IO power but set it off until it needed
+  gpio_reset_pin(EN_CE_CARD);
+  gpio_set_direction(EN_CE_CARD, GPIO_MODE_OUTPUT);
+  gpio_set_level(EN_CE_CARD, 0);
+}
+
+void disableIO() {
+  // Only necessary peripherals that needs to be turned off
+  gpio_set_level(EN_PM1, 0);
+  gpio_set_level(EN_PM2, 0);
+  gpio_set_level(EN_CE_CARD, 0);
 }
 
 void printWakeupReason() {
@@ -205,8 +205,16 @@ void printWakeupReason() {
 }
 
 void goSleep() {
+  // Reset external watchdog before sleep to make sure its not trigger while in sleep
+  //   before system wakeup
   resetExtWatchdog();
-  // TODO
+
+  // Calculate how long to sleep
+  int toSleepMs = MEASURE_CYCLE_INTERVAL_SECONDS * 1000;
+  ESP_LOGI(TAG, "Sleeping");
+  esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  esp_deep_sleep_start();
 }
 
 std::string buildSerialNumber() {
@@ -242,7 +250,8 @@ bool initializeCellularNetwork() {
   }
 
   // Enable CE card power
-  enableIO(true);
+  gpio_set_level(EN_CE_CARD, 1);
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   g_ceAgSerial = new AirgradientUART();
   if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD, UART_RX_CE_CARD,
@@ -281,6 +290,7 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   }
 
   // Retrieve measurements from the cache
+  // TODO: push back signal same value to each payload
   std::vector<AirgradientClient::OpenAirMaxPayload> payloads;
   PayloadType tmp;
   ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
