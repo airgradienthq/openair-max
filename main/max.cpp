@@ -42,7 +42,6 @@ static void enableIO();
 static void disableIO();
 static void resetExtWatchdog();
 static void printWakeupReason();
-static void goSleep();
 static std::string buildSerialNumber();
 static bool initializeCellularNetwork();
 
@@ -53,6 +52,8 @@ extern "C" void app_main(void) {
   // Give time for logs to initialized (solving wake up cycle no logs)
   esp_log_level_set("*", ESP_LOG_INFO);
   vTaskDelay(pdMS_TO_TICKS(1000));
+
+  uint32_t wakeUpMillis = MILLIS() - 1000;
   ESP_LOGI(TAG, "MAX!");
 
   // Initialize NVS
@@ -129,9 +130,24 @@ extern "C" void app_main(void) {
   disableIO();
   statusLed.set(StatusLed::Off);
 
-  goSleep();
+  // Reset external watchdog before sleep to make sure its not trigger while in sleep
+  //   before system wakeup
+  resetExtWatchdog();
 
-  // NOTE: Will never go here onwards
+  // Calculate how long to sleep to keep measurement cycle the same
+  uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
+  int toSleepMs = (MEASURE_CYCLE_INTERVAL_SECONDS * 1000) - aliveTimeSpendMillis;
+  if (toSleepMs < 0) {
+    // NOTE: if its 0 means, no need to sleep, right?
+    toSleepMs = 0;
+  }
+  ESP_LOGI(TAG, "Will sleep for %dms", toSleepMs);
+  esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  esp_deep_sleep_start();
+
+  // Will never go here
+
   while (1) {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
@@ -202,19 +218,6 @@ void printWakeupReason() {
 
   ++xWakeUpCounter;
   ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
-}
-
-void goSleep() {
-  // Reset external watchdog before sleep to make sure its not trigger while in sleep
-  //   before system wakeup
-  resetExtWatchdog();
-
-  // Calculate how long to sleep
-  int toSleepMs = MEASURE_CYCLE_INTERVAL_SECONDS * 1000;
-  ESP_LOGI(TAG, "Sleeping");
-  esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
-  vTaskDelay(pdMS_TO_TICKS(1000));
-  esp_deep_sleep_start();
 }
 
 std::string buildSerialNumber() {
