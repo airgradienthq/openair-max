@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <string>
 
+#include "airgradientOtaCellular.h"
 #include "nvs_flash.h"
 #include "esp_err.h"
 #include "esp_wifi.h"
@@ -32,6 +33,7 @@ RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
 // Global Vars
 static const char *const TAG = "APP";
 static std::string g_serialNumber;
+static bool g_networkReady = false;
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
@@ -47,6 +49,7 @@ static bool initializeCellularNetwork();
 
 // Return false if failed init network or failed send
 static bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache);
+static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
 
 extern "C" void app_main(void) {
   // Give time for logs to initialized (solving wake up cycle no logs)
@@ -118,15 +121,18 @@ extern "C" void app_main(void) {
 
   statusLed.set(StatusLed::Blink, 2000, 100);
   // NOTE: Don't de-initialize/poweroff ce client if its already initialize so other transmission can use it if needed
+  checkForFirmwareUpdate(wakeUpCounter);
   sendMeasuresWhenReady(wakeUpCounter, payloadCache);
   // NOTE: Other transmission (ota, config)
 
-  if (g_cellularCard != nullptr) {
+  if (g_cellularCard != nullptr || g_networkReady) {
     g_cellularCard->powerOff();
+    gpio_set_level(EN_CE_CARD, 0);
   }
 
   // Disable un-needed peripherals
   // TODO: Is there any periphrals that level needs to be kept when sleep?
+  //   because deepsleep also reset all its GPIO state
   disableIO();
   statusLed.set(StatusLed::Off);
 
@@ -189,7 +195,6 @@ void disableIO() {
   // Only necessary peripherals that needs to be turned off
   gpio_set_level(EN_PM1, 0);
   gpio_set_level(EN_PM2, 0);
-  gpio_set_level(EN_CE_CARD, 0);
 }
 
 void printWakeupReason() {
@@ -245,6 +250,11 @@ std::string buildSerialNumber() {
 }
 
 bool initializeCellularNetwork() {
+  if (g_networkReady) {
+    ESP_LOGI(TAG, "Network is already ready to use");
+    return true;
+  }
+
   if (g_ceAgSerial != nullptr || g_cellularCard != nullptr || g_agClient != nullptr) {
     ESP_LOGW(
         TAG,
@@ -276,6 +286,7 @@ bool initializeCellularNetwork() {
 
   // Disable again
   g_ceAgSerial->setDebug(false);
+  g_networkReady = true;
 
   return true;
 }
@@ -311,6 +322,41 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   }
 
   payloadCache.clean();
+
+  return true;
+}
+
+bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
+  if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
+    ESP_LOGI(TAG, "Not the time to check firmware update, skip");
+    return true;
+  }
+
+  if (!initializeCellularNetwork()) {
+    ESP_LOGI(TAG, "Cannot connect to cellular network skip send measures");
+    return false;
+  }
+
+  AirgradientOTACellular agOta(g_cellularCard);
+  auto result = agOta.updateIfAvailable(g_serialNumber, "0.0.1");
+
+  switch (result) {
+  case AirgradientOTA::Failed:
+    ESP_LOGI(TAG, "Firmware update failed");
+    break;
+  case AirgradientOTA::Skipped:
+    ESP_LOGI(TAG, "Firmware update is skipped");
+  case AirgradientOTA::AlreadyUpToDate:
+    ESP_LOGI(TAG, "Firmware version already up to date");
+    break;
+  case AirgradientOTA::Success:
+    ESP_LOGI(TAG, "Firmware update success, will restart in 3s...");
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    esp_restart();
+    break;
+  default:
+    break;
+  }
 
   return true;
 }
