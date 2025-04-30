@@ -303,13 +303,21 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     return false;
   }
 
-  // Retrieve measurements from the cache
   // TODO: push back signal same value to each payload
+  auto result = g_cellularCard->retrieveSignal();
+  int signalStrength = -1;
+  if (result.status == CellReturnStatus::Ok && result.data != 99) {
+    signalStrength = result.data;
+  }
+  ESP_LOGI(TAG, "Signal strength: %d", signalStrength);
+
+  // Retrieve measurements from the cache
   std::vector<AirgradientClient::OpenAirMaxPayload> payloads;
   PayloadType tmp;
   ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
   for (int i = 0; i < payloadCache.getSize(); i++) {
     payloadCache.peekAtIndex(i, &tmp);
+    tmp.signal = signalStrength;
     payloads.push_back(tmp);
   }
 
