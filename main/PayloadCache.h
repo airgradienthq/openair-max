@@ -31,6 +31,7 @@ private:
   PayloadType payloads[MAX_PAYLOAD_CACHE];  // Buffer for Queue
 
   // Temporary buffer for serialization
+  // TODO: Need to optimize this, why the need to have 2 buffer?
   char charBuffer[sizeof(PayloadType) * MAX_PAYLOAD_CACHE];
 
   void serialize();
