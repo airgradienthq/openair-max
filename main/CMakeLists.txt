@@ -9,7 +9,6 @@ set (
   components
   freertos
   nvs_flash
-  esp_wifi
   esp_driver_gpio
   AirgradientSerial
   Sunlight

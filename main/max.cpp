@@ -6,7 +6,6 @@
 #include "airgradientOtaCellular.h"
 #include "nvs_flash.h"
 #include "esp_err.h"
-#include "esp_wifi.h"
 #include "esp_timer.h"
 #include "freertos/projdefs.h"
 #include "sdkconfig.h"
@@ -229,15 +228,11 @@ void printWakeupReason() {
 }
 
 std::string buildSerialNumber() {
-  // Initialize Wi-Fi driver
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
   uint8_t mac_address[6];
-  esp_err_t err = esp_wifi_get_mac(WIFI_IF_STA, mac_address); // Get MAC address of Wi-Fi interface
+  esp_err_t err =
+      esp_read_mac(mac_address, ESP_MAC_WIFI_STA); // or ESP_MAC_BT / ESP_MAC_ETH if needed
   if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Failed build serial number, get wifi mac addr failed (%s)",
-             esp_err_to_name(err));
+    ESP_LOGE(TAG, "Failed to get MAC address (%s)", esp_err_to_name(err));
     return {};
   }
 
@@ -245,9 +240,6 @@ std::string buildSerialNumber() {
   snprintf(result, sizeof(result), "%02x%02x%02x%02x%02x%02x", mac_address[0], mac_address[1],
            mac_address[2], mac_address[3], mac_address[4], mac_address[5]);
   std::string sn = std::string(result);
-
-  // Deinitialize Wi-Fi after use
-  esp_wifi_deinit();
 
   return sn;
 }
