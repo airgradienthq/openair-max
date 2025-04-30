@@ -229,8 +229,7 @@ void printWakeupReason() {
 
 std::string buildSerialNumber() {
   uint8_t mac_address[6];
-  esp_err_t err =
-      esp_read_mac(mac_address, ESP_MAC_WIFI_STA); // or ESP_MAC_BT / ESP_MAC_ETH if needed
+  esp_err_t err = esp_read_mac(mac_address, ESP_MAC_WIFI_STA);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Failed to get MAC address (%s)", esp_err_to_name(err));
     return {};

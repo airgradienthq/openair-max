@@ -3,7 +3,7 @@
 
 #include "soc/gpio_num.h"
 
-#define MAX_PAYLOAD_CACHE 10
+#define MAX_PAYLOAD_CACHE 100
 
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 
