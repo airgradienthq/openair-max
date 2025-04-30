@@ -34,6 +34,7 @@ RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
 static const char *const TAG = "APP";
 static std::string g_serialNumber;
 static bool g_networkReady = false;
+static std::string g_fimwareVersion;
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
@@ -46,6 +47,7 @@ static void resetExtWatchdog();
 static void printWakeupReason();
 static std::string buildSerialNumber();
 static bool initializeCellularNetwork();
+static std::string getFirmwareVersion();
 
 // Return false if failed init network or failed send
 static bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache);
@@ -67,7 +69,8 @@ extern "C" void app_main(void) {
   }
   ESP_ERROR_CHECK(ret);
 
-  // TODO: Print firmware version
+  g_fimwareVersion = getFirmwareVersion();
+  ESP_LOGI("APP", "Firmware version: %s", g_fimwareVersion.c_str());
 
   g_serialNumber = buildSerialNumber();
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
@@ -249,6 +252,11 @@ std::string buildSerialNumber() {
   return sn;
 }
 
+std::string getFirmwareVersion() {
+  const esp_app_desc_t *app_desc = esp_app_get_description();
+  return app_desc->version;
+}
+
 bool initializeCellularNetwork() {
   if (g_networkReady) {
     ESP_LOGI(TAG, "Network is already ready to use");
@@ -346,7 +354,7 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
   }
 
   AirgradientOTACellular agOta(g_cellularCard);
-  auto result = agOta.updateIfAvailable(g_serialNumber, "0.0.1");
+  auto result = agOta.updateIfAvailable(g_serialNumber, g_fimwareVersion);
 
   switch (result) {
   case AirgradientOTA::Failed:
