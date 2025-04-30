@@ -118,8 +118,10 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
   for (int i = 1; i <= iterations; i++) {
     uint32_t startIteration = MILLIS();
 
-    // Call update schedule for BQ25672
-    charger_->update();
+    if (_chargerAvailable) {
+      // Call update schedule for BQ25672
+      charger_->update();
+    }
 
     // Attempt measure each sensor and sum each measures iteration
     _measure(iterationData);

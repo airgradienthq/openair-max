@@ -120,11 +120,11 @@ extern "C" void app_main(void) {
   int wakeUpCounter = xWakeUpCounter;
 
   statusLed.set(StatusLed::Blink, 2000, 100);
-  // NOTE: Don't de-initialize/poweroff ce client if its already initialize so other transmission can use it if needed
   checkForFirmwareUpdate(wakeUpCounter);
   sendMeasuresWhenReady(wakeUpCounter, payloadCache);
-  // NOTE: Other transmission (ota, config)
+  // getConfig
 
+  // Only poweroff when all transmission attempt is done
   if (g_cellularCard != nullptr || g_networkReady) {
     g_cellularCard->powerOff();
     gpio_set_level(EN_CE_CARD, 0);
@@ -346,6 +346,7 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
     break;
   case AirgradientOTA::Skipped:
     ESP_LOGI(TAG, "Firmware update is skipped");
+    break;
   case AirgradientOTA::AlreadyUpToDate:
     ESP_LOGI(TAG, "Firmware version already up to date");
     break;
