@@ -43,6 +43,7 @@ public:
   // Passive mode. In this mode sensor would send serial data to the host only for request.
   void passiveMode();
 
+  void clearBuffer();
   // Request read in Passive Mode.
   void requestRead();
   // Non-blocking function for parse response.

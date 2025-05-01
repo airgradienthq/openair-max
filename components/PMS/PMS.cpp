@@ -29,6 +29,16 @@ void PMS::passiveMode() {
   _mode = Mode::PASSIVE;
 }
 
+void PMS::clearBuffer() {
+  // empty buffer first
+  int bytesCleared = 0;
+  while (uint8_t bb = agSerial_->read() != -1) {
+    ESP_LOGD(TAG, "%.2x", bb);
+    bytesCleared++;
+  }
+  ESP_LOGD(TAG, "Cleared %d byte(s)", bytesCleared);
+}
+
 void PMS::requestRead() {
   if (_mode == Mode::PASSIVE) {
     uint8_t command[] = {0x42, 0x4D, 0xE2, 0x00, 0x00, 0x01, 0x71};
@@ -40,19 +50,11 @@ bool PMS::read(Data &data) { return _loop(data); }
 
 bool PMS::readUntil(Data &data, uint16_t timeoutMs) {
   uint32_t start = MILLIS();
-
-  // // empty buffer first
-  // int bytesCleared = 0;
-  // while (uint8_t bb = agSerial_->read() != -1) {
-  //   ESP_LOGD(TAG, "%.2x", bb);
-  //   bytesCleared++;
-  // }
-  // ESP_LOGD(TAG, "Cleared %d byte(s)", bytesCleared);
-
   bool newData = false;
   do {
     if (_loop(data)) {
       newData = true;
+      break;
     }
   } while ((MILLIS() - start) < timeoutMs);
 

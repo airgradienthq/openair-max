@@ -211,11 +211,10 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   }
 
   if (_pms1Available || _pms2Available) {
-    // TODO: Somehow result takes too long, close to timeout
-
     bool pms1ReadSuccess = false;
     PMS::Data pmData1;
     if (_pms1Available) {
+      pms1_->clearBuffer();
       pms1_->requestRead();
       if (pms1_->readUntil(pmData1, 1000)) {
         ESP_LOGD(TAG, "{1} PM1.0 : %d", pmData1.pm_ae_1_0);
@@ -231,6 +230,7 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
     bool pms2ReadSuccess = false;
     PMS::Data pmData2;
     if (_pms2Available) {
+      pms2_->clearBuffer();
       pms2_->requestRead();
       if (pms2_->readUntil(pmData2, 1000)) {
         ESP_LOGD(TAG, "{2} PM1.0 : %d", pmData2.pm_ae_1_0);
