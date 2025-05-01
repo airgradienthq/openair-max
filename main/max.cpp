@@ -16,7 +16,7 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 
-#include "config.h"
+#include "MaxConfig.h"
 #include "PayloadCache.h"
 #include "StatusLed.h"
 #include "Sensor.h"

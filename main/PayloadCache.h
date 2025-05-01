@@ -1,9 +1,9 @@
 #ifndef PAYLOAD_CACHE_H
 #define PAYLOAD_CACHE_H
 
-#include "airgradientClient.h"
 #include <cstdint>
-#include "config.h"
+#include "airgradientClient.h"
+#include "MaxConfig.h"
 
 typedef AirgradientClient::OpenAirMaxPayload PayloadType;
 
