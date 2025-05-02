@@ -27,6 +27,7 @@
 #include "airgradientCellularClient.h"
 #include "cellularModuleA7672xx.h"
 
+// Wake up counter that saved on Low Power memory
 RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
 
 // Global Vars
@@ -38,14 +39,42 @@ static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
 
-// Prototype functions
-// TODO: Add comment docs
+/**
+ * Initialize all peripheral IO and turn on all of it except cellular card 
+ */
 static void enableIO();
+
+/**
+ * Disable neccessary peripherals IO that needs to be off
+ */
 static void disableIO();
+
+/**
+ * Reset monitor external watchdog timer
+ *   with assumption GPIO already initialized before calling this function
+ */
 static void resetExtWatchdog();
+
+/**
+ * Helper to print out the reason system wake up from deepsleep
+ */
 static void printWakeupReason();
+
+/**
+ * Build monitor serial number from WiFi mac address
+ */
 static std::string buildSerialNumber();
+
+/**
+ * Attempt to initialize and connect to cellular network
+ * If failed once, it will not re-attempt to initialize for its wake up cycle
+ * Called when post measure, check remote configuraiton and check for firmware update
+ */
 static bool initializeCellularNetwork();
+
+/**
+ * Retrieve currently running firmware version
+ */
 static std::string getFirmwareVersion();
 
 // Return false if failed init network or failed send
@@ -109,16 +138,19 @@ extern "C" void app_main(void) {
         "One or more sensor were failed to initialize, will not measure those on this iteration");
   }
 
-  // TODO: Describe this paragraph
-  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
   statusLed.set(StatusLed::Blink, 4000, 1000);
-  if (sensor.startMeasures(20, 2000)) {
+
+  // Start measure sensor sequence that if success,
+  //   push new measure cycle to payload cache to send later
+  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
+  if (sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT,
+                           DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION)) {
     sensor.printMeasures();
     auto averageMeasures = sensor.getLastAverageMeasure();
     payloadCache.push(&averageMeasures);
   }
 
-  // Optimization: copy from rtc memory so will not always call from LP memory
+  // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
   statusLed.set(StatusLed::Blink, 2000, 100);
@@ -298,11 +330,11 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   }
 
   if (!initializeCellularNetwork()) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network skip send measures");
+    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
     return false;
   }
 
-  // TODO: push back signal same value to each payload
+  // Push back signal same value to each payload
   auto result = g_cellularCard->retrieveSignal();
   int signalStrength = -1;
   if (result.status == CellReturnStatus::Ok && result.data != 99) {
@@ -340,7 +372,7 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
   }
 
   if (!initializeCellularNetwork()) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network skip send measures");
+    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check firmware update");
     return false;
   }
 
