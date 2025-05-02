@@ -26,8 +26,7 @@ private:
   void _measure(AirgradientClient::OpenAirMaxPayload &data);
   void _applyIteration(AirgradientClient::OpenAirMaxPayload &data);
   void _calculateMeasuresAverage();
-  void _warmUpSGP41();
-  void _warmUpPMS();
+  void _warmUpSensor();
 
   int _rco2IterationOkCount = 0;
   int _atmpIterationOkCount = 0;

@@ -12,7 +12,6 @@
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "esp_log.h"
 
-
 Sensor::Sensor(i2c_master_bus_handle_t busHandle) : _busHandle(busHandle) {}
 
 bool Sensor::init() {
@@ -47,7 +46,6 @@ bool Sensor::init() {
     _tvocNoxAvailable = false;
     ESP_LOGE(TAG, "Failed init TVOC & NOx sensor");
   }
-  _warmUpSGP41();
 
   // BQ25672
   charger_ = new BQ25672;
@@ -85,9 +83,8 @@ bool Sensor::init() {
     // NOTE: Since UART, need to check if its actually able to communicate?
   }
 
-  _warmUpPMS();
-
-  // TODO: Maybe combine warmup of PMS and SGP in 1 loop
+  // Warm up SGP41 and PMS 
+  _warmUpSensor();
 
   ESP_LOGI(TAG, "Initialize finish");
 
@@ -383,42 +380,40 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
   }
 }
 
-void Sensor::_warmUpSGP41() {
-  // Self test
-  sgp4x_self_test_result_t selfTestResult;
-  esp_err_t result = sgp4x_execute_self_test(sgp_dev_hdl, &selfTestResult);
-  if (result != ESP_OK) {
-    ESP_LOGE(TAG, "sgp4x device self-test failed (%s)", esp_err_to_name(result));
-  } else {
-    ESP_LOGI(TAG, "VOC Pixel: %d", selfTestResult.pixels.voc_pixel_failed);
-    ESP_LOGI(TAG, "NOX Pixel: %d", selfTestResult.pixels.nox_pixel_failed);
-  }
-
-  // TVOC Conditioning
-  for (int i = 10; i >= 0; i--) {
-    uint16_t sraw_voc;
-    ESP_LOGI(TAG, "Warming up TVOC and NOx sensor %d", i);
-    // NOTE: Use sgp4x_execute_compensated_conditioning() to pass rhum and atmp
-    esp_err_t result = sgp4x_execute_conditioning(sgp_dev_hdl, &sraw_voc);
+void Sensor::_warmUpSensor() {
+  // Self test SGP41
+  if (_tvocNoxAvailable) {
+    sgp4x_self_test_result_t selfTestResult;
+    esp_err_t result = sgp4x_execute_self_test(sgp_dev_hdl, &selfTestResult);
     if (result != ESP_OK) {
-      ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)", esp_err_to_name(result));
+      ESP_LOGE(TAG, "sgp4x device self-test failed (%s)", esp_err_to_name(result));
     } else {
-      ESP_LOGI(TAG, "SRAW VOC: %u", sraw_voc);
+      ESP_LOGI(TAG, "VOC Pixel: %d", selfTestResult.pixels.voc_pixel_failed);
+      ESP_LOGI(TAG, "NOX Pixel: %d", selfTestResult.pixels.nox_pixel_failed);
     }
-    vTaskDelay(pdMS_TO_TICKS(1000)); // 1-second * 10 iterations = 10-seconds
   }
-}
 
-void Sensor::_warmUpPMS() {
-  // Warmup PM1 and PM2
+  // Warmup PM1 and PM2 while also do SGP conditioning
+  // Only if sensor is available
   for (int i = 10; i >= 0; i--) {
-    ESP_LOGI(TAG, "Warming up PM sensors %d", i);
+    ESP_LOGI(TAG, "Warming up PMS and/or SGP41 sensors %d", i);
     vTaskDelay(pdMS_TO_TICKS(1000));
     if (_pms1Available) {
       pms1_->passiveMode();
     }
     if (_pms2Available) {
       pms2_->passiveMode();
+    }
+    if (_tvocNoxAvailable) {
+      uint16_t sraw_voc;
+      ESP_LOGI(TAG, "Warming up TVOC and NOx sensor %d", i);
+      // NOTE: Use sgp4x_execute_compensated_conditioning() to pass rhum and atmp
+      esp_err_t result = sgp4x_execute_conditioning(sgp_dev_hdl, &sraw_voc);
+      if (result != ESP_OK) {
+        ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)", esp_err_to_name(result));
+      } else {
+        ESP_LOGI(TAG, "SRAW VOC: %u", sraw_voc);
+      }
     }
   }
 }
