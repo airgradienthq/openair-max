@@ -406,7 +406,6 @@ void Sensor::_warmUpSensor() {
     }
     if (_tvocNoxAvailable) {
       uint16_t sraw_voc;
-      ESP_LOGI(TAG, "Warming up TVOC and NOx sensor %d", i);
       // NOTE: Use sgp4x_execute_compensated_conditioning() to pass rhum and atmp
       esp_err_t result = sgp4x_execute_conditioning(sgp_dev_hdl, &sraw_voc);
       if (result != ESP_OK) {

@@ -19,6 +19,7 @@ set (
   BQ25672
   AirgradientClient
   AirgradientOTA
+  json_parser
 )
 
 idf_component_register(SRCS "${srcs}"

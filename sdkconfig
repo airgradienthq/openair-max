@@ -2078,18 +2078,30 @@ CONFIG_WIFI_PROV_STA_ALL_CHANNEL_SCAN=y
 # end of Wi-Fi Provisioning Manager
 
 #
-# Driver SHTC3 Sensor
+# Airgradient Client
 #
 
 #
-# I2C
+# AT Command Handler
 #
-CONFIG_SHTC3_I2C_NUM=-1
-CONFIG_SHTC3_I2C_SDA=17
-CONFIG_SHTC3_I2C_SCL=18
-CONFIG_SHTC3_I2C_CLK_SPEED_HZ=100000
-# end of I2C
-# end of Driver SHTC3 Sensor
+CONFIG_BUFFER_LENGTH_ALLOCATION=4000
+# end of AT Command Handler
+
+#
+# Cellular module
+#
+CONFIG_HTTPREAD_CHUNK_SIZE=1000
+CONFIG_DELAY_HTTPREAD_ITERATION_ENABLED=y
+# end of Cellular module
+# end of Airgradient Client
+
+#
+# jsmn
+#
+# CONFIG_JSMN_PARENT_LINKS is not set
+# CONFIG_JSMN_STRICT is not set
+# CONFIG_JSMN_STATIC is not set
+# end of jsmn
 # end of Component config
 
 # CONFIG_IDF_EXPERIMENTAL_FEATURES is not set

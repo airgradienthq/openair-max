@@ -6,3 +6,4 @@ build
 .cache
 .clangd
 sdkconfig.old
+managed_components/
