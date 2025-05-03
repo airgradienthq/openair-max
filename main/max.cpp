@@ -17,6 +17,7 @@
 #include "driver/i2c_master.h"
 
 #include "MaxConfig.h"
+#include "RemoteConfig.h"
 #include "PayloadCache.h"
 #include "StatusLed.h"
 #include "Sensor.h"
@@ -35,6 +36,7 @@ static const char *const TAG = "APP";
 static std::string g_serialNumber;
 static bool g_networkReady = false;
 static std::string g_fimwareVersion;
+static RemoteConfig g_remoteConfig;
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
@@ -78,16 +80,14 @@ static bool initializeCellularNetwork();
 static std::string getFirmwareVersion();
 
 // Return false if failed init network or failed send
+// TODO: Add description
+static bool checkRemoteConfiguration(unsigned long wakeUpCounter);
 static bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
 
 extern "C" void app_main(void) {
   // Give time for logs to initialized (solving wake up cycle no logs)
   esp_log_level_set("*", ESP_LOG_INFO);
-  vTaskDelay(pdMS_TO_TICKS(1000));
-
-  uint32_t wakeUpMillis = MILLIS() - 1000;
-  ESP_LOGI(TAG, "MAX!");
 
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
@@ -96,21 +96,28 @@ extern "C" void app_main(void) {
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
+  vTaskDelay(pdMS_TO_TICKS(1000));
 
-  g_fimwareVersion = getFirmwareVersion();
-  ESP_LOGI("APP", "Firmware version: %s", g_fimwareVersion.c_str());
-
-  g_serialNumber = buildSerialNumber();
-  ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
-
-  printWakeupReason();
+  uint32_t wakeUpMillis = MILLIS() - 1000; // minus with previous delay
+  ESP_LOGI(TAG, "MAX!");
 
   StatusLed statusLed(IO_LED_INDICATOR);
   statusLed.start();
   statusLed.set(StatusLed::On);
 
+  // Load remote configuration that saved on NVS
+  g_remoteConfig.load();
+
   // Initialize and enable all IO required
   enableIO();
+
+  g_fimwareVersion = getFirmwareVersion();
+  ESP_LOGI(TAG, "Firmware version: %s", g_fimwareVersion.c_str());
+
+  g_serialNumber = buildSerialNumber();
+  ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
+
+  printWakeupReason();
 
   // Reset external WDT
   resetExtWatchdog();
@@ -138,6 +145,8 @@ extern "C" void app_main(void) {
         "One or more sensor were failed to initialize, will not measure those on this iteration");
   }
 
+  // TODO: co2 calibration based on config
+
   statusLed.set(StatusLed::Blink, 4000, 1000);
 
   // Start measure sensor sequence that if success,
@@ -156,7 +165,7 @@ extern "C" void app_main(void) {
   statusLed.set(StatusLed::Blink, 2000, 100);
   checkForFirmwareUpdate(wakeUpCounter);
   sendMeasuresWhenReady(wakeUpCounter, payloadCache);
-  // getConfig
+  checkRemoteConfiguration(wakeUpCounter);
 
   // Only poweroff when all transmission attempt is done
   if (g_cellularCard != nullptr || g_networkReady) {
@@ -396,6 +405,32 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
     break;
   default:
     break;
+  }
+
+  return true;
+}
+
+bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
+  if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
+    ESP_LOGI(TAG, "Not the time to check remote configuration, skip");
+    return true;
+  }
+
+  if (!initializeCellularNetwork()) {
+    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check remote configuration");
+    return false;
+  }
+
+  // Attempt retrieve configuration
+  std::string result = g_agClient->httpFetchConfig();
+  if (g_agClient->isRegisteredOnAgServer() == false) {
+    ESP_LOGW(TAG, "Monitor hasn't registered on AirGradient dashboard yet");
+    return false;
+  }
+
+  if (g_agClient->isLastFetchConfigSucceed() && g_remoteConfig.parse(result)) {
+    // Goes here if parse configuration change
+    // TODO: print out will do this on next wake up cycle if there's a new configuration change
   }
 
   return true;

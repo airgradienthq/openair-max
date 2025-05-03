@@ -3,6 +3,7 @@ set(srcs
   "StatusLed.cpp"
   "Sensor.cpp"
   "PayloadCache.cpp"
+  "RemoteConfig.cpp"
 )
 
 set (
