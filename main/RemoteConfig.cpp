@@ -1,12 +1,28 @@
 #include "RemoteConfig.h"
 #include "esp_log.h"
 #include "json_parser.h"
+#include "nvs.h"
+#include <cstring>
+
+#define REMOTE_CONFIG_NVS_STORAGE_NAME "remote-config"
+#define NVS_KEY_CO2_CALIBRATION_REQUESTED "co2CalibReq"
+#define NVS_KEY_LED_TEST_REQUESTED "ledTestReq"
+#define NVS_KEY_MODEL "model"
+#define NVS_KEY_SCHEDULE_PM02 "pm02"
+#define NVS_KEY_SCHEDULE_CONTINUOUS "cont"
+#define NVS_KEY_FIRMWARE_URL "furl"
+#define NVS_KEY_FIRMWARE_TARGET "ftarget"
 
 bool RemoteConfig::load() {
-  // TODO: Load from NVS, if failed use default
-
-  ESP_LOGW(TAG, "Configuration not found on NVS, set to default");
+  // At first, set every configuration to default
+  //   to accomodate some config that are failed to read from NVS
   _setConfigToDefault();
+
+  // Load configuration from NVS
+  if (!_loadConfig()) {
+    ESP_LOGW(TAG, "Cannot open NVS, set configuration to default");
+    _setConfigToDefault();
+  }
 
   // Printout configurations
   ESP_LOGI(TAG, "**** REMOTE CONFIGURATION ****");
@@ -122,15 +138,172 @@ bool RemoteConfig::parse(const std::string &config) {
   json_parse_end(&jctx);
 
   if (_configChanged) {
-    ESP_LOGI(TAG, "Saving new configuration to NVS");
     _saveConfig();
   }
 
   return true;
 }
 
+bool RemoteConfig::_loadConfig() {
+  ESP_LOGI(TAG, "Reading remote configuration from NVS");
+  nvs_handle_t handle;
+  esp_err_t err = nvs_open(REMOTE_CONFIG_NVS_STORAGE_NAME, NVS_READONLY, &handle);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+    return false;
+  }
+
+  // CO2 CALIBRATION
+  uint8_t co2CalibrationRequested;
+  err = nvs_get_u8(handle, NVS_KEY_CO2_CALIBRATION_REQUESTED, &co2CalibrationRequested);
+  if (err == ESP_OK) {
+    _config.co2CalibrationRequested = co2CalibrationRequested;
+  } else {
+    ESP_LOGW(TAG, "Failed to get co2CalibrationRequested");
+  }
+
+  // LED TEST
+  uint8_t ledTestRequested;
+  err = nvs_get_u8(handle, NVS_KEY_LED_TEST_REQUESTED, &ledTestRequested);
+  if (err == ESP_OK) {
+    _config.ledTestRequested = ledTestRequested;
+  } else {
+    ESP_LOGW(TAG, "Failed to get ledTestRequested");
+  }
+
+  // MODEL
+  size_t requiredSize = 0;
+  err = nvs_get_str(handle, NVS_KEY_MODEL, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_MODEL, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.model = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get model");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get model");
+  }
+
+  // FIRMWARE.TARGET
+  err = nvs_get_str(handle, NVS_KEY_FIRMWARE_TARGET, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_FIRMWARE_TARGET, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.firmware.target = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get firmware.target");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get firmware.target");
+  }
+
+  // FIRMWARE.URL
+  err = nvs_get_str(handle, NVS_KEY_FIRMWARE_URL, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_FIRMWARE_URL, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.firmware.url = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get firmware.url");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get firmware.url");
+  }
+
+  // SCHEDULE.CONTINUOUS
+  uint8_t continuous;
+  err = nvs_get_u8(handle, NVS_KEY_SCHEDULE_CONTINUOUS, &continuous);
+  if (err == ESP_OK) {
+    _config.schedule.continuous = continuous;
+  } else {
+    ESP_LOGW(TAG, "Failed to get schedule.continuous");
+  }
+
+  // SCHEDULE.PM02
+  uint32_t pm02;
+  err = nvs_get_u32(handle, NVS_KEY_SCHEDULE_PM02, &pm02);
+  if (err == ESP_OK) {
+    _config.schedule.pm02 = pm02;
+  } else {
+    ESP_LOGW(TAG, "Failed to get schedule.pm02");
+  }
+
+  // Close NVS
+  nvs_close(handle);
+
+  return true;
+}
+
 bool RemoteConfig::_saveConfig() {
-  //
+  ESP_LOGI(TAG, "Saving remote configuration to NVS");
+  nvs_handle_t handle;
+  esp_err_t err = nvs_open(REMOTE_CONFIG_NVS_STORAGE_NAME, NVS_READWRITE, &handle);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+    return false;
+  }
+
+  // CO2 CALIBRATION
+  err = nvs_set_u8(handle, NVS_KEY_CO2_CALIBRATION_REQUESTED, _config.co2CalibrationRequested);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save co2CalibrationRequested");
+  }
+
+  // LED TEST
+  err = nvs_set_u8(handle, NVS_KEY_LED_TEST_REQUESTED, _config.ledTestRequested);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save ledTestRequested");
+  }
+
+  // MODEL
+  err = nvs_set_str(handle, NVS_KEY_MODEL, _config.model.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save model");
+  }
+
+  // FIRMWARE.TARGET
+  err = nvs_set_str(handle, NVS_KEY_FIRMWARE_TARGET, _config.firmware.target.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save firmware.target");
+  }
+
+  // FIRMWARE.URL
+  err = nvs_set_str(handle, NVS_KEY_FIRMWARE_URL, _config.firmware.url.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save firmware.url");
+  }
+
+  // SCHEDULE.CONTINUOUS
+  err = nvs_set_u8(handle, NVS_KEY_SCHEDULE_CONTINUOUS, _config.schedule.continuous);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save schedule.continuous");
+  }
+
+  // SCHEDULE.PM02
+  err = nvs_set_u32(handle, NVS_KEY_SCHEDULE_PM02, _config.schedule.pm02);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save schedule.pm02");
+  }
+
+  // Commit changes
+  err = nvs_commit(handle);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to commit configuration to NVS");
+    nvs_close(handle);
+    return false;
+  }
+
+  nvs_close(handle);
   return true;
 }
 

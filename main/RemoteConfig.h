@@ -26,6 +26,7 @@ public:
   RemoteConfig() {}
   ~RemoteConfig() {}
   bool load();
+  bool reset();
   bool parse(const std::string &config);
 
 private:
@@ -33,6 +34,7 @@ private:
   Config _config;
   bool _configChanged = false;
 
+  bool _loadConfig();
   bool _saveConfig();
   void _setConfigToDefault();
 };
