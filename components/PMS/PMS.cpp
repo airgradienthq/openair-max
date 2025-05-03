@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "PMS.h"
+#include "freertos/FreeRTOS.h"
 #include "esp_timer.h"
 #include "esp_log.h"
 
@@ -27,6 +28,22 @@ void PMS::passiveMode() {
   uint8_t command[] = {0x42, 0x4D, 0xE1, 0x00, 0x00, 0x01, 0x70};
   agSerial_->write(command, sizeof(command));
   _mode = Mode::PASSIVE;
+}
+
+bool PMS::isConnected() {
+  bool connected = false;
+  Data data;
+  for (int i = 0; i < 3; i++) {
+    clearBuffer();
+    requestRead();
+    if (readUntil(data, 1000)) {
+      connected = true;
+      break;
+    }
+    vTaskDelay(pdMS_TO_TICKS(200));
+  }
+
+  return connected;
 }
 
 void PMS::clearBuffer() {

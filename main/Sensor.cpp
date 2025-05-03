@@ -80,11 +80,24 @@ bool Sensor::init() {
     _pms2Available = false;
   } else {
     pms2_ = new PMS(agsPM2_);
-    // NOTE: Since UART, need to check if its actually able to communicate?
   }
 
   // Warm up SGP41 and PMS 
   _warmUpSensor();
+
+  // Ensure PMS1 is available since the sensor using UART
+  if (_pms1Available) {
+    if (pms1_->isConnected() == false) {
+      ESP_LOGE(TAG, "PMS1 is not connected");
+      _pms1Available = false;
+    }
+  }
+  if (_pms2Available) {
+    if (pms2_->isConnected() == false) {
+      ESP_LOGE(TAG, "PMS2 is not connected");
+      _pms2Available = false;
+    }
+  }
 
   ESP_LOGI(TAG, "Initialize finish");
 
