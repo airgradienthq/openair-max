@@ -21,7 +21,7 @@ bool AirgradientUART::begin(int port, int baud, int rx, int tx) {
   _port_num = static_cast<uart_port_t>(port);
 
   esp_err_t err;
-  err = uart_driver_install(_port_num, BUF_SIZE * 2, 0, 0, nullptr, 0);
+  err = uart_driver_install(_port_num, BUF_SIZE, 0, 0, nullptr, 0);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Failed to install UART driver: %s", esp_err_to_name(err));
     return false;
