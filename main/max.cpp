@@ -42,7 +42,7 @@ static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
 
 /**
- * Initialize all peripheral IO and turn on all of it except cellular card 
+ * Initialize all peripheral IO and turn on all of it except cellular card
  */
 static void enableIO();
 
@@ -108,6 +108,13 @@ extern "C" void app_main(void) {
   // Load remote configuration that saved on NVS
   g_remoteConfig.load();
 
+  // Run led test if requested
+  if (g_remoteConfig.isLedTestRequested()) {
+    statusLed.set(StatusLed::Blink, 5000, 100);
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    g_remoteConfig.resetLedTestRequested();
+  }
+
   // Initialize and enable all IO required
   enableIO();
 
@@ -145,7 +152,9 @@ extern "C" void app_main(void) {
         "One or more sensor were failed to initialize, will not measure those on this iteration");
   }
 
-  // TODO: co2 calibration based on config
+  if (g_remoteConfig.isCo2CalibrationRequested()) {
+    // TODO: Implement!
+  }
 
   statusLed.set(StatusLed::Blink, 4000, 1000);
 
@@ -187,7 +196,7 @@ extern "C" void app_main(void) {
   uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
   int toSleepMs = (g_remoteConfig.getConfigSchedule().pm02 * 1000) - aliveTimeSpendMillis;
   if (toSleepMs < 0) {
-    // NOTE: if its 0 means, no need to sleep, right?
+    // TODO: if its 0 means, no need to sleep, right? if so need to move to loop
     toSleepMs = 0;
   }
   ESP_LOGI(TAG, "Will sleep for %dms", toSleepMs);
@@ -428,9 +437,12 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
     return false;
   }
 
-  if (g_agClient->isLastFetchConfigSucceed() && g_remoteConfig.parse(result)) {
-    // Goes here if parse configuration change
-    // TODO: print out will do this on next wake up cycle if there's a new configuration change
+  if (g_agClient->isLastFetchConfigSucceed() == false || g_remoteConfig.parse(result) == false) {
+    return false;
+  }
+
+  if (g_remoteConfig.isConfigChanged()) {
+    ESP_LOGI(TAG, "Changed configuration will be applied on next wakeup cycle onwards");
   }
 
   return true;

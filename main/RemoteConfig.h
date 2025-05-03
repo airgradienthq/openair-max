@@ -36,6 +36,8 @@ public:
   Firmware getConfigFirmware();
   Schedule getConfigSchedule();
 
+  void resetLedTestRequested();
+
 private:
   const char *const TAG = "RemoteConfig";
   Config _config;

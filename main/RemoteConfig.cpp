@@ -318,6 +318,11 @@ RemoteConfig::Firmware RemoteConfig::getConfigFirmware() { return _config.firmwa
 
 RemoteConfig::Schedule RemoteConfig::getConfigSchedule() { return _config.schedule; }
 
+void RemoteConfig::resetLedTestRequested() {
+  _config.ledTestRequested = false;
+  _saveConfig();
+}
+
 void RemoteConfig::_setConfigToDefault() {
   _config.co2CalibrationRequested = false;
   _config.ledTestRequested = false;
