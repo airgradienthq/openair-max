@@ -185,7 +185,7 @@ extern "C" void app_main(void) {
 
   // Calculate how long to sleep to keep measurement cycle the same
   uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
-  int toSleepMs = (MEASURE_CYCLE_INTERVAL_SECONDS * 1000) - aliveTimeSpendMillis;
+  int toSleepMs = (g_remoteConfig.getConfigSchedule().pm02 * 1000) - aliveTimeSpendMillis;
   if (toSleepMs < 0) {
     // NOTE: if its 0 means, no need to sleep, right?
     toSleepMs = 0;
@@ -362,7 +362,7 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   }
 
   // Attempt to send
-  bool success = g_agClient->httpPostMeasures(MEASURE_CYCLE_INTERVAL_SECONDS, payloads);
+  bool success = g_agClient->httpPostMeasures(g_remoteConfig.getConfigSchedule().pm02, payloads);
   if (!success) {
     // Consider network has a problem, retry in next schedule
     ESP_LOGE(TAG, "send measures failed, retry in next schedule");

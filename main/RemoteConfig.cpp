@@ -1,4 +1,5 @@
 #include "RemoteConfig.h"
+#include "MaxConfig.h"
 #include "esp_log.h"
 #include "json_parser.h"
 #include "nvs.h"
@@ -307,12 +308,22 @@ bool RemoteConfig::_saveConfig() {
   return true;
 }
 
+bool RemoteConfig::isConfigChanged() { return _configChanged; }
+
+bool RemoteConfig::isCo2CalibrationRequested() { return _config.co2CalibrationRequested; }
+
+bool RemoteConfig::isLedTestRequested() { return _config.ledTestRequested; }
+
+RemoteConfig::Firmware RemoteConfig::getConfigFirmware() { return _config.firmware; }
+
+RemoteConfig::Schedule RemoteConfig::getConfigSchedule() { return _config.schedule; }
+
 void RemoteConfig::_setConfigToDefault() {
   _config.co2CalibrationRequested = false;
   _config.ledTestRequested = false;
   _config.model = "";
   _config.firmware.target = "";
   _config.firmware.url = "";
-  _config.schedule.pm02 = 180; // in seconds
+  _config.schedule.pm02 = MEASURE_CYCLE_INTERVAL_SECONDS;
   _config.schedule.continuous = false;
 }

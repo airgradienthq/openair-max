@@ -29,6 +29,13 @@ public:
   bool reset();
   bool parse(const std::string &config);
 
+  // Getter
+  bool isConfigChanged();
+  bool isCo2CalibrationRequested();
+  bool isLedTestRequested();
+  Firmware getConfigFirmware();
+  Schedule getConfigSchedule();
+
 private:
   const char *const TAG = "RemoteConfig";
   Config _config;
