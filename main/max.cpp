@@ -168,7 +168,7 @@ extern "C" void app_main(void) {
   checkRemoteConfiguration(wakeUpCounter);
 
   // Only poweroff when all transmission attempt is done
-  if (g_cellularCard != nullptr || g_networkReady) {
+  if (g_ceAgSerial != nullptr || g_networkReady) {
     g_cellularCard->powerOff();
     gpio_set_level(EN_CE_CARD, 0);
   }
