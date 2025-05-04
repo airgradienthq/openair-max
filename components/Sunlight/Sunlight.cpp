@@ -181,8 +181,8 @@ int Sunlight::write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16
     return -1;
   }
 
-  uint8_t writeValHi;
-  uint8_t writeValLo;
+  // uint8_t writeValHi;
+  // uint8_t writeValLo;
 
   int requestSize = 7 + numBytes;
 
@@ -372,11 +372,7 @@ bool Sunlight::set_measurement_mode(uint8_t mode) {
 
   if (read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg) != 0) {
     ESP_LOGE(TAG, "Failed to read Measurement Mode");
-    ESP_LOGE(TAG, "Failed to change Measurement Mode");
-    // TODO: handle better
-    /* FATAL ERROR */
-    while (true)
-      ;
+    return false;
   }
 
   if (values[0] != change[0]) {
@@ -388,10 +384,7 @@ bool Sunlight::set_measurement_mode(uint8_t mode) {
 
     if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg, change) != 0) {
       ESP_LOGE(TAG, "Failed to change measurement mode");
-      // TODO: handle better
-      /* FATAL ERROR */
-      while (true)
-        ;
+      return false;
     }
     ESP_LOGW(TAG, "Sensor restart is required to apply changes");
     return true;
@@ -409,19 +402,14 @@ bool Sunlight::set_measurement_period(uint16_t seconds) {
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read measurement period (%d)", error);
     ESP_LOGE(TAG, "Failed to change Measurement period");
-    // TODO: handle better
-    /* FATAL ERROR */
-    while (true)
-      ;
+    return false;
   }
 
   if (values[0] != seconds) {
     ESP_LOGI(TAG, "Changing measurement period to %ds", seconds);
     if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_PERIOD, numReg, change) != 0) {
       ESP_LOGE(TAG, "Failed to change measurement period");
-      /* FATAL ERROR */
-      while (true)
-        ;
+      return false;
     }
     ESP_LOGI(TAG, "Sensor restart is required to apply changes");
     return true;
@@ -439,19 +427,14 @@ bool Sunlight::set_measurement_samples(uint16_t number) {
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read measurement samples (%d)", error);
     ESP_LOGE(TAG, "Failed to change measurement samples");
-    /* FATAL ERROR */
-    // TODO: handle better
-    while (true)
-      ;
+    return false;
   }
 
   if (values[0] != number) {
     ESP_LOGI(TAG, "Changing measurement samples to %d", number);
     if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg, change) != 0) {
       ESP_LOGE(TAG, "Failed to change Measurement samples");
-      /* FATAL ERROR */
-      while (true)
-        ;
+      return false;
     }
 
     ESP_LOGI(TAG, "Sensor restart is required to apply changes");
@@ -514,10 +497,7 @@ bool Sunlight::isABCEnabled() {
 
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read meter control (%d)", error);
-    // TODO: handle better
-    /* FATAL ERROR */
-    while (true)
-      ;
+    return false;
   }
 
   return (bitRead(values[0], 1) == 0);
@@ -531,10 +511,7 @@ bool Sunlight::setMeterControlBit(uint8_t target, bool newValue, uint8_t bit) {
 
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read meter control (%d)", error);
-    // TODO: Handle better
-    /* FATAL ERROR */
-    while (true)
-      ;
+    return false;
   }
   uint16_t meterControlVal = values[0];
   bool isHigh = bitRead(meterControlVal, bit) == 0;
@@ -549,10 +526,7 @@ bool Sunlight::setMeterControlBit(uint8_t target, bool newValue, uint8_t bit) {
     uint16_t change[] = {meterControlVal};
     if (write_multiple_registers(target, METER_CONTROL, numReg, change) != 0) {
       ESP_LOGE(TAG, "Failed to change ABC status");
-      // TODO: handle better
-      /* FATAL ERROR */
-      while (true)
-        ;
+      return false;
     }
     return true;
   }
