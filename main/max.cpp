@@ -88,6 +88,7 @@ static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
 extern "C" void app_main(void) {
   // Give time for logs to initialized (solving wake up cycle no logs)
   esp_log_level_set("*", ESP_LOG_INFO);
+  vTaskDelay(pdMS_TO_TICKS(1000));
 
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
@@ -96,7 +97,7 @@ extern "C" void app_main(void) {
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   uint32_t wakeUpMillis = MILLIS() - 1000; // minus with previous delay
   ESP_LOGI(TAG, "MAX!");
@@ -437,7 +438,11 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
     return false;
   }
 
-  if (g_agClient->isLastFetchConfigSucceed() == false || g_remoteConfig.parse(result) == false) {
+  if (g_agClient->isLastFetchConfigSucceed() == false) {
+    return false;
+  }
+
+  if (g_remoteConfig.parse(result) == false) {
     return false;
   }
 
