@@ -122,7 +122,8 @@ extern "C" void app_main(void) {
   g_fimwareVersion = getFirmwareVersion();
   ESP_LOGI(TAG, "Firmware version: %s", g_fimwareVersion.c_str());
 
-  g_serialNumber = buildSerialNumber();
+  // g_serialNumber = buildSerialNumber();
+  g_serialNumber = "84fce606f790";
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
 
   printWakeupReason();
@@ -226,19 +227,30 @@ void enableIO() {
   gpio_set_level(IO_WDT, 0);
 
   // Enable Both PM
+#if BOARD_VERSION == MAX_BOARD_2XX
+  gpio_hold_dis(EN_PM1);
+  gpio_hold_dis(EN_PM2);
   gpio_reset_pin(EN_PM1);
   gpio_set_direction(EN_PM1, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_PM1, 1);
   gpio_reset_pin(EN_PM2);
   gpio_set_direction(EN_PM2, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_PM2, 1);
+#elif BOARD_VERSION == MAX_BOARD_3XX
+  gpio_hold_dis(EN_PMS);
+  gpio_reset_pin(EN_PMS);
+  gpio_set_direction(EN_PMS, GPIO_MODE_OUTPUT);
+  gpio_set_level(EN_PMS, 1);
+#endif
 
   // Enable Sunlight
+  gpio_hold_dis(EN_CO2);
   gpio_reset_pin(EN_CO2);
   gpio_set_direction(EN_CO2, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_CO2, 1);
 
   // init CE card IO power but set it off until it needed
+  gpio_hold_dis(EN_CE_CARD);
   gpio_reset_pin(EN_CE_CARD);
   gpio_set_direction(EN_CE_CARD, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_CE_CARD, 0);
@@ -246,8 +258,21 @@ void enableIO() {
 
 void disableIO() {
   // Only necessary peripherals that needs to be turned off
+#if BOARD_VERSION == MAX_BOARD_2XX
   gpio_set_level(EN_PM1, 0);
   gpio_set_level(EN_PM2, 0);
+  gpio_hold_en(EN_PM1);
+  gpio_hold_en(EN_PM2);
+#elif BOARD_VERSION == MAX_BOARD_3XX
+  gpio_set_level(EN_PMS, 0);
+  gpio_hold_en(EN_PMS);
+#endif
+
+  gpio_set_level(EN_CO2, 0);
+  gpio_hold_en(EN_CO2);
+
+  gpio_set_level(EN_CE_CARD, 0);
+  gpio_hold_en(EN_CE_CARD);
 }
 
 void printWakeupReason() {
