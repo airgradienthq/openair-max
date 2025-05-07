@@ -122,8 +122,7 @@ extern "C" void app_main(void) {
   g_fimwareVersion = getFirmwareVersion();
   ESP_LOGI(TAG, "Firmware version: %s", g_fimwareVersion.c_str());
 
-  // g_serialNumber = buildSerialNumber();
-  g_serialNumber = "84fce606f790";
+  g_serialNumber = buildSerialNumber();
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
 
   printWakeupReason();
