@@ -37,6 +37,7 @@ static std::string g_serialNumber;
 static bool g_networkReady = false;
 static std::string g_fimwareVersion;
 static RemoteConfig g_remoteConfig;
+static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
@@ -102,16 +103,15 @@ extern "C" void app_main(void) {
   uint32_t wakeUpMillis = MILLIS() - 1000; // minus with previous delay
   ESP_LOGI(TAG, "MAX!");
 
-  StatusLed statusLed(IO_LED_INDICATOR);
-  statusLed.start();
-  statusLed.set(StatusLed::On);
+  g_statusLed.start();
+  g_statusLed.set(StatusLed::On);
 
   // Load remote configuration that saved on NVS
   g_remoteConfig.load();
 
   // Run led test if requested
   if (g_remoteConfig.isLedTestRequested()) {
-    statusLed.set(StatusLed::Blink, 5000, 100);
+    g_statusLed.set(StatusLed::Blink, 5000, 100);
     vTaskDelay(pdMS_TO_TICKS(5000));
     g_remoteConfig.resetLedTestRequested();
   }
@@ -122,7 +122,8 @@ extern "C" void app_main(void) {
   g_fimwareVersion = getFirmwareVersion();
   ESP_LOGI(TAG, "Firmware version: %s", g_fimwareVersion.c_str());
 
-  g_serialNumber = buildSerialNumber();
+  // g_serialNumber = buildSerialNumber();
+  g_serialNumber = "84fce606f790";
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
 
   printWakeupReason();
@@ -132,6 +133,7 @@ extern "C" void app_main(void) {
 
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
   vTaskDelay(pdMS_TO_TICKS(2000));
+  g_statusLed.set(StatusLed::Off);
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -157,7 +159,7 @@ extern "C" void app_main(void) {
     // TODO: Implement!
   }
 
-  statusLed.set(StatusLed::Blink, 4000, 1000);
+  g_statusLed.set(StatusLed::Blink, 8000, 2000);
 
   // Start measure sensor sequence that if success,
   //   push new measure cycle to payload cache to send later
@@ -172,7 +174,6 @@ extern "C" void app_main(void) {
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
-  statusLed.set(StatusLed::Blink, 2000, 100);
   checkForFirmwareUpdate(wakeUpCounter);
   sendMeasuresWhenReady(wakeUpCounter, payloadCache);
   checkRemoteConfiguration(wakeUpCounter);
@@ -180,14 +181,12 @@ extern "C" void app_main(void) {
   // Only poweroff when all transmission attempt is done
   if (g_ceAgSerial != nullptr || g_networkReady) {
     g_cellularCard->powerOff();
-    gpio_set_level(EN_CE_CARD, 0);
+  } else {
+    g_statusLed.set(StatusLed::Blink, 1000, 500);
   }
 
   // Disable un-needed peripherals
-  // TODO: Is there any periphrals that level needs to be kept when sleep?
-  //   because deepsleep also reset all its GPIO state
   disableIO();
-  statusLed.set(StatusLed::Off);
 
   // Reset external watchdog before sleep to make sure its not trigger while in sleep
   //   before system wakeup
@@ -203,6 +202,7 @@ extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Will sleep for %dms", toSleepMs);
   esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
   vTaskDelay(pdMS_TO_TICKS(1000));
+  g_statusLed.disable();
   esp_deep_sleep_start();
 
   // Will never go here
@@ -336,6 +336,8 @@ bool initializeCellularNetwork() {
     return false;
   }
 
+  g_statusLed.set(StatusLed::Blink, 2000, 500);
+
   // Enable CE card power
   gpio_set_level(EN_CE_CARD, 1);
   vTaskDelay(pdMS_TO_TICKS(100));
@@ -344,6 +346,7 @@ bool initializeCellularNetwork() {
   if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD, UART_RX_CE_CARD,
                            UART_TX_CE_CARD)) {
     ESP_LOGI(TAG, "Failed initialize serial communication for cellular card");
+    g_statusLed.set(StatusLed::Blink, 500, 100);
     return false;
   }
 
@@ -355,12 +358,15 @@ bool initializeCellularNetwork() {
   g_agClient = new AirgradientCellularClient(g_cellularCard);
   if (!g_agClient->begin(g_serialNumber)) {
     ESP_LOGE(TAG, "Failed initialize airgradient client");
+    g_statusLed.set(StatusLed::Blink, 500, 100);
     return false;
   }
 
   // Disable again
   g_ceAgSerial->setDebug(false);
   g_networkReady = true;
+
+  g_statusLed.set(StatusLed::Blink, 2000, 100);
 
   return true;
 }
