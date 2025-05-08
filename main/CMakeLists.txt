@@ -21,6 +21,8 @@ set (
   AirgradientClient
   AirgradientOTA
   json_parser
+  console 
+  esp_driver_usb_serial_jtag
 )
 
 idf_component_register(SRCS "${srcs}"

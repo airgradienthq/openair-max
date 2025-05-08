@@ -3,7 +3,10 @@
 #include <inttypes.h>
 #include <string>
 
-#include "airgradientOtaCellular.h"
+#include <fcntl.h>
+#include "esp_console.h"
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
 #include "nvs_flash.h"
 #include "esp_err.h"
 #include "esp_timer.h"
@@ -27,6 +30,11 @@
 #include "cellularModule.h"
 #include "airgradientCellularClient.h"
 #include "cellularModuleA7672xx.h"
+#include "airgradientOtaCellular.h"
+
+#define CONSOLE_MAX_CMDLINE_ARGS 8
+#define CONSOLE_MAX_CMDLINE_LENGTH 256
+#define CONSOLE_PROMPT_MAX_LEN (32)
 
 // Wake up counter that saved on Low Power memory
 RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
@@ -41,6 +49,11 @@ static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
+
+/**
+ * Re-initialize console for logging
+ */
+static void initConsole();
 
 /**
  * Initialize all peripheral IO and turn on all of it except cellular card
@@ -61,7 +74,7 @@ static void resetExtWatchdog();
 /**
  * Helper to print out the reason system wake up from deepsleep
  */
-static void printWakeupReason();
+static void printWakeupReason(esp_sleep_wakeup_cause_t reason);
 
 /**
  * Build monitor serial number from WiFi mac address
@@ -87,9 +100,15 @@ static bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &pay
 static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
 
 extern "C" void app_main(void) {
-  // Give time for logs to initialized (solving wake up cycle no logs)
-  esp_log_level_set("*", ESP_LOG_INFO);
+  // Re-initialize console for logging only if it just wake up after deepsleep
+  esp_sleep_wakeup_cause_t wakeUpReason = esp_sleep_get_wakeup_cause();
+  if (wakeUpReason != ESP_SLEEP_WAKEUP_UNDEFINED) {
+    initConsole();
+    ++xWakeUpCounter;
+    ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
+  }
   vTaskDelay(pdMS_TO_TICKS(1000));
+  printWakeupReason(wakeUpReason);
 
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
@@ -125,8 +144,6 @@ extern "C" void app_main(void) {
   // g_serialNumber = buildSerialNumber();
   g_serialNumber = "84fce606f790";
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
-
-  printWakeupReason();
 
   // Reset external WDT
   resetExtWatchdog();
@@ -212,6 +229,41 @@ extern "C" void app_main(void) {
   }
 }
 
+void initConsole() {
+  fflush(stdout);
+  fsync(fileno(stdout));
+  esp_console_deinit();
+
+  /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
+  usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+  /* Move the caret to the beginning of the next line on '\n' */
+  usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+
+  /* Enable blocking mode on stdin and stdout */
+  fcntl(fileno(stdout), F_SETFL, 0);
+  fcntl(fileno(stdin), F_SETFL, 0);
+
+  usb_serial_jtag_driver_config_t jtag_config = {
+      .tx_buffer_size = 256,
+      .rx_buffer_size = 256,
+  };
+
+  /* Install USB-SERIAL-JTAG driver for interrupt-driven reads and writes */
+  ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&jtag_config));
+
+  /* Tell vfs to use usb-serial-jtag driver */
+  usb_serial_jtag_vfs_use_driver();
+
+  /* Initialize the console */
+  esp_console_config_t console_config = {.max_cmdline_length = CONSOLE_MAX_CMDLINE_LENGTH,
+                                         .max_cmdline_args = CONSOLE_MAX_CMDLINE_ARGS,
+#if CONFIG_LOG_COLORS
+                                         .hint_color = atoi(LOG_COLOR_CYAN)
+#endif
+  };
+  ESP_ERROR_CHECK(esp_console_init(&console_config));
+}
+
 void resetExtWatchdog() {
   ESP_LOGI(TAG, "Watchdog reset");
   gpio_set_level(IO_WDT, 1);
@@ -274,9 +326,8 @@ void disableIO() {
   gpio_hold_en(EN_CE_CARD);
 }
 
-void printWakeupReason() {
-  esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
-  switch (wakeup_reason) {
+void printWakeupReason(esp_sleep_wakeup_cause_t reason) {
+  switch (reason) {
   case ESP_SLEEP_WAKEUP_EXT0:
     ESP_LOGI(TAG, "Wakeup caused by external signal using RTC_IO");
     break;
@@ -293,13 +344,9 @@ void printWakeupReason() {
     ESP_LOGI(TAG, "Wakeup caused by ULP program");
     break;
   default:
-    ESP_LOGI(TAG, "Wakeup was not caused by deep sleep: %d", wakeup_reason);
+    ESP_LOGI(TAG, "Wakeup was not caused by deep sleep: %d", reason);
     ESP_LOGI(TAG, "Wakeup counter: %lu", xWakeUpCounter);
-    return;
   }
-
-  ++xWakeUpCounter;
-  ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
 }
 
 std::string buildSerialNumber() {
@@ -374,7 +421,7 @@ bool initializeCellularNetwork() {
 bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
   // Check if pass criteria to post measures
   if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Data not ready to send");
+    ESP_LOGI(TAG, "Not the time to post measures, skip");
     return true;
   }
 
