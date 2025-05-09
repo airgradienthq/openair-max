@@ -123,7 +123,10 @@ extern "C" void app_main(void) {
   ESP_LOGI(TAG, "MAX!");
 
   g_statusLed.start();
-  g_statusLed.set(StatusLed::On);
+  if (xWakeUpCounter == 0) {
+    // Only turn on led indicator when it just powered on, not wakeup from sleep
+    g_statusLed.set(StatusLed::On);
+  }
 
   // Load remote configuration that saved on NVS
   g_remoteConfig.load();
@@ -141,8 +144,7 @@ extern "C" void app_main(void) {
   g_fimwareVersion = getFirmwareVersion();
   ESP_LOGI(TAG, "Firmware version: %s", g_fimwareVersion.c_str());
 
-  // g_serialNumber = buildSerialNumber();
-  g_serialNumber = "84fce606f790";
+  g_serialNumber = buildSerialNumber();
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
 
   // Reset external WDT
@@ -167,6 +169,7 @@ extern "C" void app_main(void) {
 
   Sensor sensor(bus_handle);
   if (!sensor.init()) {
+    g_statusLed.set(StatusLed::Blink, 500, 100);
     ESP_LOGW(
         TAG,
         "One or more sensor were failed to initialize, will not measure those on this iteration");
@@ -175,8 +178,6 @@ extern "C" void app_main(void) {
   if (g_remoteConfig.isCo2CalibrationRequested()) {
     // TODO: Implement!
   }
-
-  g_statusLed.set(StatusLed::Blink, 8000, 2000);
 
   // Start measure sensor sequence that if success,
   //   push new measure cycle to payload cache to send later
@@ -198,10 +199,7 @@ extern "C" void app_main(void) {
   // Only poweroff when all transmission attempt is done
   if (g_ceAgSerial != nullptr || g_networkReady) {
     g_cellularCard->powerOff();
-  } else {
-    g_statusLed.set(StatusLed::Blink, 1000, 500);
   }
-
   // Disable un-needed peripherals
   disableIO();
 
@@ -383,8 +381,6 @@ bool initializeCellularNetwork() {
     return false;
   }
 
-  g_statusLed.set(StatusLed::Blink, 2000, 500);
-
   // Enable CE card power
   gpio_set_level(EN_CE_CARD, 1);
   vTaskDelay(pdMS_TO_TICKS(100));
@@ -393,7 +389,7 @@ bool initializeCellularNetwork() {
   if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD, UART_RX_CE_CARD,
                            UART_TX_CE_CARD)) {
     ESP_LOGI(TAG, "Failed initialize serial communication for cellular card");
-    g_statusLed.set(StatusLed::Blink, 500, 100);
+    g_statusLed.set(StatusLed::Blink, 700, 100);
     return false;
   }
 
@@ -405,15 +401,13 @@ bool initializeCellularNetwork() {
   g_agClient = new AirgradientCellularClient(g_cellularCard);
   if (!g_agClient->begin(g_serialNumber)) {
     ESP_LOGE(TAG, "Failed initialize airgradient client");
-    g_statusLed.set(StatusLed::Blink, 500, 100);
+    g_statusLed.set(StatusLed::Blink, 700, 100);
     return false;
   }
 
   // Disable again
   g_ceAgSerial->setDebug(false);
   g_networkReady = true;
-
-  g_statusLed.set(StatusLed::Blink, 2000, 100);
 
   return true;
 }
