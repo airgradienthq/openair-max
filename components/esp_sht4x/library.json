@@ -1,0 +1,25 @@
+{
+  "name": "esp_sht4x",
+  "keywords": "esp32, espressif, espidf, temperature, humidity, sht40, sht41, sht43, sht45, i2c, sht4x, sensirion",
+  "description": "ESP32 espressif IoT development framework (esp-idf) compatible component for Sensirion SHT40, SHT41, SHT43, SHT45 temperature and humidity I2C sensors.",
+  "authors": [
+    {
+      "name": "Eric Gionet",
+      "email": "gionet.c.eric@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/K0I05/ESP32-S3_ESP-IDF_COMPONENTS/tree/main/components/peripherals/i2c/esp_sht4x"
+  },
+  "homepage": "https://github.com/K0I05/ESP32-S3_ESP-IDF_COMPONENTS",
+  "version": "1.2.6",
+  "license": "MIT",
+  "frameworks": "espidf",
+  "platforms": "espressif32",
+  "headers": "sht4x.h",
+  "dependencies": {
+    "k0i05/esp_type_utils": ">=1.0.0"
+  }
+}
