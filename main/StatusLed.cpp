@@ -25,7 +25,6 @@ esp_err_t StatusLed::start() {
     return ESP_FAIL;
   }
 
-  gpio_hold_dis(_ioLed);
   gpio_reset_pin(_ioLed);
   gpio_set_direction(_ioLed, GPIO_MODE_OUTPUT);
   gpio_set_level(_ioLed, 0);
@@ -38,11 +37,6 @@ void StatusLed::stop() {
   if (_isRunning) {
     vTaskDelete(_taskHandle);
   }
-}
-
-void StatusLed::disable() {
-  gpio_set_level(_ioLed, 0);
-  gpio_hold_en(_ioLed);
 }
 
 void StatusLed::set(Mode mode, int durationMs, int intervalMs) {

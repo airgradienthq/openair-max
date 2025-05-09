@@ -13,7 +13,6 @@ public:
 
   esp_err_t start();
   void stop();
-  void disable();
 
   /**
    * @brief set led notification based on provided Mode

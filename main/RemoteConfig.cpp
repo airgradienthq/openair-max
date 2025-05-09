@@ -27,7 +27,7 @@ bool RemoteConfig::load() {
 
   // Printout configurations
   ESP_LOGI(TAG, "**** REMOTE CONFIGURATION ****");
-  ESP_LOGI(TAG, "co2CalibrationRequested: %d", _config.co2CalibrationRequested);
+  ESP_LOGI(TAG, "co2CalbirationRequested: %d", _config.co2CalibrationRequested);
   ESP_LOGI(TAG, "ledTestRequested: %d", _config.ledTestRequested);
   ESP_LOGI(TAG, "model: %s", _config.model.c_str());
   ESP_LOGI(TAG, "firmware.target: %s", _config.firmware.target.c_str());

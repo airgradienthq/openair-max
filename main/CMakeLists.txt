@@ -11,6 +11,7 @@ set (
   freertos
   nvs_flash
   esp_driver_gpio
+  driver
   AirgradientSerial
   Sunlight
   PMS
@@ -21,8 +22,6 @@ set (
   AirgradientClient
   AirgradientOTA
   json_parser
-  console 
-  esp_driver_usb_serial_jtag
 )
 
 idf_component_register(SRCS "${srcs}"
