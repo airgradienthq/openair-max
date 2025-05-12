@@ -1,0 +1,6 @@
+[submodule "components/AirgradientClient"]
+	path = components/AirgradientClient
+	url = ../../airgradienthq/airgradient-client.git
+[submodule "components/AirgradientOTA"]
+	path = components/AirgradientOTA
+	url = ../../airgradienthq/airgradient-ota.git
