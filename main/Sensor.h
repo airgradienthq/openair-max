@@ -1,3 +1,10 @@
+/**
+ * AirGradient
+ * https://airgradient.com
+ *
+ * CC BY-SA 4.0 Attribution-ShareAlike 4.0 International License
+ */
+
 #ifndef AG_SENSOR_H
 #define AG_SENSOR_H
 

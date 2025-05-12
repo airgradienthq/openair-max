@@ -1,3 +1,10 @@
+/**
+ * AirGradient
+ * https://airgradient.com
+ *
+ * CC BY-SA 4.0 Attribution-ShareAlike 4.0 International License
+ */
+
 #ifndef PAYLOAD_CACHE_H
 #define PAYLOAD_CACHE_H
 

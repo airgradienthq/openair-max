@@ -1,3 +1,10 @@
+/**
+ * AirGradient
+ * https://airgradient.com
+ *
+ * CC BY-SA 4.0 Attribution-ShareAlike 4.0 International License
+ */
+
 #include "soc/gpio_num.h"
 #ifndef STATUS_LED_H
 

@@ -1,3 +1,10 @@
+/**
+ * AirGradient
+ * https://airgradient.com
+ *
+ * CC BY-SA 4.0 Attribution-ShareAlike 4.0 International License
+ */
+
 #include "RemoteConfig.h"
 #include "MaxConfig.h"
 #include "esp_log.h"

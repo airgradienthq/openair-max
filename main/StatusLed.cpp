@@ -1,3 +1,10 @@
+/**
+ * AirGradient
+ * https://airgradient.com
+ *
+ * CC BY-SA 4.0 Attribution-ShareAlike 4.0 International License
+ */
+
 #include "StatusLed.h"
 #include "driver/gpio.h"
 #include "freertos/idf_additions.h"
