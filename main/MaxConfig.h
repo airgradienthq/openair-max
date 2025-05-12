@@ -10,7 +10,7 @@
 #define MAX_BOARD_2XX 1
 #define MAX_BOARD_3XX 2
 
-#define BOARD_VERSION MAX_BOARD_2XX
+#define BOARD_VERSION MAX_BOARD_3XX
 
 #if BOARD_VERSION == MAX_BOARD_3XX
 constexpr gpio_num_t EN_CO2 = GPIO_NUM_5;
