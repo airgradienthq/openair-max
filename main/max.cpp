@@ -388,6 +388,10 @@ bool initializeCellularNetwork() {
     return false;
   }
 
+  if (xWakeUpCounter == 0) {
+    g_statusLed.set(StatusLed::Blink, 0, 1000);
+  }
+
   // Enable CE card power
   gpio_set_level(EN_CE_CARD, 1);
   vTaskDelay(pdMS_TO_TICKS(100));
@@ -396,7 +400,7 @@ bool initializeCellularNetwork() {
   if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD, UART_RX_CE_CARD,
                            UART_TX_CE_CARD)) {
     ESP_LOGI(TAG, "Failed initialize serial communication for cellular card");
-    g_statusLed.set(StatusLed::Blink, 700, 100);
+    g_statusLed.set(StatusLed::Blink, 1000, 100);
     return false;
   }
 
@@ -408,8 +412,12 @@ bool initializeCellularNetwork() {
   g_agClient = new AirgradientCellularClient(g_cellularCard);
   if (!g_agClient->begin(g_serialNumber)) {
     ESP_LOGE(TAG, "Failed initialize airgradient client");
-    g_statusLed.set(StatusLed::Blink, 700, 100);
+    g_statusLed.set(StatusLed::Blink, 1000, 100);
     return false;
+  }
+
+  if (xWakeUpCounter == 0) {
+    g_statusLed.set(StatusLed::Blink, 2000, 500);
   }
 
   // Disable again
