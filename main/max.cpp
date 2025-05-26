@@ -93,7 +93,7 @@ static std::string buildSerialNumber();
  * If failed once, it will not re-attempt to initialize for its wake up cycle
  * Called when post measure, check remote configuraiton and check for firmware update
  */
-static bool initializeCellularNetwork();
+static bool initializeCellularNetwork(unsigned long wakeUpCounter);
 
 /**
  * Retrieve currently running firmware version
@@ -375,7 +375,7 @@ std::string getFirmwareVersion() {
   return app_desc->version;
 }
 
-bool initializeCellularNetwork() {
+bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   if (g_networkReady) {
     ESP_LOGI(TAG, "Network is already ready to use");
     return true;
@@ -392,25 +392,45 @@ bool initializeCellularNetwork() {
   gpio_set_level(EN_CE_CARD, 1);
   vTaskDelay(pdMS_TO_TICKS(100));
 
+  if (wakeUpCounter == 0) {
+    g_statusLed.set(StatusLed::Blink, 0, 1000);
+  }
+
   g_ceAgSerial = new AirgradientUART();
   if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD, UART_RX_CE_CARD,
                            UART_TX_CE_CARD)) {
     ESP_LOGI(TAG, "Failed initialize serial communication for cellular card");
-    g_statusLed.set(StatusLed::Blink, 700, 100);
+    g_statusLed.set(StatusLed::Blink, 1000, 100);
     return false;
   }
 
   // Enable debugging when CE card initializing
   g_ceAgSerial->setDebug(true);
-
   // Initialize cellular card and client
   g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
-  if (!g_agClient->begin(g_serialNumber)) {
-    ESP_LOGE(TAG, "Failed initialize airgradient client");
-    g_statusLed.set(StatusLed::Blink, 700, 100);
-    return false;
-  }
+
+  do {
+    if (g_agClient->begin(g_serialNumber)) {
+      // Connected
+      if (wakeUpCounter == 0) {
+        g_statusLed.set(StatusLed::Blink, 2000, 500);
+      }
+      break;
+    }
+
+    if (wakeUpCounter == 0) {
+      ESP_LOGE(TAG, "Failed start airgradient client, retry in 10s");
+      g_statusLed.set(StatusLed::Blink, 1000, 100);
+      vTaskDelay(pdMS_TO_TICKS(10000));
+      ESP_LOGI(TAG, "Retry starting airgradient client...");
+      g_statusLed.set(StatusLed::Blink, 0, 1000);
+    } else {
+      ESP_LOGE(TAG, "Failed start airgradient client");
+      break;
+    }
+  } while (wakeUpCounter == 0);
+
 
   // Disable again
   g_ceAgSerial->setDebug(false);
@@ -426,7 +446,7 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     return true;
   }
 
-  if (!initializeCellularNetwork()) {
+  if (!initializeCellularNetwork(wakeUpCounter)) {
     ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
     return false;
   }
@@ -468,7 +488,7 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
     return true;
   }
 
-  if (!initializeCellularNetwork()) {
+  if (!initializeCellularNetwork(wakeUpCounter)) {
     ESP_LOGI(TAG, "Cannot connect to cellular network, skip check firmware update");
     return false;
   }
@@ -504,7 +524,7 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
     return true;
   }
 
-  if (!initializeCellularNetwork()) {
+  if (!initializeCellularNetwork(wakeUpCounter)) {
     ESP_LOGI(TAG, "Cannot connect to cellular network, skip check remote configuration");
     return false;
   }
