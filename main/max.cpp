@@ -360,7 +360,7 @@ void enableIO() {
   // gpio_hold_dis(EN_CO2);
   // gpio_reset_pin(EN_CO2);
   gpio_set_direction(EN_CO2, GPIO_MODE_OUTPUT);
-  softstart(EN_CO2, 10000);
+  softstart(EN_CO2, 1000);
 
   // init CE card IO power but set it off until it needed
   // gpio_hold_dis(EN_CE_CARD);
