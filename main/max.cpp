@@ -64,19 +64,6 @@ static AirgradientClient *g_agClient = nullptr;
  */
 static void initConsole();
 
-/*
- * Function: softstart
- * -------------------
- * Gradually increases the PWM duty cycle on a specified GPIO pin
- * over a defined time period until it reaches 100%.
- *
- * gpio_num       : GPIO number to output PWM signal.
- * time_ms_total  : Total time in milliseconds to reach full duty cycle.
- *
- * returns: void
- */
-void softstart(int gpioNum, int timeMsTotal);
-
 void initGPIO();
 
 /**
@@ -173,6 +160,7 @@ extern "C" void app_main(void) {
   gpio_set_level(EN_PMS, 1);
   vTaskDelay(pdMS_TO_TICKS(2000));
   gpio_set_level(EN_CO2, 1);
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
