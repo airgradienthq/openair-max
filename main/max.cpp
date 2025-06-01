@@ -170,10 +170,9 @@ extern "C" void app_main(void) {
   vTaskDelay(pdMS_TO_TICKS(100));
 
   // Turn ON PMS and CO2 sensor load switch
-  // gpio_set_level(EN_PMS, 1);
-  // gpio_set_level(EN_CO2, 1);
-  softstart(EN_PMS, 5000);
-  softstart(EN_CO2, 1000);
+  gpio_set_level(EN_PMS, 1);
+  vTaskDelay(pdMS_TO_TICKS(2000));
+  gpio_set_level(EN_CO2, 1);
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -213,7 +212,7 @@ extern "C" void app_main(void) {
   // Turn OFF PMS and CO2 sensor load switch
   gpio_set_level(EN_PMS, 0);
   gpio_set_level(EN_CO2, 0);
-  vTaskDelay(pdMS_TO_TICKS(100));
+  vTaskDelay(pdMS_TO_TICKS(1000));
 
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
@@ -297,70 +296,25 @@ void resetExtWatchdog() {
   gpio_set_level(IO_WDT, 0);
 }
 
-void softstart(int gpio_num, int time_ms_total) {
-  // Define constants for PWM configuration
-  const int PWM_FREQ_HZ = 5000;                              // PWM frequency in Hz
-  const ledc_timer_bit_t PWM_RESOLUTION = LEDC_TIMER_13_BIT; // PWM resolution
-  const int MAX_DUTY = (1 << PWM_RESOLUTION) - 1;            // Maximum duty cycle value
-  const ledc_channel_t CHANNEL = LEDC_CHANNEL_0;             // LEDC channel to use
-  const ledc_timer_t TIMER = LEDC_TIMER_0;                   // LEDC timer to use
-  const ledc_mode_t MODE = LEDC_LOW_SPEED_MODE;              // Use low-speed mode
-
-  const int STEP_COUNT = 100;                               // Number of incremental steps
-  const int DELAY_PER_STEP_MS = time_ms_total / STEP_COUNT; // Delay between each step
-
-  // Configure the LEDC timer
-  ledc_timer_config_t ledc_timer = {.speed_mode = MODE,
-                                    .duty_resolution = PWM_RESOLUTION,
-                                    .timer_num = TIMER,
-                                    .freq_hz = PWM_FREQ_HZ,
-                                    .clk_cfg = LEDC_AUTO_CLK};
-  ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-
-  // Configure the LEDC channel
-  ledc_channel_config_t ledc_channel = {.gpio_num = gpio_num,
-                                        .speed_mode = MODE,
-                                        .channel = CHANNEL,
-                                        .intr_type = LEDC_INTR_DISABLE,
-                                        .timer_sel = TIMER,
-                                        .duty = 0,
-                                        .hpoint = 0};
-  ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
-
-  // Gradually increase duty cycle to MAX_DUTY
-  for (int i = 0; i <= STEP_COUNT; ++i) {
-    int duty = (MAX_DUTY * i) / STEP_COUNT;              // Calculate duty for current step
-    ESP_ERROR_CHECK(ledc_set_duty(MODE, CHANNEL, duty)); // Set duty cycle
-    ESP_ERROR_CHECK(ledc_update_duty(MODE, CHANNEL));    // Apply duty cycle
-    vTaskDelay(pdMS_TO_TICKS(DELAY_PER_STEP_MS));        // Wait before next step
-  }
-}
-
 void initGPIO() {
-  // // Cellular card
-  // gpio_config_t io_conf_ce = {
-  //   .pin_bit_mask = 1ULL << EN_CE_CARD,
-  //   .mode = GPIO_MODE_OUTPUT,
-  //   .pull_up_en = GPIO_PULLUP_ENABLE,
-  //   .pull_down_en = GPIO_PULLDOWN_DISABLE,
-  //   .intr_type = GPIO_INTR_DISABLE
-  // };
-  // gpio_config(&io_conf_ce);
-  gpio_set_direction(EN_CE_CARD, GPIO_MODE_OUTPUT);
-  gpio_set_level(EN_CE_CARD, 0);
-  gpio_set_drive_capability(EN_CE_CARD, GPIO_DRIVE_CAP_2);
+  gpio_config_t io_conf = {.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CO2) |
+                                           (1ULL << EN_CE_CARD),
+                           .mode = GPIO_MODE_OUTPUT,
+                           .pull_up_en = GPIO_PULLUP_DISABLE,
+                           .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                           .intr_type = GPIO_INTR_DISABLE};
+  gpio_config(&io_conf);
 
-  // External watchdog
-  gpio_set_direction(IO_WDT, GPIO_MODE_OUTPUT);
+  // TODO: Add reason why, and why watchdog not needed
+  gpio_set_drive_capability(IO_WDT, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_PMS, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_CO2, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_CE_CARD, GPIO_DRIVE_CAP_3);
+
   gpio_set_level(IO_WDT, 0);
-
-  // PMS
-  gpio_set_direction(EN_PMS, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_PMS, 0);
-
-  // CO2
-  gpio_set_direction(EN_CO2, GPIO_MODE_OUTPUT);
   gpio_set_level(EN_CO2, 0);
+  gpio_set_level(EN_CE_CARD, 0);
 }
 
 void printWakeupReason(esp_sleep_wakeup_cause_t reason) {
@@ -421,8 +375,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   }
 
   // Enable CE card power
-  softstart(EN_CE_CARD, 5000);
-  // gpio_set_level(EN_CE_CARD, 1);
+  gpio_set_level(EN_CE_CARD, 1);
   vTaskDelay(pdMS_TO_TICKS(100));
 
   if (wakeUpCounter == 0) {
@@ -445,7 +398,6 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
 
   do {
     if (g_agClient->begin(g_serialNumber)) {
-    // if (g_agClient->begin("7c2c6753f538")) {
       // Connected
       if (wakeUpCounter == 0) {
         g_statusLed.set(StatusLed::Blink, 2000, 500);
