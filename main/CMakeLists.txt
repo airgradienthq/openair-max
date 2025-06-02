@@ -20,7 +20,6 @@ set (
   BQ25672
   AirgradientClient
   AirgradientOTA
-  esp_driver_ledc
   json_parser
   console 
   esp_driver_usb_serial_jtag
