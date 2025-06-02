@@ -292,7 +292,7 @@ void initGPIO() {
                            .intr_type = GPIO_INTR_DISABLE};
   gpio_config(&io_conf);
 
-  // TODO: Add reason why, and why watchdog not needed
+  // Load switch needs more IO current drive
   gpio_set_drive_capability(IO_WDT, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_PMS, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_CO2, GPIO_DRIVE_CAP_3);
@@ -383,6 +383,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
 
+  // If first time boot, attempt to connect until watchdog trigger a reset
   do {
     if (g_agClient->begin(g_serialNumber)) {
       // Connected
@@ -403,8 +404,6 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
       break;
     }
   } while (wakeUpCounter == 0);
-  // TODO: Add timeout to this loop and if failed just restart
-  // TOOD: watchdog might reset on this loop
 
   // Disable again
   g_ceAgSerial->setDebug(false);
