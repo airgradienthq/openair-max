@@ -14,6 +14,7 @@
 #include "esp_console.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
+#include "hal/gpio_types.h"
 #include "nvs_flash.h"
 #include "esp_err.h"
 #include "esp_timer.h"
@@ -62,15 +63,7 @@ static AirgradientClient *g_agClient = nullptr;
  */
 static void initConsole();
 
-/**
- * Initialize all peripheral IO and turn on all of it except cellular card
- */
-static void enableIO();
-
-/**
- * Disable neccessary peripherals IO that needs to be off
- */
-static void disableIO();
+void initGPIO();
 
 /**
  * Reset monitor external watchdog timer
@@ -117,6 +110,9 @@ extern "C" void app_main(void) {
   vTaskDelay(pdMS_TO_TICKS(1000));
   printWakeupReason(wakeUpReason);
 
+  // Initialize every peripheral GPIOs to OFF state
+  initGPIO();
+
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -135,6 +131,12 @@ extern "C" void app_main(void) {
     g_statusLed.set(StatusLed::On);
   }
 
+  g_fimwareVersion = getFirmwareVersion();
+  ESP_LOGI(TAG, "Firmware version: %s", g_fimwareVersion.c_str());
+
+  g_serialNumber = buildSerialNumber();
+  ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
+
   // Load remote configuration that saved on NVS
   g_remoteConfig.load();
 
@@ -145,21 +147,19 @@ extern "C" void app_main(void) {
     g_remoteConfig.resetLedTestRequested();
   }
 
-  // Initialize and enable all IO required
-  enableIO();
-
-  g_fimwareVersion = getFirmwareVersion();
-  ESP_LOGI(TAG, "Firmware version: %s", g_fimwareVersion.c_str());
-
-  g_serialNumber = buildSerialNumber();
-  ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
-
   // Reset external WDT
   resetExtWatchdog();
 
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
   vTaskDelay(pdMS_TO_TICKS(2000));
   g_statusLed.set(StatusLed::Off);
+  vTaskDelay(pdMS_TO_TICKS(100));
+
+  // Turn ON PMS and CO2 sensor load switch
+  gpio_set_level(EN_PMS, 1);
+  vTaskDelay(pdMS_TO_TICKS(2000));
+  gpio_set_level(EN_CO2, 1);
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -196,23 +196,30 @@ extern "C" void app_main(void) {
     payloadCache.push(&averageMeasures);
   }
 
+  // Turn OFF PMS and CO2 sensor load switch
+  gpio_set_level(EN_PMS, 0);
+  gpio_set_level(EN_CO2, 0);
+  vTaskDelay(pdMS_TO_TICKS(1000));
+
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
-  checkForFirmwareUpdate(wakeUpCounter);
   sendMeasuresWhenReady(wakeUpCounter, payloadCache);
   checkRemoteConfiguration(wakeUpCounter);
+  checkForFirmwareUpdate(wakeUpCounter);
 
   // Only poweroff when all transmission attempt is done
   if (g_ceAgSerial != nullptr || g_networkReady) {
     g_cellularCard->powerOff();
   }
-  // Disable un-needed peripherals
-  disableIO();
+  // Turn OFF Cellular Card load switch
+  gpio_set_level(EN_CE_CARD, 0);
 
   // Reset external watchdog before sleep to make sure its not trigger while in sleep
   //   before system wakeup
   resetExtWatchdog();
+
+  // TODO: Print cache size before sleep
 
   // Calculate how long to sleep to keep measurement cycle the same
   uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
@@ -276,59 +283,25 @@ void resetExtWatchdog() {
   gpio_set_level(IO_WDT, 0);
 }
 
-void enableIO() {
-  // watchdog
-  gpio_reset_pin(IO_WDT);
-  gpio_set_direction(IO_WDT, GPIO_MODE_OUTPUT);
+void initGPIO() {
+  gpio_config_t io_conf = {.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CO2) |
+                                           (1ULL << EN_CE_CARD),
+                           .mode = GPIO_MODE_OUTPUT,
+                           .pull_up_en = GPIO_PULLUP_DISABLE,
+                           .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                           .intr_type = GPIO_INTR_DISABLE};
+  gpio_config(&io_conf);
+
+  // Load switch needs more IO current drive
+  gpio_set_drive_capability(IO_WDT, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_PMS, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_CO2, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_CE_CARD, GPIO_DRIVE_CAP_3);
+
   gpio_set_level(IO_WDT, 0);
-
-  // Enable Both PM
-#if BOARD_VERSION == MAX_BOARD_2XX
-  gpio_hold_dis(EN_PM1);
-  gpio_hold_dis(EN_PM2);
-  gpio_reset_pin(EN_PM1);
-  gpio_set_direction(EN_PM1, GPIO_MODE_OUTPUT);
-  gpio_set_level(EN_PM1, 1);
-  gpio_reset_pin(EN_PM2);
-  gpio_set_direction(EN_PM2, GPIO_MODE_OUTPUT);
-  gpio_set_level(EN_PM2, 1);
-#elif BOARD_VERSION == MAX_BOARD_3XX
-  gpio_hold_dis(EN_PMS);
-  gpio_reset_pin(EN_PMS);
-  gpio_set_direction(EN_PMS, GPIO_MODE_OUTPUT);
-  gpio_set_level(EN_PMS, 1);
-#endif
-
-  // Enable Sunlight
-  gpio_hold_dis(EN_CO2);
-  gpio_reset_pin(EN_CO2);
-  gpio_set_direction(EN_CO2, GPIO_MODE_OUTPUT);
-  gpio_set_level(EN_CO2, 1);
-
-  // init CE card IO power but set it off until it needed
-  gpio_hold_dis(EN_CE_CARD);
-  gpio_reset_pin(EN_CE_CARD);
-  gpio_set_direction(EN_CE_CARD, GPIO_MODE_OUTPUT);
-  gpio_set_level(EN_CE_CARD, 0);
-}
-
-void disableIO() {
-  // Only necessary peripherals that needs to be turned off
-#if BOARD_VERSION == MAX_BOARD_2XX
-  gpio_set_level(EN_PM1, 0);
-  gpio_set_level(EN_PM2, 0);
-  gpio_hold_en(EN_PM1);
-  gpio_hold_en(EN_PM2);
-#elif BOARD_VERSION == MAX_BOARD_3XX
   gpio_set_level(EN_PMS, 0);
-  gpio_hold_en(EN_PMS);
-#endif
-
   gpio_set_level(EN_CO2, 0);
-  gpio_hold_en(EN_CO2);
-
   gpio_set_level(EN_CE_CARD, 0);
-  gpio_hold_en(EN_CE_CARD);
 }
 
 void printWakeupReason(esp_sleep_wakeup_cause_t reason) {
@@ -410,6 +383,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
 
+  // If first time boot, attempt to connect until watchdog trigger a reset
   do {
     if (g_agClient->begin(g_serialNumber)) {
       // Connected
@@ -430,7 +404,6 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
       break;
     }
   } while (wakeUpCounter == 0);
-
 
   // Disable again
   g_ceAgSerial->setDebug(false);
@@ -468,6 +441,7 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     tmp.signal = signalStrength;
     payloads.push_back(tmp);
   }
+  // TODO: Make sure send data success when wake up counter is 0
 
   // Attempt to send
   bool success = g_agClient->httpPostMeasures(g_remoteConfig.getConfigSchedule().pm02, payloads);
