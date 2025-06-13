@@ -1,5 +1,5 @@
 set(srcs 
-  "max.cpp"
+ 
   "StatusLed.cpp"
   "Sensor.cpp"
   "PayloadCache.cpp"
@@ -25,6 +25,6 @@ set (
   esp_driver_usb_serial_jtag
 )
 
-idf_component_register(SRCS "${srcs}"
+idf_component_register(SRCS "max.cpp" "${srcs}"
                     PRIV_REQUIRES "${components}" 
                     INCLUDE_DIRS "")

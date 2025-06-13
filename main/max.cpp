@@ -182,8 +182,12 @@ extern "C" void app_main(void) {
         "One or more sensor were failed to initialize, will not measure those on this iteration");
   }
 
+  // Test sunlight background calibration
+  // sensor.co2Calibration();
+
   if (g_remoteConfig.isCo2CalibrationRequested()) {
     // TODO: Implement!
+    sensor.co2Calibration();
   }
 
   // Start measure sensor sequence that if success,
@@ -206,7 +210,7 @@ extern "C" void app_main(void) {
 
   sendMeasuresWhenReady(wakeUpCounter, payloadCache);
   checkRemoteConfiguration(wakeUpCounter);
-  checkForFirmwareUpdate(wakeUpCounter);
+  // checkForFirmwareUpdate(wakeUpCounter);
 
   // Only poweroff when all transmission attempt is done
   if (g_ceAgSerial != nullptr || g_networkReady) {

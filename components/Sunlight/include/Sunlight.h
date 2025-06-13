@@ -3,8 +3,11 @@
 
 #include <stdint.h>
 #include "AirgradientSerial.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-class Sunlight {
+class Sunlight
+{
 
   /*
    * The delay when waiting for responses, in milliseconds.
@@ -20,8 +23,7 @@ class Sunlight {
   static const int ILLEGAL_FUNCTION = 1;
   static const int ILLEGAL_DATA_ADDRESS = 2;
   static const int ILLEGAL_DATA_VALUE = 3;
-
-  /* Function codes */
+  static const int SLAVE_FAILURE = -4;
 
   /* Register addresses */
   static const uint16_t ERROR_STATUS = 0x0000;
@@ -33,6 +35,31 @@ class Sunlight {
   /* Measurement modes */
   static const uint16_t CONTINUOUS = 0x0000;
   static const uint16_t SINGLE = 0x0001;
+
+  /* Error statuses */
+  static const uint16_t IR1_FATAL_ERROR = 0x0001u;
+  static const uint16_t IR1_I2C_ERROR = 0x0002u;
+  static const uint16_t IR1_ALGORITHM_ERROR = 0x0004u;
+  static const uint16_t IR1_CALIBRATION_ERROR = 0x0008u;
+  static const uint16_t IR1_SELFDIAG_ERROR = 0x0010u;
+  static const uint16_t IR1_OUT_OF_RANGE_ERROR = 0x0020u;
+  static const uint16_t IR1_MEMORY_ERROR = 0x0040u;
+  static const uint16_t IR1_NO_MEASUREMENT_ERROR = 0x0080u;
+  static const uint16_t IR1_NO_ERROR = 0x0000u;
+
+  /* Sensors registers */
+  static const uint16_t HR1 = 0u;
+  static const uint16_t HR2 = 1u;
+
+  /* Calibration statuses fro HR1 register */
+  static const uint16_t HR1_RESET_VALUE = 0x0000u;
+  static const uint16_t HR1_BACKGROUND_CALIBRATION = 0x0020u;
+
+  /* Calibration command for HR2 register */
+  static const uint16_t HR2_RESTORE_FACTORY_CALIBRATION = 0x7C02u;
+  static const uint16_t HR2_BACKGROUND_CALIBRATION = 0x7C06u;
+
+  /* Function codes */
 
   /**
    * Arrays for request, responses and register values
@@ -107,6 +134,12 @@ public:
    * @retval true, ABC calibration is enabled on device
    */
   bool isABCEnabled();
+
+  /**
+   * @brief  Make background calibration and report
+   *         error status.
+   */
+  int background_calibration();
 
   void setABC(bool enable);
 
