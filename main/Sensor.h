@@ -27,6 +27,8 @@ public:
   void printMeasures();
   AirgradientClient::OpenAirMaxPayload getLastAverageMeasure();
 
+  int co2Calibration();
+
 private:
   const char *const TAG = "Sensor";
 
