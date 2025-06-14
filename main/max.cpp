@@ -71,6 +71,8 @@ void initGPIO();
  */
 static void resetExtWatchdog();
 
+static void printResetReason();
+
 /**
  * Helper to print out the reason system wake up from deepsleep
  */
@@ -108,6 +110,7 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
   }
   vTaskDelay(pdMS_TO_TICKS(1000));
+  printResetReason();
   printWakeupReason(wakeUpReason);
 
   // Initialize every peripheral GPIOs to OFF state
@@ -302,6 +305,44 @@ void initGPIO() {
   gpio_set_level(EN_PMS, 0);
   gpio_set_level(EN_CO2, 0);
   gpio_set_level(EN_CE_CARD, 0);
+
+void printResetReason() {
+  esp_reset_reason_t reason = esp_reset_reason();
+  switch (reason) {
+  case ESP_RST_UNKNOWN:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_UNKNOWN");
+    break;
+  case ESP_RST_POWERON:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_POWERON");
+    break;
+  case ESP_RST_EXT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_EXT");
+    break;
+  case ESP_RST_SW:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_SW");
+    break;
+  case ESP_RST_PANIC:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_PANIC");
+    break;
+  case ESP_RST_INT_WDT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_INT_WDT");
+    break;
+  case ESP_RST_TASK_WDT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_TASK_WDT");
+    break;
+  case ESP_RST_WDT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_WDT");
+    break;
+  case ESP_RST_BROWNOUT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_BROWNOUT");
+    break;
+  case ESP_RST_SDIO:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_SDIO");
+    break;
+  default:
+    ESP_LOGI(TAG, "Reset reason: unknown");
+    break;
+  }
 }
 
 void printWakeupReason(esp_sleep_wakeup_cause_t reason) {
