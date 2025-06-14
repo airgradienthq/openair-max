@@ -71,6 +71,9 @@ void initGPIO();
  */
 static void resetExtWatchdog();
 
+/**
+ * Helper to print system reset reason
+ */
 static void printResetReason();
 
 /**
@@ -416,7 +419,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
 
   // Enable CE card power
   gpio_set_level(EN_CE_CARD, 1);
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   if (wakeUpCounter == 0) {
     g_statusLed.set(StatusLed::Blink, 0, 1000);
