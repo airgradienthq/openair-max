@@ -72,6 +72,11 @@ void initGPIO();
 static void resetExtWatchdog();
 
 /**
+ * Helper to print system reset reason
+ */
+static void printResetReason();
+
+/**
  * Helper to print out the reason system wake up from deepsleep
  */
 static void printWakeupReason(esp_sleep_wakeup_cause_t reason);
@@ -108,6 +113,7 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
   }
   vTaskDelay(pdMS_TO_TICKS(1000));
+  printResetReason();
   printWakeupReason(wakeUpReason);
 
   // Initialize every peripheral GPIOs to OFF state
@@ -158,8 +164,6 @@ extern "C" void app_main(void) {
   // Turn ON PMS and CO2 sensor load switch
   gpio_set_level(EN_PMS, 1);
   vTaskDelay(pdMS_TO_TICKS(2000));
-  gpio_set_level(EN_CO2, 1);
-  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -196,9 +200,8 @@ extern "C" void app_main(void) {
     payloadCache.push(&averageMeasures);
   }
 
-  // Turn OFF PMS and CO2 sensor load switch
+  // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS, 0);
-  gpio_set_level(EN_CO2, 0);
   vTaskDelay(pdMS_TO_TICKS(1000));
 
   // Optimization: copy from LP memory so will not always call from LP memory
@@ -284,12 +287,19 @@ void resetExtWatchdog() {
 }
 
 void initGPIO() {
-  gpio_config_t io_conf = {.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CO2) |
-                                           (1ULL << EN_CE_CARD),
-                           .mode = GPIO_MODE_OUTPUT,
-                           .pull_up_en = GPIO_PULLUP_DISABLE,
-                           .pull_down_en = GPIO_PULLDOWN_DISABLE,
-                           .intr_type = GPIO_INTR_DISABLE};
+  // Initialize IOs configurations
+  gpio_config_t io_conf;
+  io_conf.mode = GPIO_MODE_OUTPUT;
+  io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  io_conf.intr_type = GPIO_INTR_DISABLE;
+  if (xWakeUpCounter == 0) {
+    io_conf.pin_bit_mask =
+        (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CO2) | (1ULL << EN_CE_CARD);
+  } else {
+    // Ignore CO2 load switch IO since the state already retained
+    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CE_CARD);
+  }
   gpio_config(&io_conf);
 
   // Load switch needs more IO current drive
@@ -298,10 +308,56 @@ void initGPIO() {
   gpio_set_drive_capability(EN_CO2, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_CE_CARD, GPIO_DRIVE_CAP_3);
 
+  // Set default state to off
   gpio_set_level(IO_WDT, 0);
   gpio_set_level(EN_PMS, 0);
-  gpio_set_level(EN_CO2, 0);
   gpio_set_level(EN_CE_CARD, 0);
+
+  if (xWakeUpCounter == 0) {
+    // Directly enable CO2 load switch and hold the state only when first boot
+    // gpio_hold_en will retain the GPIO state on every sleep cycle even when system reset
+    gpio_set_level(EN_CO2, 1);
+    gpio_hold_en(EN_CO2);
+  }
+}
+
+void printResetReason() {
+  esp_reset_reason_t reason = esp_reset_reason();
+  switch (reason) {
+  case ESP_RST_UNKNOWN:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_UNKNOWN");
+    break;
+  case ESP_RST_POWERON:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_POWERON");
+    break;
+  case ESP_RST_EXT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_EXT");
+    break;
+  case ESP_RST_SW:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_SW");
+    break;
+  case ESP_RST_PANIC:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_PANIC");
+    break;
+  case ESP_RST_INT_WDT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_INT_WDT");
+    break;
+  case ESP_RST_TASK_WDT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_TASK_WDT");
+    break;
+  case ESP_RST_WDT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_WDT");
+    break;
+  case ESP_RST_BROWNOUT:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_BROWNOUT");
+    break;
+  case ESP_RST_SDIO:
+    ESP_LOGI(TAG, "Reset reason: ESP_RST_SDIO");
+    break;
+  default:
+    ESP_LOGI(TAG, "Reset reason: unknown");
+    break;
+  }
 }
 
 void printWakeupReason(esp_sleep_wakeup_cause_t reason) {
