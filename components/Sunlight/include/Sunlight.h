@@ -1,8 +1,10 @@
 #ifndef SUNLIGHT_H
 #define SUNLIGHT_H
 
-#include <stdint.h>
 #include "AirgradientSerial.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include <stdint.h>
 
 class Sunlight {
 
@@ -12,7 +14,8 @@ class Sunlight {
    * Sunlight".
    */
   static const int WAIT_MS = 180;
-  /* For baudrate equal 9600 the Modbus 3.5T interval is close to 3.5 ms, we round it to 4 ms*/
+  /* For baudrate equal 9600 the Modbus 3.5T interval is close to 3.5 ms, we
+   * round it to 4 ms*/
   static const int INTER_PACKET_INTERVAL_MS = 5;
 
   /* Error codes */
@@ -20,8 +23,7 @@ class Sunlight {
   static const int ILLEGAL_FUNCTION = 1;
   static const int ILLEGAL_DATA_ADDRESS = 2;
   static const int ILLEGAL_DATA_VALUE = 3;
-
-  /* Function codes */
+  static const int SLAVE_FAILURE = -4;
 
   /* Register addresses */
   static const uint16_t ERROR_STATUS = 0x0000;
@@ -33,6 +35,31 @@ class Sunlight {
   /* Measurement modes */
   static const uint16_t CONTINUOUS = 0x0000;
   static const uint16_t SINGLE = 0x0001;
+
+  /* Error statuses */
+  static const uint16_t IR1_FATAL_ERROR = 0x0001u;
+  static const uint16_t IR1_I2C_ERROR = 0x0002u;
+  static const uint16_t IR1_ALGORITHM_ERROR = 0x0004u;
+  static const uint16_t IR1_CALIBRATION_ERROR = 0x0008u;
+  static const uint16_t IR1_SELFDIAG_ERROR = 0x0010u;
+  static const uint16_t IR1_OUT_OF_RANGE_ERROR = 0x0020u;
+  static const uint16_t IR1_MEMORY_ERROR = 0x0040u;
+  static const uint16_t IR1_NO_MEASUREMENT_ERROR = 0x0080u;
+  static const uint16_t IR1_NO_ERROR = 0x0000u;
+
+  /* Sensors registers */
+  static const uint16_t HR1 = 0u;
+  static const uint16_t HR2 = 1u;
+
+  /* Calibration statuses fro HR1 register */
+  static const uint16_t HR1_RESET_VALUE = 0x0000u;
+  static const uint16_t HR1_BACKGROUND_CALIBRATION = 0x0020u;
+
+  /* Calibration command for HR2 register */
+  static const uint16_t HR2_RESTORE_FACTORY_CALIBRATION = 0x7C02u;
+  static const uint16_t HR2_BACKGROUND_CALIBRATION = 0x7C06u;
+
+  /* Function codes */
 
   /**
    * Arrays for request, responses and register values
@@ -108,6 +135,12 @@ public:
    */
   bool isABCEnabled();
 
+  /**
+   * @brief  Make background calibration and report
+   *         error status.
+   */
+  int startBackgroundCalibration();
+
   void setABC(bool enable);
 
   void setNRDY(bool enable);
@@ -131,8 +164,8 @@ private:
    *         funCode:      Function code
    * @note   This function stores the values read through a global
    *         array, which can then be read to obtain the values.
-   * @retval Error status, >0 on success (response size), -1 on communication error
-   *         or time-out, and 1 - 3 for exceptions.
+   * @retval Error status, >0 on success (response size), -1 on communication
+   * error or time-out, and 1 - 3 for exceptions.
    */
   int modbus_read_response(int waitBytes, uint8_t funCode);
 
@@ -147,7 +180,8 @@ private:
    * @retval Error status, 0 on success, -1 on communication error
    *         or time-out, and 1 - 3 for exceptions.
    */
-  int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg);
+  int read_holding_registers(uint8_t comAddr, uint16_t regAddr,
+                             uint16_t numReg);
 
   /**
    * @brief  Reads multiple input registers.
@@ -195,8 +229,8 @@ private:
    * @retval Error status, 0 on success, -1 on communication error
    *         or time-out, and 1 - 3 for exceptions.
    */
-  int write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg,
-                               uint16_t writeVal[]);
+  int write_multiple_registers(uint8_t comAddr, uint16_t regAddr,
+                               uint16_t numReg, uint16_t writeVal[]);
 
   bool setMeterControlBit(uint8_t target, bool enable, uint8_t bit);
 };

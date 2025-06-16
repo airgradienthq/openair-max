@@ -9,11 +9,11 @@
 
 #include "AirgradientUART.h"
 #include "BQ25672.h"
+#include "MaxConfig.h"
 #include "esp_log_level.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/projdefs.h"
-#include "MaxConfig.h"
 #include <cmath>
 
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
@@ -27,7 +27,8 @@ bool Sensor::init() {
 
   // Sunlight sensor
   agsCO2_ = new AirgradientUART();
-  if (!agsCO2_->begin(UART_PORT_SUNLIGHT, UART_BAUD_SUNLIGHT, UART_RX_SUNLIGHT, UART_TX_SUNLIGHT)) {
+  if (!agsCO2_->begin(UART_PORT_SUNLIGHT, UART_BAUD_SUNLIGHT, UART_RX_SUNLIGHT,
+                      UART_TX_SUNLIGHT)) {
     ESP_LOGE(TAG, "Failed open serial for Sunlight");
     _co2Available = false;
   } else {
@@ -89,7 +90,7 @@ bool Sensor::init() {
     pms2_ = new PMS(agsPM2_);
   }
 
-  // Warm up SGP41 and PMS 
+  // Warm up SGP41 and PMS
   _warmUpSensor();
 
   // Ensure PMS1 is available since the sensor using UART
@@ -108,13 +109,14 @@ bool Sensor::init() {
 
   ESP_LOGI(TAG, "Initialize finish");
 
-  return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
-          _tvocNoxAvailable && _tempHumAvailable);
+  return (_co2Available && _pms1Available && _pms2Available &&
+          _chargerAvailable && _tvocNoxAvailable && _tempHumAvailable);
 }
 
 bool Sensor::startMeasures(int iterations, int intervalMs) {
-  ESP_LOGI(TAG, "Start measures with %d iterations and interval in between %dms", iterations,
-           intervalMs);
+  ESP_LOGI(TAG,
+           "Start measures with %d iterations and interval in between %dms",
+           iterations, intervalMs);
 
   // When starting, set all measures average values to invalid
   //  as indication no valid data from every iterations before saving to cache
@@ -149,16 +151,18 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
     if (toDelay < 0) {
       toDelay = 0;
     }
-    ESP_LOGI(TAG, "Iteration %d takes %ums to finish, next iteration in %ums", i, timeSpendMs,
-             toDelay);
+    ESP_LOGI(TAG, "Iteration %d takes %ums to finish, next iteration in %ums",
+             i, timeSpendMs, toDelay);
     vTaskDelay(pdMS_TO_TICKS(toDelay));
   }
 
-  // Now calculate the average based on total sum result of each measures iteration
+  // Now calculate the average based on total sum result of each measures
+  // iteration
   _calculateMeasuresAverage();
   // TODO: Validate the averaging always works!
 
-  // TODO: _calculateMeasuresAverage should return if there's one or more measure data is invalid
+  // TODO: _calculateMeasuresAverage should return if there's one or more
+  // measure data is invalid
 
   return true;
 }
@@ -178,7 +182,9 @@ void Sensor::printMeasures() {
   ESP_LOGI(TAG, "VPanel : %.2f", _averageMeasure.vPanel);
 }
 
-AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
+AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() {
+  return _averageMeasure;
+}
 
 void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   // Set measure data to invalid for indication if respective sensor failed
@@ -201,7 +207,8 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
 
   if (_tempHumAvailable) {
     float temperature, humidity;
-    esp_err_t result = sht4x_get_measurement(sht_dev_hdl, &temperature, &humidity);
+    esp_err_t result =
+        sht4x_get_measurement(sht_dev_hdl, &temperature, &humidity);
     if (result != ESP_OK) {
       ESP_LOGE(TAG, "sht4x device read failed (%s)", esp_err_to_name(result));
     } else {
@@ -215,10 +222,11 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   if (_tvocNoxAvailable) {
     uint16_t tvocRaw;
     uint16_t noxRaw;
-    esp_err_t result =
-        sgp4x_measure_compensated_signals(sgp_dev_hdl, data.atmp, data.rhum, &tvocRaw, &noxRaw);
+    esp_err_t result = sgp4x_measure_compensated_signals(
+        sgp_dev_hdl, data.atmp, data.rhum, &tvocRaw, &noxRaw);
     if (result != ESP_OK) {
-      ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)", esp_err_to_name(result));
+      ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)",
+               esp_err_to_name(result));
     } else {
       ESP_LOGD(TAG, "SRAW VOC: %u", tvocRaw);
       ESP_LOGD(TAG, "SRAW NOX: %u", noxRaw);
@@ -260,7 +268,8 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
       }
     }
 
-    // Average if both success, if not, use only 1 or no data both if both failed
+    // Average if both success, if not, use only 1 or no data both if both
+    // failed
     if (pms1ReadSuccess && pms2ReadSuccess) {
       data.pm01 = (pmData1.pm_ae_1_0 + pmData2.pm_ae_1_0) / 2.0f;
       data.pm25 = (pmData1.pm_ae_2_5 + pmData2.pm_ae_2_5) / 2.0f;
@@ -358,7 +367,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.particleCount003 == DEFAULT_INVALID_PM) {
       _averageMeasure.particleCount003 = data.particleCount003;
     } else {
-      _averageMeasure.particleCount003 = _averageMeasure.particleCount003 + data.particleCount003;
+      _averageMeasure.particleCount003 =
+          _averageMeasure.particleCount003 + data.particleCount003;
     }
     _pm003CountIterationOkCount = _pm003CountIterationOkCount + 1;
   }
@@ -406,7 +416,8 @@ void Sensor::_warmUpSensor() {
     sgp4x_self_test_result_t selfTestResult;
     esp_err_t result = sgp4x_execute_self_test(sgp_dev_hdl, &selfTestResult);
     if (result != ESP_OK) {
-      ESP_LOGE(TAG, "sgp4x device self-test failed (%s)", esp_err_to_name(result));
+      ESP_LOGE(TAG, "sgp4x device self-test failed (%s)",
+               esp_err_to_name(result));
     } else {
       ESP_LOGI(TAG, "VOC Pixel: %d", selfTestResult.pixels.voc_pixel_failed);
       ESP_LOGI(TAG, "NOX Pixel: %d", selfTestResult.pixels.nox_pixel_failed);
@@ -426,10 +437,12 @@ void Sensor::_warmUpSensor() {
     }
     if (_tvocNoxAvailable) {
       uint16_t sraw_voc;
-      // NOTE: Use sgp4x_execute_compensated_conditioning() to pass rhum and atmp
+      // NOTE: Use sgp4x_execute_compensated_conditioning() to pass rhum and
+      // atmp
       esp_err_t result = sgp4x_execute_conditioning(sgp_dev_hdl, &sraw_voc);
       if (result != ESP_OK) {
-        ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)", esp_err_to_name(result));
+        ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)",
+                 esp_err_to_name(result));
       } else {
         ESP_LOGI(TAG, "SRAW VOC: %u", sraw_voc);
       }
@@ -482,4 +495,16 @@ void Sensor::_calculateMeasuresAverage() {
   if (_vpanelIterationOkCount > 0) {
     _averageMeasure.vPanel = _averageMeasure.vPanel / _vpanelIterationOkCount;
   }
+}
+
+int Sensor::co2Calibration() {
+  /* Read measurements and error status */
+  ESP_LOGI(TAG, "Trying to attempt background calibration process...");
+  int error = co2_->startBackgroundCalibration();
+  if (0 == error) {
+    ESP_LOGD(TAG, "CO2 calibration Success!");
+  } else {
+    ESP_LOGE(TAG, "CO2 calibration Failed!");
+  }
+  return error;
 }

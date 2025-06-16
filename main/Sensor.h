@@ -14,18 +14,19 @@
 #include "PMS.h"
 #include "Sunlight.h"
 #include "airgradientClient.h"
-#include "sht4x.h"
 #include "sgp4x.h"
-
+#include "sht4x.h"
 
 class Sensor {
 public:
   Sensor(i2c_master_bus_handle_t busHandle);
-  ~Sensor(){}
+  ~Sensor() {}
   bool init();
   bool startMeasures(int iterations, int intervalMs);
   void printMeasures();
   AirgradientClient::OpenAirMaxPayload getLastAverageMeasure();
+
+  int co2Calibration();
 
 private:
   const char *const TAG = "Sensor";

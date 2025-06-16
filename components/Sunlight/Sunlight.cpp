@@ -1,7 +1,7 @@
 #include "Sunlight.h"
-#include <cstring>
 #include "esp_log.h"
 #include "esp_timer.h"
+#include <cstring>
 
 #define CO2_SUNLIGHT_ADDR 0x68
 
@@ -14,6 +14,9 @@
 #define bitClear(value, bit) ((value) &= ~(1UL << (bit)))
 
 Sunlight::Sunlight(AirgradientSerial &serial) : _agSerial(serial) {}
+
+/* Reading period, in milliseconds. Default is 4 seconds */
+int readPeriodMs = 4000;
 
 int Sunlight::modbus_read_response(int waitBytes, uint8_t funCode) {
   /* Time-out variable */
@@ -42,7 +45,8 @@ int Sunlight::modbus_read_response(int waitBytes, uint8_t funCode) {
       byteTime = timestamp;
       available_bytes = new_available_bytes;
     }
-  } while (INTER_PACKET_INTERVAL_MS > (unsigned long)((long)timestamp - (long)byteTime));
+  } while (INTER_PACKET_INTERVAL_MS >
+           (unsigned long)((long)timestamp - (long)byteTime));
 
   for (int n = 0; n < available_bytes; n++) {
     response[n] = _agSerial.read();
@@ -53,7 +57,8 @@ int Sunlight::modbus_read_response(int waitBytes, uint8_t funCode) {
   return ((error == 0) ? available_bytes : error);
 }
 
-int Sunlight::read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
+int Sunlight::read_holding_registers(uint8_t comAddr, uint16_t regAddr,
+                                     uint16_t numReg) {
   /* Return variable */
   int error;
 
@@ -90,12 +95,14 @@ int Sunlight::read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t
   /* Wait for response */
   error = modbus_read_response(waitBytes, funCode);
 
-  /* If no error were encountered, combine the bytes containing the requested values into words */
+  /* If no error were encountered, combine the bytes containing the requested
+   * values into words */
   if (error > 0) {
     int counter = 0;
     int slot = 3;
     while (counter < ((error - 5) / 2)) {
-      values[counter] = ((int16_t)(int8_t)response[slot] << 8) | (uint16_t)response[slot + 1];
+      values[counter] =
+          ((int16_t)(int8_t)response[slot] << 8) | (uint16_t)response[slot + 1];
 
       counter++;
       slot = slot + 2;
@@ -107,7 +114,8 @@ int Sunlight::read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t
   return 0;
 }
 
-int Sunlight::read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
+int Sunlight::read_input_registers(uint8_t comAddr, uint16_t regAddr,
+                                   uint16_t numReg) {
   /* Return variable */
   int error = 0;
   /* PDU variables */
@@ -143,12 +151,14 @@ int Sunlight::read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t n
   /* Wait for response */
   error = modbus_read_response(waitBytes, funCode);
 
-  /* If no error were encountered, combine the bytes containing the requested values into words */
+  /* If no error were encountered, combine the bytes containing the requested
+   * values into words */
   if (error > 0) {
     int counter = 0;
     int slot = 3;
     while (counter < ((error - 5) / 2)) {
-      values[counter] = ((int16_t)(int8_t)response[slot] << 8) | (uint16_t)response[slot + 1];
+      values[counter] =
+          ((int16_t)(int8_t)response[slot] << 8) | (uint16_t)response[slot + 1];
 
       counter++;
       slot = slot + 2;
@@ -160,8 +170,8 @@ int Sunlight::read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t n
   return 0;
 }
 
-int Sunlight::write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg,
-                                       uint16_t writeVal[]) {
+int Sunlight::write_multiple_registers(uint8_t comAddr, uint16_t regAddr,
+                                       uint16_t numReg, uint16_t writeVal[]) {
   /* Return variable */
   int error = 0;
 
@@ -195,7 +205,8 @@ int Sunlight::write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16
   request[5] = numRegLo;
   request[6] = numBytes;
 
-  /* Convert the words to be written into 2 bytes and assign them to the request array */
+  /* Convert the words to be written into 2 bytes and assign them to the request
+   * array */
   int counter = 7;
   for (int n = 0; n < numBytes; n++) {
     request[counter] = (writeVal[n] >> 8);
@@ -347,7 +358,8 @@ void Sunlight::read_sensor_config() {
   /* Function variables */
   uint16_t numReg = 0x0003;
 
-  if (read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg) != 0) {
+  if (read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg) !=
+      0) {
     ESP_LOGE(TAG, "Failed to read Sensor Configurations");
     return;
   }
@@ -370,7 +382,8 @@ bool Sunlight::set_measurement_mode(uint8_t mode) {
     change[0] = SINGLE;
   }
 
-  if (read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg) != 0) {
+  if (read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg) !=
+      0) {
     ESP_LOGE(TAG, "Failed to read Measurement Mode");
     return false;
   }
@@ -382,7 +395,8 @@ bool Sunlight::set_measurement_mode(uint8_t mode) {
       ESP_LOGI(TAG, "Changing Measurement Mode to Single...");
     }
 
-    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg, change) != 0) {
+    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_MODE, numReg,
+                                 change) != 0) {
       ESP_LOGE(TAG, "Failed to change measurement mode");
       return false;
     }
@@ -397,7 +411,8 @@ bool Sunlight::set_measurement_period(uint16_t seconds) {
   uint16_t numReg = 0x0001;
   uint16_t change[] = {seconds};
 
-  int error = read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_PERIOD, numReg);
+  int error =
+      read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_PERIOD, numReg);
 
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read measurement period (%d)", error);
@@ -407,7 +422,8 @@ bool Sunlight::set_measurement_period(uint16_t seconds) {
 
   if (values[0] != seconds) {
     ESP_LOGI(TAG, "Changing measurement period to %ds", seconds);
-    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_PERIOD, numReg, change) != 0) {
+    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_PERIOD, numReg,
+                                 change) != 0) {
       ESP_LOGE(TAG, "Failed to change measurement period");
       return false;
     }
@@ -422,7 +438,8 @@ bool Sunlight::set_measurement_samples(uint16_t number) {
   uint16_t numReg = 0x0001;
   uint16_t change[] = {number};
 
-  int error = read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg);
+  int error =
+      read_holding_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg);
 
   if (error != 0) {
     ESP_LOGE(TAG, "Failed to read measurement samples (%d)", error);
@@ -432,7 +449,8 @@ bool Sunlight::set_measurement_samples(uint16_t number) {
 
   if (values[0] != number) {
     ESP_LOGI(TAG, "Changing measurement samples to %d", number);
-    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg, change) != 0) {
+    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg,
+                                 change) != 0) {
       ESP_LOGE(TAG, "Failed to change Measurement samples");
       return false;
     }
@@ -450,7 +468,8 @@ int16_t Sunlight::read_sensor_measurements() {
   uint16_t co2Value = 0;
 
   /* Read values */
-  if ((error = read_input_registers(CO2_SUNLIGHT_ADDR, ERROR_STATUS, numReg)) != 0) {
+  if ((error = read_input_registers(CO2_SUNLIGHT_ADDR, ERROR_STATUS, numReg)) !=
+      0) {
     ESP_LOGE(TAG, "Failed to read input register (%d)", error);
   } else {
     /* Read CO2 concentration */
@@ -543,4 +562,62 @@ void Sunlight::setNRDY(bool enable) {
   if (!this->setMeterControlBit(CO2_SUNLIGHT_ADDR, enable, 0)) {
     DBG("nRDY value change not needed");
   }
+}
+
+int Sunlight::startBackgroundCalibration() {
+  /* Function variables */
+  uint16_t hr1_reset_value[] = {
+      HR1_RESET_VALUE,
+  };
+  uint16_t hr2_background_cal[] = {
+      HR2_BACKGROUND_CALIBRATION,
+  };
+  int error;
+  /* To simplify the calibration process,
+      we will assume that the sensor is in stable air enviroment,
+      but for real applications we should be insure that the sensor is in stable
+     air environment!
+  */
+  /* We should reset last calibration result before attempt to make new
+   * calibration */
+  error = write_multiple_registers(CO2_SUNLIGHT_ADDR, HR1, 1, hr1_reset_value);
+  if (error == 0) {
+    /* Start calibration... */
+    error =
+        write_multiple_registers(CO2_SUNLIGHT_ADDR, HR2, 1, hr2_background_cal);
+    if (error == 0) {
+      int attempts = 0;
+      do {
+        /* The calibration should be finished after next measurement period,
+          so to simplicity the process - we just waiting for one (or two if we
+          have a synchronization issue) measurement periods...
+        */
+        vTaskDelay(pdMS_TO_TICKS(readPeriodMs));
+        /* First check ErrorStatus, probably the calibration is fail due to
+         * non-stable environment */
+        if ((error = read_input_registers(CO2_SUNLIGHT_ADDR, ERROR_STATUS,
+                                          1)) == 0) {
+          if (values[0] & IR1_CALIBRATION_ERROR) {
+            /* Calibration error */
+            error = SLAVE_FAILURE;
+          }
+          /* Second, check Calibration status */
+          else if ((error = read_holding_registers(CO2_SUNLIGHT_ADDR, HR1,
+                                                   1)) == 0) {
+            /* Is calibration completed? */
+            if (values[0] & HR1_BACKGROUND_CALIBRATION) {
+              break;
+            }
+            /* Check timeout, probably we used wrong measurement period to wait
+               for calibration complete */
+            else if (++attempts == 3) {
+              /* Timeout while waiting for calibration */
+              error = SLAVE_FAILURE;
+            }
+          }
+        }
+      } while (error == 0);
+    }
+  }
+  return error;
 }
