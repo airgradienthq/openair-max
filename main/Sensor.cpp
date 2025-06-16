@@ -9,11 +9,11 @@
 
 #include "AirgradientUART.h"
 #include "BQ25672.h"
+#include "MaxConfig.h"
 #include "esp_log_level.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/projdefs.h"
-#include "MaxConfig.h"
 #include <cmath>
 
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
@@ -21,20 +21,17 @@
 
 Sensor::Sensor(i2c_master_bus_handle_t busHandle) : _busHandle(busHandle) {}
 
-bool Sensor::init()
-{
+bool Sensor::init() {
   ESP_LOGI(TAG, "Initializing sensor...");
   esp_log_level_set(TAG, ESP_LOG_DEBUG);
 
   // Sunlight sensor
   agsCO2_ = new AirgradientUART();
-  if (!agsCO2_->begin(UART_PORT_SUNLIGHT, UART_BAUD_SUNLIGHT, UART_RX_SUNLIGHT, UART_TX_SUNLIGHT))
-  {
+  if (!agsCO2_->begin(UART_PORT_SUNLIGHT, UART_BAUD_SUNLIGHT, UART_RX_SUNLIGHT,
+                      UART_TX_SUNLIGHT)) {
     ESP_LOGE(TAG, "Failed open serial for Sunlight");
     _co2Available = false;
-  }
-  else
-  {
+  } else {
     co2_ = new Sunlight(*agsCO2_);
     co2_->read_sensor_id();
     // NOTE: Since UART, need to check if its actually able to communicate?
@@ -44,8 +41,7 @@ bool Sensor::init()
   // initialize i2c SHT configuration
   sht4x_config_t sht_cfg = I2C_SHT4X_CONFIG_DEFAULT;
   sht4x_init(_busHandle, &sht_cfg, &sht_dev_hdl);
-  if (sht_dev_hdl == NULL)
-  {
+  if (sht_dev_hdl == NULL) {
     _tempHumAvailable = false;
     ESP_LOGE(TAG, "Failed init temperature and humidity sensor");
   }
@@ -54,21 +50,17 @@ bool Sensor::init()
   // initialize i2c SGP configuration
   sgp4x_config_t sgp_cfg = I2C_SGP41_CONFIG_DEFAULT;
   sgp4x_init(_busHandle, &sgp_cfg, &sgp_dev_hdl);
-  if (sgp_dev_hdl == NULL)
-  {
+  if (sgp_dev_hdl == NULL) {
     _tvocNoxAvailable = false;
     ESP_LOGE(TAG, "Failed init TVOC & NOx sensor");
   }
 
   // BQ25672
   charger_ = new BQ25672;
-  if (charger_->begin(_busHandle) != ESP_OK)
-  {
+  if (charger_->begin(_busHandle) != ESP_OK) {
     ESP_LOGE(TAG, "Failed init charger");
     _chargerAvailable = false;
-  }
-  else
-  {
+  } else {
     charger_->printSystemStatus();
     charger_->printControlAndConfiguration();
     charger_->update();
@@ -81,26 +73,20 @@ bool Sensor::init()
 
   // PMS 1
   agsPM1_ = new AirgradientIICSerial(_busHandle, SUBUART_CHANNEL_1, 0, 1);
-  if (agsPM1_->begin(9600) == false)
-  {
+  if (agsPM1_->begin(9600) == false) {
     ESP_LOGE(TAG, "Failed open serial for PM sensor 1");
     _pms1Available = false;
-  }
-  else
-  {
+  } else {
     pms1_ = new PMS(agsPM1_);
     // NOTE: Since UART, need to check if its actually able to communicate?
   }
 
   // PMS 2
   agsPM2_ = new AirgradientIICSerial(_busHandle, SUBUART_CHANNEL_2, 0, 1);
-  if (agsPM2_->begin(9600) == false)
-  {
+  if (agsPM2_->begin(9600) == false) {
     ESP_LOGE(TAG, "Failed open serial for PM sensor 2");
     _pms2Available = false;
-  }
-  else
-  {
+  } else {
     pms2_ = new PMS(agsPM2_);
   }
 
@@ -108,18 +94,14 @@ bool Sensor::init()
   _warmUpSensor();
 
   // Ensure PMS1 is available since the sensor using UART
-  if (_pms1Available)
-  {
-    if (pms1_->isConnected() == false)
-    {
+  if (_pms1Available) {
+    if (pms1_->isConnected() == false) {
       ESP_LOGE(TAG, "PMS1 is not connected");
       _pms1Available = false;
     }
   }
-  if (_pms2Available)
-  {
-    if (pms2_->isConnected() == false)
-    {
+  if (_pms2Available) {
+    if (pms2_->isConnected() == false) {
       ESP_LOGE(TAG, "PMS2 is not connected");
       _pms2Available = false;
     }
@@ -127,14 +109,14 @@ bool Sensor::init()
 
   ESP_LOGI(TAG, "Initialize finish");
 
-  return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
-          _tvocNoxAvailable && _tempHumAvailable);
+  return (_co2Available && _pms1Available && _pms2Available &&
+          _chargerAvailable && _tvocNoxAvailable && _tempHumAvailable);
 }
 
-bool Sensor::startMeasures(int iterations, int intervalMs)
-{
-  ESP_LOGI(TAG, "Start measures with %d iterations and interval in between %dms", iterations,
-           intervalMs);
+bool Sensor::startMeasures(int iterations, int intervalMs) {
+  ESP_LOGI(TAG,
+           "Start measures with %d iterations and interval in between %dms",
+           iterations, intervalMs);
 
   // When starting, set all measures average values to invalid
   //  as indication no valid data from every iterations before saving to cache
@@ -152,12 +134,10 @@ bool Sensor::startMeasures(int iterations, int intervalMs)
 
   AirgradientClient::OpenAirMaxPayload iterationData;
 
-  for (int i = 1; i <= iterations; i++)
-  {
+  for (int i = 1; i <= iterations; i++) {
     uint32_t startIteration = MILLIS();
 
-    if (_chargerAvailable)
-    {
+    if (_chargerAvailable) {
       // Call update schedule for BQ25672
       charger_->update();
     }
@@ -168,26 +148,26 @@ bool Sensor::startMeasures(int iterations, int intervalMs)
 
     int timeSpendMs = MILLIS() - startIteration;
     int toDelay = intervalMs - timeSpendMs;
-    if (toDelay < 0)
-    {
+    if (toDelay < 0) {
       toDelay = 0;
     }
-    ESP_LOGI(TAG, "Iteration %d takes %ums to finish, next iteration in %ums", i, timeSpendMs,
-             toDelay);
+    ESP_LOGI(TAG, "Iteration %d takes %ums to finish, next iteration in %ums",
+             i, timeSpendMs, toDelay);
     vTaskDelay(pdMS_TO_TICKS(toDelay));
   }
 
-  // Now calculate the average based on total sum result of each measures iteration
+  // Now calculate the average based on total sum result of each measures
+  // iteration
   _calculateMeasuresAverage();
   // TODO: Validate the averaging always works!
 
-  // TODO: _calculateMeasuresAverage should return if there's one or more measure data is invalid
+  // TODO: _calculateMeasuresAverage should return if there's one or more
+  // measure data is invalid
 
   return true;
 }
 
-void Sensor::printMeasures()
-{
+void Sensor::printMeasures() {
   ESP_LOGI(TAG, "<<< Average Measures >>>");
   ESP_LOGI(TAG, "CO2 : %d", _averageMeasure.rco2);
   ESP_LOGI(TAG, "Temperature : %.1f", _averageMeasure.atmp);
@@ -202,10 +182,11 @@ void Sensor::printMeasures()
   ESP_LOGI(TAG, "VPanel : %.2f", _averageMeasure.vPanel);
 }
 
-AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
+AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() {
+  return _averageMeasure;
+}
 
-void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data)
-{
+void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   // Set measure data to invalid for indication if respective sensor failed
   data.rco2 = DEFAULT_INVALID_CO2;
   data.atmp = DEFAULT_INVALID_TEMPERATURE;
@@ -219,22 +200,18 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data)
   data.vBat = DEFAULT_INVALID_VOLT;
   data.vPanel = DEFAULT_INVALID_VOLT;
 
-  if (_co2Available)
-  {
+  if (_co2Available) {
     data.rco2 = co2_->read_sensor_measurements();
     ESP_LOGD(TAG, "CO2: %d", data.rco2);
   }
 
-  if (_tempHumAvailable)
-  {
+  if (_tempHumAvailable) {
     float temperature, humidity;
-    esp_err_t result = sht4x_get_measurement(sht_dev_hdl, &temperature, &humidity);
-    if (result != ESP_OK)
-    {
+    esp_err_t result =
+        sht4x_get_measurement(sht_dev_hdl, &temperature, &humidity);
+    if (result != ESP_OK) {
       ESP_LOGE(TAG, "sht4x device read failed (%s)", esp_err_to_name(result));
-    }
-    else
-    {
+    } else {
       ESP_LOGD(TAG, "Temperature: %.2f °C", temperature);
       ESP_LOGD(TAG, "Relative humidity: %.2f %c", humidity, '%');
       data.atmp = temperature;
@@ -242,18 +219,15 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data)
     }
   }
 
-  if (_tvocNoxAvailable)
-  {
+  if (_tvocNoxAvailable) {
     uint16_t tvocRaw;
     uint16_t noxRaw;
-    esp_err_t result =
-        sgp4x_measure_compensated_signals(sgp_dev_hdl, data.atmp, data.rhum, &tvocRaw, &noxRaw);
-    if (result != ESP_OK)
-    {
-      ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)", esp_err_to_name(result));
-    }
-    else
-    {
+    esp_err_t result = sgp4x_measure_compensated_signals(
+        sgp_dev_hdl, data.atmp, data.rhum, &tvocRaw, &noxRaw);
+    if (result != ESP_OK) {
+      ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)",
+               esp_err_to_name(result));
+    } else {
       ESP_LOGD(TAG, "SRAW VOC: %u", tvocRaw);
       ESP_LOGD(TAG, "SRAW NOX: %u", noxRaw);
       data.tvocRaw = tvocRaw;
@@ -261,65 +235,52 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data)
     }
   }
 
-  if (_pms1Available || _pms2Available)
-  {
+  if (_pms1Available || _pms2Available) {
     bool pms1ReadSuccess = false;
     PMS::Data pmData1;
-    if (_pms1Available)
-    {
+    if (_pms1Available) {
       pms1_->clearBuffer();
       pms1_->requestRead();
-      if (pms1_->readUntil(pmData1, 1000))
-      {
+      if (pms1_->readUntil(pmData1, 1000)) {
         ESP_LOGD(TAG, "{1} PM1.0 : %d", pmData1.pm_ae_1_0);
         ESP_LOGD(TAG, "{1} PM2.5 : %d", pmData1.pm_ae_2_5);
         ESP_LOGD(TAG, "{1} PM10.0 : %d", pmData1.pm_ae_10_0);
         ESP_LOGD(TAG, "{1} PM 0.3 count : %d", pmData1.pm_raw_0_3);
         pms1ReadSuccess = true;
-      }
-      else
-      {
+      } else {
         ESP_LOGE(TAG, "{1} PMS no data");
       }
     }
 
     bool pms2ReadSuccess = false;
     PMS::Data pmData2;
-    if (_pms2Available)
-    {
+    if (_pms2Available) {
       pms2_->clearBuffer();
       pms2_->requestRead();
-      if (pms2_->readUntil(pmData2, 1000))
-      {
+      if (pms2_->readUntil(pmData2, 1000)) {
         ESP_LOGD(TAG, "{2} PM1.0 : %d", pmData2.pm_ae_1_0);
         ESP_LOGD(TAG, "{2} PM2.5 : %d", pmData2.pm_ae_2_5);
         ESP_LOGD(TAG, "{2} PM10.0 : %d", pmData2.pm_ae_10_0);
         ESP_LOGD(TAG, "{2} PM 0.3 count : %d", pmData2.pm_raw_0_3);
         pms2ReadSuccess = true;
-      }
-      else
-      {
+      } else {
         ESP_LOGE(TAG, "{2} PMS no data");
       }
     }
 
-    // Average if both success, if not, use only 1 or no data both if both failed
-    if (pms1ReadSuccess && pms2ReadSuccess)
-    {
+    // Average if both success, if not, use only 1 or no data both if both
+    // failed
+    if (pms1ReadSuccess && pms2ReadSuccess) {
       data.pm01 = (pmData1.pm_ae_1_0 + pmData2.pm_ae_1_0) / 2.0f;
       data.pm25 = (pmData1.pm_ae_2_5 + pmData2.pm_ae_2_5) / 2.0f;
       data.pm10 = (pmData1.pm_ae_10_0 + pmData2.pm_ae_10_0) / 2.0f;
       data.particleCount003 = (pmData1.pm_raw_0_3 + pmData2.pm_raw_0_3) / 2.0f;
-    }
-    else if (pms1ReadSuccess)
-    {
+    } else if (pms1ReadSuccess) {
       data.pm01 = pmData1.pm_ae_1_0;
       data.pm25 = pmData1.pm_ae_2_5;
       data.pm10 = pmData1.pm_ae_10_0;
       data.particleCount003 = pmData1.pm_raw_0_3;
-    }
-    else if (pms2ReadSuccess)
-    {
+    } else if (pms2ReadSuccess) {
       data.pm01 = pmData2.pm_ae_1_0;
       data.pm25 = pmData2.pm_ae_2_5;
       data.pm10 = pmData2.pm_ae_10_0;
@@ -327,192 +288,137 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data)
     }
   }
 
-  if (_chargerAvailable)
-  {
+  if (_chargerAvailable) {
     uint16_t output;
     esp_err_t err = charger_->getVBAT(&output);
-    if (err != ESP_OK)
-    {
+    if (err != ESP_OK) {
       ESP_LOGE(TAG, "Charger failed get VBAT");
-    }
-    else
-    {
+    } else {
       data.vBat = output / 1000.0; // Convert from mV to V
       ESP_LOGD(TAG, "VBAT: %.2fV", data.vBat);
     }
 
     err = charger_->getVBUS(&output);
-    if (err != ESP_OK)
-    {
+    if (err != ESP_OK) {
       ESP_LOGE(TAG, "Charger failed get VBUS");
-    }
-    else
-    {
+    } else {
       data.vPanel = output / 1000.0; // Convert from mV to V
       ESP_LOGD(TAG, "VBUS: %.2fV", data.vPanel);
     }
   }
 }
 
-void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data)
-{
-  if (IS_CO2_VALID(data.rco2))
-  {
-    if (_averageMeasure.rco2 == DEFAULT_INVALID_CO2)
-    {
+void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
+  if (IS_CO2_VALID(data.rco2)) {
+    if (_averageMeasure.rco2 == DEFAULT_INVALID_CO2) {
       _averageMeasure.rco2 = data.rco2;
-    }
-    else
-    {
+    } else {
       _averageMeasure.rco2 = _averageMeasure.rco2 + data.rco2;
     }
     _rco2IterationOkCount = _rco2IterationOkCount + 1;
   }
 
-  if (IS_TEMPERATURE_VALID(data.atmp))
-  {
-    if (_averageMeasure.atmp == DEFAULT_INVALID_TEMPERATURE)
-    {
+  if (IS_TEMPERATURE_VALID(data.atmp)) {
+    if (_averageMeasure.atmp == DEFAULT_INVALID_TEMPERATURE) {
       _averageMeasure.atmp = data.atmp;
-    }
-    else
-    {
+    } else {
       _averageMeasure.atmp = _averageMeasure.atmp + data.atmp;
     }
     _atmpIterationOkCount = _atmpIterationOkCount + 1;
   }
 
-  if (IS_HUMIDITY_VALID(data.rhum))
-  {
-    if (_averageMeasure.rhum == DEFAULT_INVALID_HUMIDITY)
-    {
+  if (IS_HUMIDITY_VALID(data.rhum)) {
+    if (_averageMeasure.rhum == DEFAULT_INVALID_HUMIDITY) {
       _averageMeasure.rhum = data.rhum;
-    }
-    else
-    {
+    } else {
       _averageMeasure.rhum = _averageMeasure.rhum + data.rhum;
     }
     _rhumIterationOkCount = _rhumIterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.pm01))
-  {
-    if (_averageMeasure.pm01 == DEFAULT_INVALID_PM)
-    {
+  if (IS_PM_VALID(data.pm01)) {
+    if (_averageMeasure.pm01 == DEFAULT_INVALID_PM) {
       _averageMeasure.pm01 = data.pm01;
-    }
-    else
-    {
+    } else {
       _averageMeasure.pm01 = _averageMeasure.pm01 + data.pm01;
     }
     _pm01IterationOkCount = _pm01IterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.pm25))
-  {
-    if (_averageMeasure.pm25 == DEFAULT_INVALID_PM)
-    {
+  if (IS_PM_VALID(data.pm25)) {
+    if (_averageMeasure.pm25 == DEFAULT_INVALID_PM) {
       _averageMeasure.pm25 = data.pm25;
-    }
-    else
-    {
+    } else {
       _averageMeasure.pm25 = _averageMeasure.pm25 + data.pm25;
     }
     _pm25IterationOkCount = _pm25IterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.pm10))
-  {
-    if (_averageMeasure.pm10 == DEFAULT_INVALID_PM)
-    {
+  if (IS_PM_VALID(data.pm10)) {
+    if (_averageMeasure.pm10 == DEFAULT_INVALID_PM) {
       _averageMeasure.pm10 = data.pm10;
-    }
-    else
-    {
+    } else {
       _averageMeasure.pm10 = _averageMeasure.pm10 + data.pm10;
     }
     _pm10IterationOkCount = _pm10IterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.particleCount003))
-  {
-    if (_averageMeasure.particleCount003 == DEFAULT_INVALID_PM)
-    {
+  if (IS_PM_VALID(data.particleCount003)) {
+    if (_averageMeasure.particleCount003 == DEFAULT_INVALID_PM) {
       _averageMeasure.particleCount003 = data.particleCount003;
-    }
-    else
-    {
-      _averageMeasure.particleCount003 = _averageMeasure.particleCount003 + data.particleCount003;
+    } else {
+      _averageMeasure.particleCount003 =
+          _averageMeasure.particleCount003 + data.particleCount003;
     }
     _pm003CountIterationOkCount = _pm003CountIterationOkCount + 1;
   }
 
-  if (IS_TVOC_VALID(data.tvocRaw))
-  {
-    if (_averageMeasure.tvocRaw == DEFAULT_INVALID_TVOC)
-    {
+  if (IS_TVOC_VALID(data.tvocRaw)) {
+    if (_averageMeasure.tvocRaw == DEFAULT_INVALID_TVOC) {
       _averageMeasure.tvocRaw = data.tvocRaw;
-    }
-    else
-    {
+    } else {
       _averageMeasure.tvocRaw = _averageMeasure.tvocRaw + data.tvocRaw;
     }
     _tvocIterationOkCount = _tvocIterationOkCount + 1;
   }
 
-  if (IS_NOX_VALID(data.noxRaw))
-  {
-    if (_averageMeasure.noxRaw == DEFAULT_INVALID_NOX)
-    {
+  if (IS_NOX_VALID(data.noxRaw)) {
+    if (_averageMeasure.noxRaw == DEFAULT_INVALID_NOX) {
       _averageMeasure.noxRaw = data.noxRaw;
-    }
-    else
-    {
+    } else {
       _averageMeasure.noxRaw = _averageMeasure.noxRaw + data.noxRaw;
     }
     _noxIterationOkCount = _noxIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.vBat))
-  {
-    if (_averageMeasure.vBat == DEFAULT_INVALID_VOLT)
-    {
+  if (IS_VOLT_VALID(data.vBat)) {
+    if (_averageMeasure.vBat == DEFAULT_INVALID_VOLT) {
       _averageMeasure.vBat = data.vBat;
-    }
-    else
-    {
+    } else {
       _averageMeasure.vBat = _averageMeasure.vBat + data.vBat;
     }
     _vbatIterationOkCount = _vbatIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.vPanel))
-  {
-    if (_averageMeasure.vPanel == DEFAULT_INVALID_VOLT)
-    {
+  if (IS_VOLT_VALID(data.vPanel)) {
+    if (_averageMeasure.vPanel == DEFAULT_INVALID_VOLT) {
       _averageMeasure.vPanel = data.vPanel;
-    }
-    else
-    {
+    } else {
       _averageMeasure.vPanel = _averageMeasure.vPanel + data.vPanel;
     }
     _vpanelIterationOkCount = _vpanelIterationOkCount + 1;
   }
 }
 
-void Sensor::_warmUpSensor()
-{
+void Sensor::_warmUpSensor() {
   // Self test SGP41
-  if (_tvocNoxAvailable)
-  {
+  if (_tvocNoxAvailable) {
     sgp4x_self_test_result_t selfTestResult;
     esp_err_t result = sgp4x_execute_self_test(sgp_dev_hdl, &selfTestResult);
-    if (result != ESP_OK)
-    {
-      ESP_LOGE(TAG, "sgp4x device self-test failed (%s)", esp_err_to_name(result));
-    }
-    else
-    {
+    if (result != ESP_OK) {
+      ESP_LOGE(TAG, "sgp4x device self-test failed (%s)",
+               esp_err_to_name(result));
+    } else {
       ESP_LOGI(TAG, "VOC Pixel: %d", selfTestResult.pixels.voc_pixel_failed);
       ESP_LOGI(TAG, "NOX Pixel: %d", selfTestResult.pixels.nox_pixel_failed);
     }
@@ -520,106 +426,85 @@ void Sensor::_warmUpSensor()
 
   // Warmup PM1 and PM2 while also do SGP conditioning
   // Only if sensor is available
-  for (int i = 10; i >= 0; i--)
-  {
+  for (int i = 10; i >= 0; i--) {
     ESP_LOGI(TAG, "Warming up PMS and/or SGP41 sensors %d", i);
     vTaskDelay(pdMS_TO_TICKS(1000));
-    if (_pms1Available)
-    {
+    if (_pms1Available) {
       pms1_->passiveMode();
     }
-    if (_pms2Available)
-    {
+    if (_pms2Available) {
       pms2_->passiveMode();
     }
-    if (_tvocNoxAvailable)
-    {
+    if (_tvocNoxAvailable) {
       uint16_t sraw_voc;
-      // NOTE: Use sgp4x_execute_compensated_conditioning() to pass rhum and atmp
+      // NOTE: Use sgp4x_execute_compensated_conditioning() to pass rhum and
+      // atmp
       esp_err_t result = sgp4x_execute_conditioning(sgp_dev_hdl, &sraw_voc);
-      if (result != ESP_OK)
-      {
-        ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)", esp_err_to_name(result));
-      }
-      else
-      {
+      if (result != ESP_OK) {
+        ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)",
+                 esp_err_to_name(result));
+      } else {
         ESP_LOGI(TAG, "SRAW VOC: %u", sraw_voc);
       }
     }
   }
 }
 
-void Sensor::_calculateMeasuresAverage()
-{
-  if (_rco2IterationOkCount > 0)
-  {
+void Sensor::_calculateMeasuresAverage() {
+  if (_rco2IterationOkCount > 0) {
     _averageMeasure.rco2 = _averageMeasure.rco2 / _rco2IterationOkCount;
   }
 
-  if (_atmpIterationOkCount > 0)
-  {
+  if (_atmpIterationOkCount > 0) {
     _averageMeasure.atmp = _averageMeasure.atmp / _atmpIterationOkCount;
   }
 
-  if (_rhumIterationOkCount > 0)
-  {
+  if (_rhumIterationOkCount > 0) {
     _averageMeasure.rhum = _averageMeasure.rhum / _rhumIterationOkCount;
   }
 
-  if (_pm01IterationOkCount > 0)
-  {
+  if (_pm01IterationOkCount > 0) {
     _averageMeasure.pm01 = _averageMeasure.pm01 / _pm01IterationOkCount;
   }
 
-  if (_pm25IterationOkCount > 0)
-  {
+  if (_pm25IterationOkCount > 0) {
     _averageMeasure.pm25 = _averageMeasure.pm25 / _pm25IterationOkCount;
   }
 
-  if (_pm10IterationOkCount > 0)
-  {
+  if (_pm10IterationOkCount > 0) {
     _averageMeasure.pm10 = _averageMeasure.pm10 / _pm10IterationOkCount;
   }
 
-  if (_pm003CountIterationOkCount > 0)
-  {
+  if (_pm003CountIterationOkCount > 0) {
     _averageMeasure.particleCount003 =
         _averageMeasure.particleCount003 / _pm003CountIterationOkCount;
   }
 
-  if (_tvocIterationOkCount > 0)
-  {
+  if (_tvocIterationOkCount > 0) {
     _averageMeasure.tvocRaw = _averageMeasure.tvocRaw / _tvocIterationOkCount;
   }
 
-  if (_noxIterationOkCount > 0)
-  {
+  if (_noxIterationOkCount > 0) {
     _averageMeasure.noxRaw = _averageMeasure.noxRaw / _noxIterationOkCount;
   }
 
-  if (_vbatIterationOkCount > 0)
-  {
+  if (_vbatIterationOkCount > 0) {
     _averageMeasure.vBat = _averageMeasure.vBat / _vbatIterationOkCount;
   }
 
-  if (_vpanelIterationOkCount > 0)
-  {
+  if (_vpanelIterationOkCount > 0) {
     _averageMeasure.vPanel = _averageMeasure.vPanel / _vpanelIterationOkCount;
   }
 }
 
-int Sensor::co2Calibration()
-{
+int Sensor::co2Calibration() {
   /* Read measurements and error status */
-    ESP_LOGI(TAG, "Trying to attempt background calibration process...");
-    int error = co2_->background_calibration();
-    if (0 == error)
-    {
-      ESP_LOGD(TAG, "CO2 calibration Success!");
-    }
-    else
-    {
-      ESP_LOGE(TAG, "CO2 calibration Failed!");
-    }
-    return error;
+  ESP_LOGI(TAG, "Trying to attempt background calibration process...");
+  int error = co2_->startBackgroundCalibration();
+  if (0 == error) {
+    ESP_LOGD(TAG, "CO2 calibration Success!");
+  } else {
+    ESP_LOGE(TAG, "CO2 calibration Failed!");
+  }
+  return error;
 }

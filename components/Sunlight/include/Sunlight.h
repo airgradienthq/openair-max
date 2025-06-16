@@ -1,13 +1,12 @@
 #ifndef SUNLIGHT_H
 #define SUNLIGHT_H
 
-#include <stdint.h>
 #include "AirgradientSerial.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <stdint.h>
 
-class Sunlight
-{
+class Sunlight {
 
   /*
    * The delay when waiting for responses, in milliseconds.
@@ -15,7 +14,8 @@ class Sunlight
    * Sunlight".
    */
   static const int WAIT_MS = 180;
-  /* For baudrate equal 9600 the Modbus 3.5T interval is close to 3.5 ms, we round it to 4 ms*/
+  /* For baudrate equal 9600 the Modbus 3.5T interval is close to 3.5 ms, we
+   * round it to 4 ms*/
   static const int INTER_PACKET_INTERVAL_MS = 5;
 
   /* Error codes */
@@ -139,7 +139,7 @@ public:
    * @brief  Make background calibration and report
    *         error status.
    */
-  int background_calibration();
+  int startBackgroundCalibration();
 
   void setABC(bool enable);
 
@@ -164,8 +164,8 @@ private:
    *         funCode:      Function code
    * @note   This function stores the values read through a global
    *         array, which can then be read to obtain the values.
-   * @retval Error status, >0 on success (response size), -1 on communication error
-   *         or time-out, and 1 - 3 for exceptions.
+   * @retval Error status, >0 on success (response size), -1 on communication
+   * error or time-out, and 1 - 3 for exceptions.
    */
   int modbus_read_response(int waitBytes, uint8_t funCode);
 
@@ -180,7 +180,8 @@ private:
    * @retval Error status, 0 on success, -1 on communication error
    *         or time-out, and 1 - 3 for exceptions.
    */
-  int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg);
+  int read_holding_registers(uint8_t comAddr, uint16_t regAddr,
+                             uint16_t numReg);
 
   /**
    * @brief  Reads multiple input registers.
@@ -228,8 +229,8 @@ private:
    * @retval Error status, 0 on success, -1 on communication error
    *         or time-out, and 1 - 3 for exceptions.
    */
-  int write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg,
-                               uint16_t writeVal[]);
+  int write_multiple_registers(uint8_t comAddr, uint16_t regAddr,
+                               uint16_t numReg, uint16_t writeVal[]);
 
   bool setMeterControlBit(uint8_t target, bool enable, uint8_t bit);
 };

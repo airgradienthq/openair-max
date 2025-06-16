@@ -5,40 +5,40 @@
  * CC BY-SA 4.0 Attribution-ShareAlike 4.0 International License
  */
 
-#include <cstdint>
-#include <stdio.h>
+#include <fcntl.h>
 #include <inttypes.h>
+#include <stdio.h>
+
+#include <cstdint>
 #include <string>
 
-#include <fcntl.h>
-#include "esp_console.h"
-#include "driver/usb_serial_jtag.h"
-#include "driver/usb_serial_jtag_vfs.h"
-#include "hal/gpio_types.h"
-#include "nvs_flash.h"
-#include "esp_err.h"
-#include "esp_timer.h"
-#include "freertos/projdefs.h"
-#include "sdkconfig.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_sleep.h"
-#include "esp_log.h"
-#include "driver/gpio.h"
-#include "driver/i2c_master.h"
-
-#include "MaxConfig.h"
-#include "RemoteConfig.h"
-#include "PayloadCache.h"
-#include "StatusLed.h"
-#include "Sensor.h"
 #include "AirgradientSerial.h"
 #include "AirgradientUART.h"
-#include "airgradientClient.h"
-#include "cellularModule.h"
+#include "MaxConfig.h"
+#include "PayloadCache.h"
+#include "RemoteConfig.h"
+#include "Sensor.h"
+#include "StatusLed.h"
 #include "airgradientCellularClient.h"
-#include "cellularModuleA7672xx.h"
+#include "airgradientClient.h"
 #include "airgradientOtaCellular.h"
+#include "cellularModule.h"
+#include "cellularModuleA7672xx.h"
+#include "driver/gpio.h"
+#include "driver/i2c_master.h"
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
+#include "esp_console.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "esp_sleep.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/projdefs.h"
+#include "freertos/task.h"
+#include "hal/gpio_types.h"
+#include "nvs_flash.h"
+#include "sdkconfig.h"
 
 #define CONSOLE_MAX_CMDLINE_ARGS 8
 #define CONSOLE_MAX_CMDLINE_LENGTH 256
@@ -84,7 +84,8 @@ static std::string buildSerialNumber();
 /**
  * Attempt to initialize and connect to cellular network
  * If failed once, it will not re-attempt to initialize for its wake up cycle
- * Called when post measure, check remote configuraiton and check for firmware update
+ * Called when post measure, check remote configuraiton and check for firmware
+ * update
  */
 static bool initializeCellularNetwork(unsigned long wakeUpCounter);
 
@@ -96,7 +97,8 @@ static std::string getFirmwareVersion();
 // Return false if failed init network or failed send
 // TODO: Add description
 static bool checkRemoteConfiguration(unsigned long wakeUpCounter);
-static bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache);
+static bool sendMeasuresWhenReady(unsigned long wakeUpCounter,
+                                  PayloadCache &payloadCache);
 static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
 
 extern "C" void app_main(void) {
@@ -115,7 +117,8 @@ extern "C" void app_main(void) {
 
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
-  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
+      ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
     ret = nvs_flash_init();
   }
@@ -177,16 +180,12 @@ extern "C" void app_main(void) {
   Sensor sensor(bus_handle);
   if (!sensor.init()) {
     g_statusLed.set(StatusLed::Blink, 500, 100);
-    ESP_LOGW(
-        TAG,
-        "One or more sensor were failed to initialize, will not measure those on this iteration");
+    ESP_LOGW(TAG,
+             "One or more sensor were failed to initialize, will not measure "
+             "those on this iteration");
   }
 
-  // Test sunlight background calibration
-  // sensor.co2Calibration();
-
   if (g_remoteConfig.isCo2CalibrationRequested()) {
-    // TODO: Implement!
     sensor.co2Calibration();
   }
 
@@ -210,7 +209,7 @@ extern "C" void app_main(void) {
 
   sendMeasuresWhenReady(wakeUpCounter, payloadCache);
   checkRemoteConfiguration(wakeUpCounter);
-  // checkForFirmwareUpdate(wakeUpCounter);
+  checkForFirmwareUpdate(wakeUpCounter);
 
   // Only poweroff when all transmission attempt is done
   if (g_ceAgSerial != nullptr || g_networkReady) {
@@ -219,7 +218,8 @@ extern "C" void app_main(void) {
   // Turn OFF Cellular Card load switch
   gpio_set_level(EN_CE_CARD, 0);
 
-  // Reset external watchdog before sleep to make sure its not trigger while in sleep
+  // Reset external watchdog before sleep to make sure its not trigger while in
+  // sleep
   //   before system wakeup
   resetExtWatchdog();
 
@@ -227,7 +227,8 @@ extern "C" void app_main(void) {
 
   // Calculate how long to sleep to keep measurement cycle the same
   uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
-  int toSleepMs = (g_remoteConfig.getConfigSchedule().pm02 * 1000) - aliveTimeSpendMillis;
+  int toSleepMs =
+      (g_remoteConfig.getConfigSchedule().pm02 * 1000) - aliveTimeSpendMillis;
   if (toSleepMs < 0) {
     // TODO: if its 0 means, no need to sleep, right? if so need to move to loop
     toSleepMs = 0;
@@ -271,10 +272,11 @@ void initConsole() {
   usb_serial_jtag_vfs_use_driver();
 
   /* Initialize the console */
-  esp_console_config_t console_config = {.max_cmdline_length = CONSOLE_MAX_CMDLINE_LENGTH,
-                                         .max_cmdline_args = CONSOLE_MAX_CMDLINE_ARGS,
+  esp_console_config_t console_config = {
+      .max_cmdline_length = CONSOLE_MAX_CMDLINE_LENGTH,
+      .max_cmdline_args = CONSOLE_MAX_CMDLINE_ARGS,
 #if CONFIG_LOG_COLORS
-                                         .hint_color = atoi(LOG_COLOR_CYAN)
+      .hint_color = atoi(LOG_COLOR_CYAN)
 #endif
   };
   ESP_ERROR_CHECK(esp_console_init(&console_config));
@@ -288,7 +290,8 @@ void resetExtWatchdog() {
 }
 
 void initGPIO() {
-  gpio_config_t io_conf = {.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CO2) |
+  gpio_config_t io_conf = {.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) |
+                                           (1ULL << EN_CO2) |
                                            (1ULL << EN_CE_CARD),
                            .mode = GPIO_MODE_OUTPUT,
                            .pull_up_en = GPIO_PULLUP_DISABLE,
@@ -340,8 +343,9 @@ std::string buildSerialNumber() {
   }
 
   char result[13] = {0};
-  snprintf(result, sizeof(result), "%02x%02x%02x%02x%02x%02x", mac_address[0], mac_address[1],
-           mac_address[2], mac_address[3], mac_address[4], mac_address[5]);
+  snprintf(result, sizeof(result), "%02x%02x%02x%02x%02x%02x", mac_address[0],
+           mac_address[1], mac_address[2], mac_address[3], mac_address[4],
+           mac_address[5]);
   std::string sn = std::string(result);
 
   return sn;
@@ -358,10 +362,10 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     return true;
   }
 
-  if (g_ceAgSerial != nullptr || g_cellularCard != nullptr || g_agClient != nullptr) {
-    ESP_LOGW(
-        TAG,
-        "Give up cellular initialization on this wakeup cycle since previous attempt is failed");
+  if (g_ceAgSerial != nullptr || g_cellularCard != nullptr ||
+      g_agClient != nullptr) {
+    ESP_LOGW(TAG, "Give up cellular initialization on this wakeup cycle since "
+                  "previous attempt is failed");
     return false;
   }
 
@@ -374,8 +378,8 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   }
 
   g_ceAgSerial = new AirgradientUART();
-  if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD, UART_RX_CE_CARD,
-                           UART_TX_CE_CARD)) {
+  if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD,
+                           UART_RX_CE_CARD, UART_TX_CE_CARD)) {
     ESP_LOGI(TAG, "Failed initialize serial communication for cellular card");
     g_statusLed.set(StatusLed::Blink, 1000, 100);
     return false;
@@ -416,9 +420,11 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   return true;
 }
 
-bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
+bool sendMeasuresWhenReady(unsigned long wakeUpCounter,
+                           PayloadCache &payloadCache) {
   // Check if pass criteria to post measures
-  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
+  if (wakeUpCounter != 0 &&
+      (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
     ESP_LOGI(TAG, "Not the time to post measures, skip");
     return true;
   }
@@ -448,7 +454,8 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   // TODO: Make sure send data success when wake up counter is 0
 
   // Attempt to send
-  bool success = g_agClient->httpPostMeasures(g_remoteConfig.getConfigSchedule().pm02, payloads);
+  bool success = g_agClient->httpPostMeasures(
+      g_remoteConfig.getConfigSchedule().pm02, payloads);
   if (!success) {
     // Consider network has a problem, retry in next schedule
     ESP_LOGE(TAG, "send measures failed, retry in next schedule");
@@ -461,13 +468,15 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
 }
 
 bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
-  if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
+  if (wakeUpCounter != 0 &&
+      (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
     ESP_LOGI(TAG, "Not the time to check firmware update, skip");
     return true;
   }
 
   if (!initializeCellularNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check firmware update");
+    ESP_LOGI(TAG,
+             "Cannot connect to cellular network, skip check firmware update");
     return false;
   }
 
@@ -497,13 +506,16 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
 }
 
 bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
-  if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
+  if (wakeUpCounter != 0 &&
+      (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
     ESP_LOGI(TAG, "Not the time to check remote configuration, skip");
     return true;
   }
 
   if (!initializeCellularNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check remote configuration");
+    ESP_LOGI(
+        TAG,
+        "Cannot connect to cellular network, skip check remote configuration");
     return false;
   }
 
@@ -523,7 +535,9 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
   }
 
   if (g_remoteConfig.isConfigChanged()) {
-    ESP_LOGI(TAG, "Changed configuration will be applied on next wakeup cycle onwards");
+    ESP_LOGI(
+        TAG,
+        "Changed configuration will be applied on next wakeup cycle onwards");
   }
 
   return true;
