@@ -10,17 +10,19 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container:
-      image: espressif/idf:release-v5.4
-
+    runs-on: ubuntu-latest:25.04
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
-      - name: Build project
-        run: |
-          idf.py build
+      - name: esp-idf build
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4
+          target: esp32c6 
+          path: '.'
 
       - name: Upload firmware binaries (on release only)
         if: github.event_name == 'release'
