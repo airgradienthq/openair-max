@@ -1,0 +1,64 @@
+name: MAX Firmware CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  release:
+    types: [published]   # triggers when a new release is published
+
+jobs:
+  # Build firmware and upload the binaries (including merge binary) to artifact
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: esp-idf build
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4
+          target: esp32c6 
+          path: '.'
+          command: idf.py merge-bin -o openair-max-merge.bin -f raw
+
+      - name: Set firmware directory output
+        id: set-output
+        run: echo "dir=build" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts 
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.run_id }}
+          path: |
+            build/openair-max.bin
+            build/ota_data_initial.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/openair-max-merge.bin
+
+  # If event is a release, run this job that upload the binaries as release asset
+  release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ github.run_id }}
+          path: output
+
+      - name: Create release ZIP
+        run: |
+          cd output
+          zip -r ../max-firmware-${{ github.ref_name }}.zip .
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: max-firmware-${{ github.ref_name }}.zip
