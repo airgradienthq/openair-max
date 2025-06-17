@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-25.04
+    runs-on: ubuntu-latest
     container:
       image: espressif/idf:release-v5.4
 
