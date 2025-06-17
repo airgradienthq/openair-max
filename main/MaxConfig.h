@@ -16,7 +16,7 @@
 
 constexpr gpio_num_t EN_CO2 = GPIO_NUM_5;
 constexpr gpio_num_t EN_PMS = GPIO_NUM_3;
-constexpr gpio_num_t EN_NO2 = GPIO_NUM_4;
+constexpr gpio_num_t EN_ALPHASENSE = GPIO_NUM_4;
 constexpr gpio_num_t IO_WDT = GPIO_NUM_2;
 constexpr gpio_num_t EN_CE_CARD = GPIO_NUM_15;
 constexpr gpio_num_t IO_CE_POWER = GPIO_NUM_23;
@@ -37,6 +37,9 @@ constexpr gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
 #define I2C_MASTER_SDA_IO 7
 #define I2C_MASTER_FREQ_HZ 100000
 #define I2C_MASTER_PORT 0
+
+#define I2C_ADDR_ADS1115_1 0x48
+#define I2C_ADDR_ADS1115_2 0x49
 
 #define DEFAULT_INVALID_TEMPERATURE -1000
 #define DEFAULT_INVALID_HUMIDITY -1

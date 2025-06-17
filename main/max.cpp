@@ -161,9 +161,10 @@ extern "C" void app_main(void) {
   g_statusLed.set(StatusLed::Off);
   vTaskDelay(pdMS_TO_TICKS(100));
 
-  // Turn ON PMS and CO2 sensor load switch
+  // Turn ON PMS and AlphaSense sensor load switch
   gpio_set_level(EN_PMS, 1);
   vTaskDelay(pdMS_TO_TICKS(2000));
+  gpio_set_level(EN_ALPHASENSE, 1);
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -202,6 +203,7 @@ extern "C" void app_main(void) {
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS, 0);
+  gpio_set_level(EN_ALPHASENSE, 0);
   vTaskDelay(pdMS_TO_TICKS(1000));
 
   // Optimization: copy from LP memory so will not always call from LP memory
@@ -294,11 +296,12 @@ void initGPIO() {
   io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
   io_conf.intr_type = GPIO_INTR_DISABLE;
   if (xWakeUpCounter == 0) {
-    io_conf.pin_bit_mask =
-        (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CO2) | (1ULL << EN_CE_CARD);
+    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CO2) |
+                           (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   } else {
     // Ignore CO2 load switch IO since the state already retained
-    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CE_CARD);
+    io_conf.pin_bit_mask =
+        (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   }
   gpio_config(&io_conf);
 
@@ -306,11 +309,13 @@ void initGPIO() {
   gpio_set_drive_capability(IO_WDT, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_PMS, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_CO2, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_ALPHASENSE, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_CE_CARD, GPIO_DRIVE_CAP_3);
 
   // Set default state to off
   gpio_set_level(IO_WDT, 0);
   gpio_set_level(EN_PMS, 0);
+  gpio_set_level(EN_ALPHASENSE, 0);
   gpio_set_level(EN_CE_CARD, 0);
 
   if (xWakeUpCounter == 0) {

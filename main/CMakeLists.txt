@@ -4,6 +4,7 @@ set(srcs
   "Sensor.cpp"
   "PayloadCache.cpp"
   "RemoteConfig.cpp"
+  "AlphaSenseSensor.cpp"
 )
 
 set (
@@ -18,6 +19,7 @@ set (
   esp_sgp4x
   sensirion_gas_index_algorithm
   BQ25672
+  ADS1115
   AirgradientClient
   AirgradientOTA
   json_parser

@@ -16,7 +16,7 @@
 #include "airgradientClient.h"
 #include "sht4x.h"
 #include "sgp4x.h"
-
+#include "AlphaSenseSensor.h"
 
 class Sensor {
 public:
@@ -46,6 +46,11 @@ private:
   int _noxIterationOkCount = 0;
   int _vbatIterationOkCount = 0;
   int _vpanelIterationOkCount = 0;
+  int _o3WEIterationOkCount = 0;
+  int _o3AEIterationOkCount = 0;
+  int _no2WEIterationOkCount = 0;
+  int _no2AEIterationOkCount = 0;
+  int _afeTempIterationOkCount = 0;
   AirgradientClient::OpenAirMaxPayload _averageMeasure;
   i2c_master_bus_handle_t _busHandle;
 
@@ -65,10 +70,14 @@ private:
   BQ25672 *charger_ = nullptr;
 
   bool _tempHumAvailable = true;
-  sht4x_handle_t sht_dev_hdl;
+  sht4x_handle_t sht_dev_hdl = NULL;
 
   bool _tvocNoxAvailable = true;
-  sgp4x_handle_t sgp_dev_hdl;
+  sgp4x_handle_t sgp_dev_hdl = NULL;
+
+  bool _alphaSenseGasAvailable = true;
+  bool _alphaSenseTempAvailable = true;
+  AlphaSenseSensor *alphaSense_ = nullptr;
 };
 
 #endif // !AG_SENSOR_H
