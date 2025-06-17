@@ -8,6 +8,7 @@
 #include "Sensor.h"
 
 #include "AirgradientUART.h"
+#include "AlphaSenseSensor.h"
 #include "BQ25672.h"
 #include "esp_log_level.h"
 #include "esp_timer.h"
@@ -70,6 +71,15 @@ bool Sensor::init() {
     charger_->getChargingStatus();
   }
 
+  // Alphasense sensor
+  alphaSense_ = new AlphaSenseSensor();
+  if (alphaSense_->initGas(_busHandle) == false) {
+    _alphaSenseGasAvailable = false;
+  }
+  if (alphaSense_->initTemperature(_busHandle) == false) {
+    _alphaSenseTempAvailable = false;
+  }
+
   // PMS 1
   agsPM1_ = new AirgradientIICSerial(_busHandle, SUBUART_CHANNEL_1, 0, 1);
   if (agsPM1_->begin(9600) == false) {
@@ -89,7 +99,7 @@ bool Sensor::init() {
     pms2_ = new PMS(agsPM2_);
   }
 
-  // Warm up SGP41 and PMS 
+  // Warm up SGP41 and PMS
   _warmUpSensor();
 
   // Ensure PMS1 is available since the sensor using UART
@@ -129,6 +139,11 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
   _averageMeasure.noxRaw = DEFAULT_INVALID_NOX;
   _averageMeasure.vBat = DEFAULT_INVALID_VOLT;
   _averageMeasure.vPanel = DEFAULT_INVALID_VOLT;
+  _averageMeasure.o3WorkingElectrode = DEFAULT_INVALID_VOLT;
+  _averageMeasure.o3AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
+  _averageMeasure.no2WorkingElectrode = DEFAULT_INVALID_VOLT;
+  _averageMeasure.no2AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
+  _averageMeasure.afeTemp = DEFAULT_INVALID_VOLT;
 
   AirgradientClient::OpenAirMaxPayload iterationData;
 
@@ -176,6 +191,11 @@ void Sensor::printMeasures() {
   ESP_LOGI(TAG, "NOx Raw : %d", _averageMeasure.noxRaw);
   ESP_LOGI(TAG, "VBAT : %.2f", _averageMeasure.vBat);
   ESP_LOGI(TAG, "VPanel : %.2f", _averageMeasure.vPanel);
+  ESP_LOGI(TAG, "O3 WE: %.3fmV", _averageMeasure.o3WorkingElectrode);
+  ESP_LOGI(TAG, "O3 AE: %.3fmV", _averageMeasure.o3AuxiliaryElectrode);
+  ESP_LOGI(TAG, "NO2 WE: %.3fmV", _averageMeasure.no2WorkingElectrode);
+  ESP_LOGI(TAG, "NO2 AE: %.3fmV", _averageMeasure.no2AuxiliaryElectrode);
+  ESP_LOGI(TAG, "AFE Temperature: %.3fmV", _averageMeasure.afeTemp);
 }
 
 AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
@@ -193,6 +213,11 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   data.noxRaw = DEFAULT_INVALID_NOX;
   data.vBat = DEFAULT_INVALID_VOLT;
   data.vPanel = DEFAULT_INVALID_VOLT;
+  data.o3WorkingElectrode = DEFAULT_INVALID_VOLT;
+  data.o3AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
+  data.no2WorkingElectrode = DEFAULT_INVALID_VOLT;
+  data.no2AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
+  data.afeTemp = DEFAULT_INVALID_VOLT;
 
   if (_co2Available) {
     data.rco2 = co2_->read_sensor_measurements();
@@ -297,6 +322,22 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
       ESP_LOGD(TAG, "VBUS: %.2fV", data.vPanel);
     }
   }
+
+  if (_alphaSenseGasAvailable) {
+    data.o3WorkingElectrode = alphaSense_->getO3WorkingElectrode();
+    data.o3AuxiliaryElectrode = alphaSense_->getO3AuxiliaryElectrode();
+    data.no2WorkingElectrode = alphaSense_->getNO2WorkingElectrode();
+    data.no2AuxiliaryElectrode = alphaSense_->getNO2AuxiliaryElectrode();
+    ESP_LOGD(TAG, "O3 WE: %.3fmV", data.o3WorkingElectrode);
+    ESP_LOGD(TAG, "O3 AE: %.3fmV", data.o3AuxiliaryElectrode);
+    ESP_LOGD(TAG, "NO2 WE: %.3fmV", data.no2WorkingElectrode);
+    ESP_LOGD(TAG, "NO2 AE: %.3fmV", data.no2AuxiliaryElectrode);
+  }
+
+  if (_alphaSenseTempAvailable) {
+    data.afeTemp = alphaSense_->getTemperature();
+    ESP_LOGD(TAG, "AFE Temperature: %.3fmV", data.afeTemp);
+  }
 }
 
 void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
@@ -398,6 +439,51 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     }
     _vpanelIterationOkCount = _vpanelIterationOkCount + 1;
   }
+
+  if (IS_VOLT_VALID(data.o3WorkingElectrode)) {
+    if (_averageMeasure.o3WorkingElectrode == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.o3WorkingElectrode = data.o3WorkingElectrode;
+    } else {
+      _averageMeasure.o3WorkingElectrode = _averageMeasure.o3WorkingElectrode + data.o3WorkingElectrode;
+    }
+    _o3WEIterationOkCount = _o3WEIterationOkCount + 1;
+  }
+
+  if (IS_VOLT_VALID(data.o3AuxiliaryElectrode)) {
+    if (_averageMeasure.o3AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.o3AuxiliaryElectrode = data.o3AuxiliaryElectrode;
+    } else {
+      _averageMeasure.o3AuxiliaryElectrode = _averageMeasure.o3AuxiliaryElectrode + data.o3AuxiliaryElectrode;
+    }
+    _o3AEIterationOkCount = _o3AEIterationOkCount + 1;
+  }
+
+  if (IS_VOLT_VALID(data.no2WorkingElectrode)) {
+    if (_averageMeasure.no2WorkingElectrode == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.no2WorkingElectrode = data.no2WorkingElectrode;
+    } else {
+      _averageMeasure.no2WorkingElectrode = _averageMeasure.no2WorkingElectrode + data.no2WorkingElectrode;
+    }
+    _no2WEIterationOkCount = _no2WEIterationOkCount + 1;
+  }
+
+  if (IS_VOLT_VALID(data.no2AuxiliaryElectrode)) {
+    if (_averageMeasure.no2AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.no2AuxiliaryElectrode = data.no2AuxiliaryElectrode;
+    } else {
+      _averageMeasure.no2AuxiliaryElectrode = _averageMeasure.no2AuxiliaryElectrode + data.no2AuxiliaryElectrode;
+    }
+    _no2AEIterationOkCount = _no2AEIterationOkCount + 1;
+  }
+
+  if (IS_VOLT_VALID(data.afeTemp)) {
+    if (_averageMeasure.afeTemp == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.afeTemp = data.afeTemp;
+    } else {
+      _averageMeasure.afeTemp = _averageMeasure.afeTemp + data.afeTemp;
+    }
+    _afeTempIterationOkCount = _afeTempIterationOkCount + 1;
+  }
 }
 
 void Sensor::_warmUpSensor() {
@@ -481,5 +567,25 @@ void Sensor::_calculateMeasuresAverage() {
 
   if (_vpanelIterationOkCount > 0) {
     _averageMeasure.vPanel = _averageMeasure.vPanel / _vpanelIterationOkCount;
+  }
+
+  if (_o3WEIterationOkCount > 0) {
+    _averageMeasure.o3WorkingElectrode = _averageMeasure.o3WorkingElectrode / _o3WEIterationOkCount;
+  }
+
+  if (_o3AEIterationOkCount > 0) {
+    _averageMeasure.o3AuxiliaryElectrode = _averageMeasure.o3AuxiliaryElectrode / _o3AEIterationOkCount;
+  }
+
+  if (_no2WEIterationOkCount > 0) {
+    _averageMeasure.no2WorkingElectrode = _averageMeasure.no2WorkingElectrode / _no2WEIterationOkCount;
+  }
+
+  if (_no2AEIterationOkCount > 0) {
+    _averageMeasure.no2AuxiliaryElectrode = _averageMeasure.no2AuxiliaryElectrode / _no2AEIterationOkCount;
+  }
+
+  if (_afeTempIterationOkCount > 0) {
+    _averageMeasure.afeTemp = _averageMeasure.afeTemp / _afeTempIterationOkCount;
   }
 }
