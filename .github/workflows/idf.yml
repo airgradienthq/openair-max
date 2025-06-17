@@ -55,11 +55,10 @@ jobs:
           # zip -r ../max-firmware-${{ github.ref_name }}.zip .
           zip -r ../max-firmware-test.zip .
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          # files: max-firmware-${{ github.ref_name }}.zip
-          files: max-firmware-test.zip
+      # - name: Upload to GitHub Release
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     files: max-firmware-${{ github.ref_name }}.zip
 
       - name: Upload build artifacts 
         uses: actions/upload-artifact@v4
