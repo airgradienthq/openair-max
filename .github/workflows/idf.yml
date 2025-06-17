@@ -9,6 +9,7 @@ on:
     types: [published]   # triggers when a new release is published
 
 jobs:
+  # Build firmware and upload the binaries (including merge binary) to artifact
   build:
     runs-on: ubuntu-latest
     steps:
@@ -40,6 +41,7 @@ jobs:
             build/partition_table/partition-table.bin
             build/openair-max-merge.bin
 
+  # If event is a release, run this job that upload the binaries as release asset
   release:
     if: github.event_name == 'release'
     needs: build
