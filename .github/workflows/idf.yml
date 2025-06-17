@@ -32,8 +32,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ github.run_id }}
-        path: |
-          build/openair-max.bin
-          build/ota_data_initial.bin
-          build/bootloader/bootloader.bin
-          build/partition_table/partition-table.bin
+          path: |
+            build/openair-max.bin
+            build/ota_data_initial.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
