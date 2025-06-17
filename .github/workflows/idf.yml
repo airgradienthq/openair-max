@@ -37,3 +37,31 @@ jobs:
             build/ota_data_initial.bin
             build/bootloader/bootloader.bin
             build/partition_table/partition-table.bin
+
+  release:
+    if: github.event_name == 'release' || github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ github.run_id }}
+          path: output
+
+      - name: Create release ZIP
+        run: |
+          cd output
+          zip -r ../max-firmware-${{ github.ref_name }}.zip .
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: max-firmware-${{ github.ref_name }}.zip
+
+      - name: Upload build artifacts 
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-zip
+          path: max-firmware-${{ github.ref_name }}.zip
