@@ -39,7 +39,6 @@ jobs:
             build/partition_table/partition-table.bin
 
   release:
-    if: github.event_name == 'release' || github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
 
