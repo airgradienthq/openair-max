@@ -23,6 +23,7 @@ jobs:
           esp_idf_version: v5.4
           target: esp32c6 
           path: '.'
+          command: idf.py merge-bin -o openair-max-merge.bin -f raw
 
       - name: Set firmware directory output
         id: set-output
@@ -37,9 +38,10 @@ jobs:
             build/ota_data_initial.bin
             build/bootloader/bootloader.bin
             build/partition_table/partition-table.bin
+            build/openair-max-merge.bin
 
   release:
-    # if: github.event_name == 'release'
+    if: github.event_name == 'release'
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -52,17 +54,9 @@ jobs:
       - name: Create release ZIP
         run: |
           cd output
-          # zip -r ../max-firmware-${{ github.ref_name }}.zip .
-          zip -r ../max-firmware-test.zip .
+          zip -r ../max-firmware-${{ github.ref_name }}.zip .
 
-      # - name: Upload to GitHub Release
-      #   uses: softprops/action-gh-release@v2
-      #   with:
-      #     files: max-firmware-${{ github.ref_name }}.zip
-
-      - name: Upload build artifacts 
-        uses: actions/upload-artifact@v4
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: firmware-zip
-          # path: max-firmware-${{ github.ref_name }}.zip
-          path: max-firmware-test.zip
+          files: max-firmware-${{ github.ref_name }}.zip
