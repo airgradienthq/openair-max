@@ -24,12 +24,15 @@ jobs:
           target: esp32c6 
           path: '.'
 
-      - name: Upload firmware binaries (on release only)
-        if: github.event_name == 'release'
+      - name: Set firmware directory output
+        id: set-output
+        run: echo "dir=build" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts 
         uses: actions/upload-artifact@v4
         with:
-          name: max-firmware-${{ github.ref_name }}
-          path: |
+          name: firmware-${{ github.run_id }}
+        path: |
             build/openair-max.bin
             build/ota_data_initial.bin
             build/bootloader/bootloader.bin
