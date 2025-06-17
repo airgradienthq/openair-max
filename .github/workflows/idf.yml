@@ -8,6 +8,10 @@ on:
   release:
     types: [published]   # triggers when a new release is published
 
+# required to upload release assets
+permissions:
+  contents: write
+
 jobs:
   # Build firmware and upload the binaries (including merge binary) to artifact
   build:
