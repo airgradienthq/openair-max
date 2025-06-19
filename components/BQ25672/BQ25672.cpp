@@ -40,6 +40,10 @@ BQ25672::BQ25672() {}
 BQ25672::~BQ25672() {}
 
 esp_err_t BQ25672::begin(i2c_master_bus_handle_t busHandle) {
+  // Check if address exist on i2c line
+  ESP_RETURN_ON_ERROR(i2c_master_probe(busHandle, BQ25672_I2C_ADDRESS, 1000), TAG,
+                      "BQ25672 address (0x%.2x) not found", BQ25672_I2C_ADDRESS);
+
   esp_log_level_set(TAG, ESP_LOG_VERBOSE);
 
   // Initialize i2c device
