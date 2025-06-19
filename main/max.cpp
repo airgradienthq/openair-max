@@ -165,6 +165,7 @@ extern "C" void app_main(void) {
   gpio_set_level(EN_PMS, 1);
   vTaskDelay(pdMS_TO_TICKS(2000));
   gpio_set_level(EN_ALPHASENSE, 1);
+  vTaskDelay(pdMS_TO_TICKS(200));
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
