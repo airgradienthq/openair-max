@@ -529,7 +529,7 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
     return false;
   }
 
-  AirgradientOTACellular agOta(g_cellularCard);
+  AirgradientOTACellular agOta(g_cellularCard, g_agClient->getICCID());
   auto result = agOta.updateIfAvailable(g_serialNumber, g_fimwareVersion);
 
   switch (result) {
