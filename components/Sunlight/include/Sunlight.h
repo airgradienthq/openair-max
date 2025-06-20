@@ -16,7 +16,8 @@ class Sunlight {
   static const int INTER_PACKET_INTERVAL_MS = 5;
 
   /* Wait interval between manual calibration attempt */
-  static const int CALIBRATION_WAIT_INTERVAL = 4000;
+  static const int CALIBRATION_STATUS_CHECK_INTERVAL = 5000;
+  static const int CALIBRATION_WAIT_COMPLETE_COUNTER = 12;
 
   /* Error codes */
   static const int COMMUNICATION_ERROR = -1;
