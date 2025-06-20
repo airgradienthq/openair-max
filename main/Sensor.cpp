@@ -456,7 +456,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.o3WorkingElectrode == DEFAULT_INVALID_VOLT) {
       _averageMeasure.o3WorkingElectrode = data.o3WorkingElectrode;
     } else {
-      _averageMeasure.o3WorkingElectrode = _averageMeasure.o3WorkingElectrode + data.o3WorkingElectrode;
+      _averageMeasure.o3WorkingElectrode =
+          _averageMeasure.o3WorkingElectrode + data.o3WorkingElectrode;
     }
     _o3WEIterationOkCount = _o3WEIterationOkCount + 1;
   }
@@ -465,7 +466,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.o3AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
       _averageMeasure.o3AuxiliaryElectrode = data.o3AuxiliaryElectrode;
     } else {
-      _averageMeasure.o3AuxiliaryElectrode = _averageMeasure.o3AuxiliaryElectrode + data.o3AuxiliaryElectrode;
+      _averageMeasure.o3AuxiliaryElectrode =
+          _averageMeasure.o3AuxiliaryElectrode + data.o3AuxiliaryElectrode;
     }
     _o3AEIterationOkCount = _o3AEIterationOkCount + 1;
   }
@@ -474,7 +476,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.no2WorkingElectrode == DEFAULT_INVALID_VOLT) {
       _averageMeasure.no2WorkingElectrode = data.no2WorkingElectrode;
     } else {
-      _averageMeasure.no2WorkingElectrode = _averageMeasure.no2WorkingElectrode + data.no2WorkingElectrode;
+      _averageMeasure.no2WorkingElectrode =
+          _averageMeasure.no2WorkingElectrode + data.no2WorkingElectrode;
     }
     _no2WEIterationOkCount = _no2WEIterationOkCount + 1;
   }
@@ -483,7 +486,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.no2AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
       _averageMeasure.no2AuxiliaryElectrode = data.no2AuxiliaryElectrode;
     } else {
-      _averageMeasure.no2AuxiliaryElectrode = _averageMeasure.no2AuxiliaryElectrode + data.no2AuxiliaryElectrode;
+      _averageMeasure.no2AuxiliaryElectrode =
+          _averageMeasure.no2AuxiliaryElectrode + data.no2AuxiliaryElectrode;
     }
     _no2AEIterationOkCount = _no2AEIterationOkCount + 1;
   }
@@ -586,15 +590,18 @@ void Sensor::_calculateMeasuresAverage() {
   }
 
   if (_o3AEIterationOkCount > 0) {
-    _averageMeasure.o3AuxiliaryElectrode = _averageMeasure.o3AuxiliaryElectrode / _o3AEIterationOkCount;
+    _averageMeasure.o3AuxiliaryElectrode =
+        _averageMeasure.o3AuxiliaryElectrode / _o3AEIterationOkCount;
   }
 
   if (_no2WEIterationOkCount > 0) {
-    _averageMeasure.no2WorkingElectrode = _averageMeasure.no2WorkingElectrode / _no2WEIterationOkCount;
+    _averageMeasure.no2WorkingElectrode =
+        _averageMeasure.no2WorkingElectrode / _no2WEIterationOkCount;
   }
 
   if (_no2AEIterationOkCount > 0) {
-    _averageMeasure.no2AuxiliaryElectrode = _averageMeasure.no2AuxiliaryElectrode / _no2AEIterationOkCount;
+    _averageMeasure.no2AuxiliaryElectrode =
+        _averageMeasure.no2AuxiliaryElectrode / _no2AEIterationOkCount;
   }
 
   if (_afeTempIterationOkCount > 0) {
