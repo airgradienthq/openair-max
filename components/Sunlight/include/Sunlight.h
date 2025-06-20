@@ -15,11 +15,39 @@ class Sunlight {
   /* For baudrate equal 9600 the Modbus 3.5T interval is close to 3.5 ms, we round it to 4 ms*/
   static const int INTER_PACKET_INTERVAL_MS = 5;
 
+  /* Wait interval between manual calibration attempt */
+  static const int CALIBRATION_STATUS_CHECK_INTERVAL = 5000;
+  static const int CALIBRATION_WAIT_COMPLETE_COUNTER = 12;
+
   /* Error codes */
   static const int COMMUNICATION_ERROR = -1;
   static const int ILLEGAL_FUNCTION = 1;
   static const int ILLEGAL_DATA_ADDRESS = 2;
   static const int ILLEGAL_DATA_VALUE = 3;
+  static const int SLAVE_FAILURE = -4;
+
+  /* Error statuses */
+  static const uint16_t IR1_FATAL_ERROR = 0x0001u;
+  static const uint16_t IR1_I2C_ERROR = 0x0002u;
+  static const uint16_t IR1_ALGORITHM_ERROR = 0x0004u;
+  static const uint16_t IR1_CALIBRATION_ERROR = 0x0008u;
+  static const uint16_t IR1_SELFDIAG_ERROR = 0x0010u;
+  static const uint16_t IR1_OUT_OF_RANGE_ERROR = 0x0020u;
+  static const uint16_t IR1_MEMORY_ERROR = 0x0040u;
+  static const uint16_t IR1_NO_MEASUREMENT_ERROR = 0x0080u;
+  static const uint16_t IR1_NO_ERROR = 0x0000u;
+
+  /* Sensors registers */
+  static const uint16_t HR1 = 0u;
+  static const uint16_t HR2 = 1u;
+
+  /* Calibration statuses fro HR1 register */
+  static const uint16_t HR1_RESET_VALUE = 0x0000u;
+  static const uint16_t HR1_BACKGROUND_CALIBRATION = 0x0020u;
+
+  /* Calibration command for HR2 register */
+  static const uint16_t HR2_RESTORE_FACTORY_CALIBRATION = 0x7C02u;
+  static const uint16_t HR2_BACKGROUND_CALIBRATION = 0x7C06u;
 
   /* Function codes */
 
@@ -102,6 +130,12 @@ public:
    * @retval true, device restart required
    */
   bool set_measurement_samples(uint16_t number);
+
+  /**
+   * @brief  Make background calibration and report
+   *         error status.
+   */
+  int startManualBackgroundCalibration();
 
   /**
    * @retval true, ABC calibration is enabled on device

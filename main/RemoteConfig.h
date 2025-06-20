@@ -38,12 +38,13 @@ public:
 
   // Getter
   bool isConfigChanged();
-  bool isCo2CalibrationRequested();
+  bool isCO2CalibrationRequested();
   bool isLedTestRequested();
   Firmware getConfigFirmware();
   Schedule getConfigSchedule();
 
-  void resetLedTestRequested();
+  void resetLedTestRequest();
+  void resetCO2CalibrationRequest();
 
 private:
   const char *const TAG = "RemoteConfig";

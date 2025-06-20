@@ -200,6 +200,18 @@ void Sensor::printMeasures() {
 
 AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
 
+bool Sensor::co2AttemptManualCalibration() {
+  ESP_LOGI(TAG, "Attempt to do manual calibration");
+  int error = co2_->startManualBackgroundCalibration();
+  if (error != 0) {
+    ESP_LOGE(TAG, "CO2 calibration Failed!");
+    return false;
+  }
+
+  ESP_LOGD(TAG, "CO2 calibration Success!");
+  return true;
+}
+
 void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   // Set measure data to invalid for indication if respective sensor failed
   data.rco2 = DEFAULT_INVALID_CO2;
@@ -444,7 +456,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.o3WorkingElectrode == DEFAULT_INVALID_VOLT) {
       _averageMeasure.o3WorkingElectrode = data.o3WorkingElectrode;
     } else {
-      _averageMeasure.o3WorkingElectrode = _averageMeasure.o3WorkingElectrode + data.o3WorkingElectrode;
+      _averageMeasure.o3WorkingElectrode =
+          _averageMeasure.o3WorkingElectrode + data.o3WorkingElectrode;
     }
     _o3WEIterationOkCount = _o3WEIterationOkCount + 1;
   }
@@ -453,7 +466,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.o3AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
       _averageMeasure.o3AuxiliaryElectrode = data.o3AuxiliaryElectrode;
     } else {
-      _averageMeasure.o3AuxiliaryElectrode = _averageMeasure.o3AuxiliaryElectrode + data.o3AuxiliaryElectrode;
+      _averageMeasure.o3AuxiliaryElectrode =
+          _averageMeasure.o3AuxiliaryElectrode + data.o3AuxiliaryElectrode;
     }
     _o3AEIterationOkCount = _o3AEIterationOkCount + 1;
   }
@@ -462,7 +476,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.no2WorkingElectrode == DEFAULT_INVALID_VOLT) {
       _averageMeasure.no2WorkingElectrode = data.no2WorkingElectrode;
     } else {
-      _averageMeasure.no2WorkingElectrode = _averageMeasure.no2WorkingElectrode + data.no2WorkingElectrode;
+      _averageMeasure.no2WorkingElectrode =
+          _averageMeasure.no2WorkingElectrode + data.no2WorkingElectrode;
     }
     _no2WEIterationOkCount = _no2WEIterationOkCount + 1;
   }
@@ -471,7 +486,8 @@ void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
     if (_averageMeasure.no2AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
       _averageMeasure.no2AuxiliaryElectrode = data.no2AuxiliaryElectrode;
     } else {
-      _averageMeasure.no2AuxiliaryElectrode = _averageMeasure.no2AuxiliaryElectrode + data.no2AuxiliaryElectrode;
+      _averageMeasure.no2AuxiliaryElectrode =
+          _averageMeasure.no2AuxiliaryElectrode + data.no2AuxiliaryElectrode;
     }
     _no2AEIterationOkCount = _no2AEIterationOkCount + 1;
   }
@@ -574,15 +590,18 @@ void Sensor::_calculateMeasuresAverage() {
   }
 
   if (_o3AEIterationOkCount > 0) {
-    _averageMeasure.o3AuxiliaryElectrode = _averageMeasure.o3AuxiliaryElectrode / _o3AEIterationOkCount;
+    _averageMeasure.o3AuxiliaryElectrode =
+        _averageMeasure.o3AuxiliaryElectrode / _o3AEIterationOkCount;
   }
 
   if (_no2WEIterationOkCount > 0) {
-    _averageMeasure.no2WorkingElectrode = _averageMeasure.no2WorkingElectrode / _no2WEIterationOkCount;
+    _averageMeasure.no2WorkingElectrode =
+        _averageMeasure.no2WorkingElectrode / _no2WEIterationOkCount;
   }
 
   if (_no2AEIterationOkCount > 0) {
-    _averageMeasure.no2AuxiliaryElectrode = _averageMeasure.no2AuxiliaryElectrode / _no2AEIterationOkCount;
+    _averageMeasure.no2AuxiliaryElectrode =
+        _averageMeasure.no2AuxiliaryElectrode / _no2AEIterationOkCount;
   }
 
   if (_afeTempIterationOkCount > 0) {

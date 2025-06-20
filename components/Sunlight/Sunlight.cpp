@@ -2,6 +2,7 @@
 #include <cstring>
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
 
 #define CO2_SUNLIGHT_ADDR 0x68
 
@@ -487,6 +488,76 @@ void Sunlight::read_sensor_id() {
   }
 
   ESP_LOGI(TAG, "MajorMinorRevision: %s", device);
+}
+
+int Sunlight::startManualBackgroundCalibration() {
+  /* Make sure reading sensor measurement is OK before start calibration*/
+  read_sensor_measurements();
+  if (values[0] & IR1_NO_ERROR) {
+    ESP_LOGE(TAG, "Read sensor measurements failed, cannot start calibration (%.2x)", values[0]);
+    return values[0];
+  }
+
+  uint16_t hr1_reset_value[] = {
+      HR1_RESET_VALUE,
+  };
+  uint16_t hr2_background_cal[] = {
+      HR2_BACKGROUND_CALIBRATION,
+  };
+
+  ESP_LOGI(TAG, "Reset last calibration result, before starting new calibration process");
+  int error = write_multiple_registers(CO2_SUNLIGHT_ADDR, HR1, 1, hr1_reset_value);
+  if (error != 0) {
+    ESP_LOGE(TAG, "Failed reset last calibration result (%d)", error);
+    return error;
+  }
+
+  uint32_t startTime = MILLIS();
+  ESP_LOGI(TAG, "Start calibration...");
+  error = write_multiple_registers(CO2_SUNLIGHT_ADDR, HR2, 1, hr2_background_cal);
+  if (error != 0) {
+    ESP_LOGE(TAG, "Failed start calibration (%d)", error);
+    return error;
+  }
+
+  ESP_LOGI(TAG, "Calibration started, wait for calibration to complete");
+  int attempts = 0;
+  do {
+    /* The calibration should be finished after next measurement period,
+      so to simplicity the process - we just waiting for one (or two if we
+      have a synchronization issue) measurement periods...
+    */
+    ESP_LOGI(TAG, "Wait for calibration status complete... [%d]", attempts + 1);
+    vTaskDelay(pdMS_TO_TICKS(CALIBRATION_STATUS_CHECK_INTERVAL));
+    /* First check ErrorStatus, probably the calibration is fail due to
+     * non-stable environment */
+    if ((error = read_input_registers(CO2_SUNLIGHT_ADDR, ERROR_STATUS, 1)) == 0) {
+      if (values[0] & IR1_CALIBRATION_ERROR) {
+        ESP_LOGE(TAG, "Sensor return calibration error (SLAVE_FAILURE)");
+        error = SLAVE_FAILURE;
+      }
+      /* Second, check Calibration status */
+      else if ((error = read_holding_registers(CO2_SUNLIGHT_ADDR, HR1, 1)) == 0) {
+        /* Is calibration completed? */
+        if (values[0] & HR1_BACKGROUND_CALIBRATION) {
+          uint32_t finish = MILLIS() - startTime;
+          ESP_LOGI(TAG, "Calibration completed in %lu ms", finish);
+          break;
+        }
+        /* Check timeout, probably we used wrong measurement period to wait
+           for calibration complete */
+        else if (++attempts == CALIBRATION_WAIT_COMPLETE_COUNTER) {
+          ESP_LOGW(
+              TAG,
+              "Timeout wait for calibration to complete, might take longer to complete. Make sure "
+              "before retry!");
+          error = SLAVE_FAILURE;
+        }
+      }
+    }
+  } while (error == 0);
+
+  return error;
 }
 
 bool Sunlight::isABCEnabled() {

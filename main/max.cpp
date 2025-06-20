@@ -150,7 +150,7 @@ extern "C" void app_main(void) {
   if (g_remoteConfig.isLedTestRequested()) {
     g_statusLed.set(StatusLed::Blink, 5000, 100);
     vTaskDelay(pdMS_TO_TICKS(5000));
-    g_remoteConfig.resetLedTestRequested();
+    g_remoteConfig.resetLedTestRequest();
   }
 
   // Reset external WDT
@@ -188,8 +188,9 @@ extern "C" void app_main(void) {
         "One or more sensor were failed to initialize, will not measure those on this iteration");
   }
 
-  if (g_remoteConfig.isCo2CalibrationRequested()) {
-    // TODO: Implement!
+  if (g_remoteConfig.isCO2CalibrationRequested()) {
+    sensor.co2AttemptManualCalibration();
+    g_remoteConfig.resetCO2CalibrationRequest();
   }
 
   // Start measure sensor sequence that if success,

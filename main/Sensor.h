@@ -26,6 +26,7 @@ public:
   bool startMeasures(int iterations, int intervalMs);
   void printMeasures();
   AirgradientClient::OpenAirMaxPayload getLastAverageMeasure();
+  bool co2AttemptManualCalibration();
 
 private:
   const char *const TAG = "Sensor";

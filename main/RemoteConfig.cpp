@@ -317,7 +317,7 @@ bool RemoteConfig::_saveConfig() {
 
 bool RemoteConfig::isConfigChanged() { return _configChanged; }
 
-bool RemoteConfig::isCo2CalibrationRequested() { return _config.co2CalibrationRequested; }
+bool RemoteConfig::isCO2CalibrationRequested() { return _config.co2CalibrationRequested; }
 
 bool RemoteConfig::isLedTestRequested() { return _config.ledTestRequested; }
 
@@ -325,8 +325,13 @@ RemoteConfig::Firmware RemoteConfig::getConfigFirmware() { return _config.firmwa
 
 RemoteConfig::Schedule RemoteConfig::getConfigSchedule() { return _config.schedule; }
 
-void RemoteConfig::resetLedTestRequested() {
+void RemoteConfig::resetLedTestRequest() {
   _config.ledTestRequested = false;
+  _saveConfig();
+}
+
+void RemoteConfig::resetCO2CalibrationRequest() {
+  _config.co2CalibrationRequested = false;
   _saveConfig();
 }
 
