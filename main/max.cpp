@@ -189,7 +189,7 @@ extern "C" void app_main(void) {
   }
 
   if (g_remoteConfig.isCo2CalibrationRequested()) {
-    // TODO: Implement!
+    sensor.co2AttemptManualCalibration();
   }
 
   // Start measure sensor sequence that if success,

@@ -517,24 +517,27 @@ int Sunlight::startManualBackgroundCalibration() {
           so to simplicity the process - we just waiting for one (or two if we
           have a synchronization issue) measurement periods...
         */
+        ESP_LOGI(TAG, "Run manual calibration attempt (%d)", attempts + 1);
         vTaskDelay(pdMS_TO_TICKS(CALIBRATION_WAIT_INTERVAL));
         /* First check ErrorStatus, probably the calibration is fail due to
          * non-stable environment */
         if ((error = read_input_registers(CO2_SUNLIGHT_ADDR, ERROR_STATUS, 1)) == 0) {
           if (values[0] & IR1_CALIBRATION_ERROR) {
-            /* Calibration error */
+            ESP_LOGE(TAG, "Calibration error");
             error = SLAVE_FAILURE;
           }
           /* Second, check Calibration status */
           else if ((error = read_holding_registers(CO2_SUNLIGHT_ADDR, HR1, 1)) == 0) {
             /* Is calibration completed? */
             if (values[0] & HR1_BACKGROUND_CALIBRATION) {
+              ESP_LOGI(TAG, "Calibration completed");
               break;
             }
             /* Check timeout, probably we used wrong measurement period to wait
                for calibration complete */
             else if (++attempts == 3) {
               /* Timeout while waiting for calibration */
+              ESP_LOGE(TAG, "All attempts failed to run manual calibration");
               error = SLAVE_FAILURE;
             }
           }

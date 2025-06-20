@@ -200,6 +200,18 @@ void Sensor::printMeasures() {
 
 AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
 
+bool Sensor::co2AttemptManualCalibration() {
+  ESP_LOGI(TAG, "Attempt to do manual calibration");
+  int error = co2_->startManualBackgroundCalibration();
+  if (error != 0) {
+    ESP_LOGE(TAG, "CO2 calibration Failed!");
+    return false;
+  }
+
+  ESP_LOGD(TAG, "CO2 calibration Success!");
+  return true;
+}
+
 void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   // Set measure data to invalid for indication if respective sensor failed
   data.rco2 = DEFAULT_INVALID_CO2;
