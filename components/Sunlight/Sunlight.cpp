@@ -2,6 +2,7 @@
 #include <cstring>
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
 
 #define CO2_SUNLIGHT_ADDR 0x68
 
@@ -487,6 +488,61 @@ void Sunlight::read_sensor_id() {
   }
 
   ESP_LOGI(TAG, "MajorMinorRevision: %s", device);
+}
+
+int Sunlight::startManualBackgroundCalibration() {
+  /* Function variables */
+  uint16_t hr1_reset_value[] = {
+      HR1_RESET_VALUE,
+  };
+  uint16_t hr2_background_cal[] = {
+      HR2_BACKGROUND_CALIBRATION,
+  };
+  int error;
+  /* To simplify the calibration process,
+      we will assume that the sensor is in stable air enviroment,
+      but for real applications we should be insure that the sensor is in stable
+     air environment!
+  */
+  /* We should reset last calibration result before attempt to make new
+   * calibration */
+  error = write_multiple_registers(CO2_SUNLIGHT_ADDR, HR1, 1, hr1_reset_value);
+  if (error == 0) {
+    /* Start calibration... */
+    error = write_multiple_registers(CO2_SUNLIGHT_ADDR, HR2, 1, hr2_background_cal);
+    if (error == 0) {
+      int attempts = 0;
+      do {
+        /* The calibration should be finished after next measurement period,
+          so to simplicity the process - we just waiting for one (or two if we
+          have a synchronization issue) measurement periods...
+        */
+        vTaskDelay(pdMS_TO_TICKS(CALIBRATION_WAIT_INTERVAL));
+        /* First check ErrorStatus, probably the calibration is fail due to
+         * non-stable environment */
+        if ((error = read_input_registers(CO2_SUNLIGHT_ADDR, ERROR_STATUS, 1)) == 0) {
+          if (values[0] & IR1_CALIBRATION_ERROR) {
+            /* Calibration error */
+            error = SLAVE_FAILURE;
+          }
+          /* Second, check Calibration status */
+          else if ((error = read_holding_registers(CO2_SUNLIGHT_ADDR, HR1, 1)) == 0) {
+            /* Is calibration completed? */
+            if (values[0] & HR1_BACKGROUND_CALIBRATION) {
+              break;
+            }
+            /* Check timeout, probably we used wrong measurement period to wait
+               for calibration complete */
+            else if (++attempts == 3) {
+              /* Timeout while waiting for calibration */
+              error = SLAVE_FAILURE;
+            }
+          }
+        }
+      } while (error == 0);
+    }
+  }
+  return error;
 }
 
 bool Sunlight::isABCEnabled() {
