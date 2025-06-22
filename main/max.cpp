@@ -158,8 +158,6 @@ extern "C" void app_main(void) {
 
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
   vTaskDelay(pdMS_TO_TICKS(2000));
-  g_statusLed.set(StatusLed::Off);
-  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Turn ON PMS and AlphaSense sensor load switch
   gpio_set_level(EN_PMS, 1);
@@ -182,7 +180,7 @@ extern "C" void app_main(void) {
 
   Sensor sensor(bus_handle);
   if (!sensor.init()) {
-    g_statusLed.set(StatusLed::Blink, 500, 100);
+    g_statusLed.set(StatusLed::Blink, 400, 100);
     ESP_LOGW(
         TAG,
         "One or more sensor were failed to initialize, will not measure those on this iteration");
@@ -429,14 +427,17 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   vTaskDelay(pdMS_TO_TICKS(100));
 
   if (wakeUpCounter == 0) {
-    g_statusLed.set(StatusLed::Blink, 0, 1000);
+    // When currently initializing network, indicate using blink animation
+    g_statusLed.set(StatusLed::Blink, 600, 100);
   }
 
   g_ceAgSerial = new AirgradientUART();
   if (!g_ceAgSerial->begin(UART_BAUD_PORT_CE_CARD, UART_BAUD_CE_CARD, UART_RX_CE_CARD,
                            UART_TX_CE_CARD)) {
     ESP_LOGI(TAG, "Failed initialize serial communication for cellular card");
-    g_statusLed.set(StatusLed::Blink, 1000, 100);
+    g_statusLed.set(StatusLed::Blink, 5000, 400);
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    // TODO: maybe restart here?
     return false;
   }
 
@@ -451,17 +452,17 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     if (g_agClient->begin(g_serialNumber)) {
       // Connected
       if (wakeUpCounter == 0) {
-        g_statusLed.set(StatusLed::Blink, 2000, 500);
+        g_statusLed.set(StatusLed::Blink, 800, 100);
+        vTaskDelay(pdMS_TO_TICKS(1000));
       }
       break;
     }
 
     if (wakeUpCounter == 0) {
       ESP_LOGE(TAG, "Failed start airgradient client, retry in 10s");
-      g_statusLed.set(StatusLed::Blink, 1000, 100);
+      g_statusLed.set(StatusLed::Blink, 10000, 1000);
       vTaskDelay(pdMS_TO_TICKS(10000));
       ESP_LOGI(TAG, "Retry starting airgradient client...");
-      g_statusLed.set(StatusLed::Blink, 0, 1000);
     } else {
       ESP_LOGE(TAG, "Failed start airgradient client");
       break;
@@ -511,7 +512,14 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   if (!success) {
     // Consider network has a problem, retry in next schedule
     ESP_LOGE(TAG, "send measures failed, retry in next schedule");
+    g_statusLed.set(StatusLed::Blink, 2000, 500); // Always show indicator when failed post
+    vTaskDelay(pdMS_TO_TICKS(2000));
     return false;
+  }
+
+  if (wakeUpCounter == 0) {
+    // Notify post success
+    g_statusLed.set(StatusLed::Blink, 1000, 100);
   }
 
   payloadCache.clean();

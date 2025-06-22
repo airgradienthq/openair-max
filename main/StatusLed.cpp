@@ -25,12 +25,18 @@ StatusLed::~StatusLed() {
 }
 
 esp_err_t StatusLed::start() {
+  // Set default value for led notification when starting
+  _newStatus.duration = 0;
+  _newStatus.interval = 0;
+  _newStatus.mode = Off;
+
   BaseType_t result;
   result = xTaskCreate(&StatusLed::_start, "StatusLed", 1024, this, 5, &_taskHandle);
   if (result != pdPASS) {
     ESP_LOGE(TAG, "Failed start status led task");
     return ESP_FAIL;
   }
+  _isRunning = true;
 
   // gpio_hold_dis(_ioLed);
   // gpio_reset_pin(_ioLed);
@@ -44,6 +50,7 @@ esp_err_t StatusLed::start() {
 void StatusLed::stop() {
   if (_isRunning) {
     vTaskDelete(_taskHandle);
+    _isRunning = false;
   }
 }
 
@@ -53,9 +60,9 @@ void StatusLed::disable() {
 }
 
 void StatusLed::set(Mode mode, int durationMs, int intervalMs) {
-  _lastDuration = durationMs;
-  _lastMode = mode;
-  _lastInterval = intervalMs;
+  _newStatus.mode = mode;
+  _newStatus.duration = durationMs;
+  _newStatus.interval = intervalMs;
   // Notify task there's a new led event
   xTaskNotifyGive(_taskHandle);
 }
@@ -70,9 +77,9 @@ void StatusLed::_start(void *params) {
   // waitNotificationTick = 100 / portTICK_PERIOD_MS;
   uint32_t notif;
 
-  Mode mode;
-  int duration = 0;
-  int interval;
+  // Set default values
+  Status lastStatus = pLed->_newStatus;
+  Status currentStatus = lastStatus;
 
   int lastLedLevel = 0;
   int blinkStartTime = 0;
@@ -81,13 +88,16 @@ void StatusLed::_start(void *params) {
     notif = ulTaskNotifyTake(pdTRUE, waitNotificationTick);
     if (notif > 0) {
       // New status led event received
-      mode = pLed->_lastMode;
-      duration = pLed->_lastDuration;
-      interval = pLed->_lastInterval;
+
+      // Keep the last status for later to get back to
+      lastStatus = currentStatus;
+
+      // Set the current status
+      currentStatus = pLed->_newStatus;
 
       // Handle start of the event based on each mode
       // For On and Off, no other action required, wait for event with blocking task
-      switch (mode) {
+      switch (currentStatus.mode) {
       case Off:
         gpio_set_level(pLed->_ioLed, 0);
         waitNotificationTick = portMAX_DELAY;
@@ -98,7 +108,7 @@ void StatusLed::_start(void *params) {
         break;
       case Blink:
         gpio_set_level(pLed->_ioLed, 1); // turn on first
-        waitNotificationTick = interval / portTICK_PERIOD_MS;
+        waitNotificationTick = currentStatus.interval / portTICK_PERIOD_MS;
         blinkStartTime = MILLIS();
         break;
       }
@@ -109,9 +119,31 @@ void StatusLed::_start(void *params) {
     // The rest is for blink mode
 
     // Check if duration is UP and duration is not set to forever (0)
-    if ((MILLIS() - blinkStartTime) > duration && duration > 0) {
+    if ((MILLIS() - blinkStartTime) > currentStatus.duration && currentStatus.duration > 0) {
+      if (lastStatus.duration == 0) {
+        // If last status duration expected to forever, go back to last status after this animation
+        currentStatus = lastStatus;
+
+        switch (lastStatus.mode) {
+        case Off:
+          gpio_set_level(pLed->_ioLed, 0);
+          waitNotificationTick = portMAX_DELAY;
+          break;
+        case On:
+          gpio_set_level(pLed->_ioLed, 1);
+          waitNotificationTick = portMAX_DELAY;
+          break;
+        case Blink:
+          gpio_set_level(pLed->_ioLed, 1); // turn on first
+          waitNotificationTick = currentStatus.interval / portTICK_PERIOD_MS;
+          blinkStartTime = MILLIS();
+          break;
+        }
+        continue;
+      }
+
       gpio_set_level(pLed->_ioLed, 0);
-      duration = 0;
+      currentStatus.duration = 0;
       waitNotificationTick = portMAX_DELAY;
       continue;
     }
