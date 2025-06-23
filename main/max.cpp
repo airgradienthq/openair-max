@@ -180,7 +180,7 @@ extern "C" void app_main(void) {
 
   Sensor sensor(bus_handle);
   if (!sensor.init()) {
-    g_statusLed.set(StatusLed::Blink, 400, 100);
+    g_statusLed.set(StatusLed::Blink, 2000, 500);
     ESP_LOGW(
         TAG,
         "One or more sensor were failed to initialize, will not measure those on this iteration");
@@ -428,7 +428,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
 
   if (wakeUpCounter == 0) {
     // When currently initializing network, indicate using blink animation
-    g_statusLed.set(StatusLed::Blink, 600, 100);
+    g_statusLed.set(StatusLed::Blink, 400, 100);
   }
 
   g_ceAgSerial = new AirgradientUART();
@@ -452,7 +452,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     if (g_agClient->begin(g_serialNumber)) {
       // Connected
       if (wakeUpCounter == 0) {
-        g_statusLed.set(StatusLed::Blink, 800, 100);
+        g_statusLed.set(StatusLed::Blink, 600, 100);
         vTaskDelay(pdMS_TO_TICKS(1000));
       }
       break;
@@ -512,14 +512,14 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   if (!success) {
     // Consider network has a problem, retry in next schedule
     ESP_LOGE(TAG, "send measures failed, retry in next schedule");
-    g_statusLed.set(StatusLed::Blink, 2000, 500); // Always show indicator when failed post
+    g_statusLed.set(StatusLed::Blink, 3000, 500); // Always show indicator when failed post
     vTaskDelay(pdMS_TO_TICKS(2000));
     return false;
   }
 
   if (wakeUpCounter == 0) {
     // Notify post success
-    g_statusLed.set(StatusLed::Blink, 1000, 100);
+    g_statusLed.set(StatusLed::Blink, 800, 100);
   }
 
   payloadCache.clean();
