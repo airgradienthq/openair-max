@@ -133,6 +133,7 @@ void StatusLed::_start(void *params) {
       } else {
         gpio_set_level(pLed->_ioLed, 0);
       }
+      currentStatus.mode = lastStatus.mode;
       currentStatus.duration = 0;
       waitNotificationTick = portMAX_DELAY;
       continue;
