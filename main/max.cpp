@@ -14,6 +14,7 @@
 #include "esp_console.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
+#include "esp_system.h"
 #include "hal/gpio_types.h"
 #include "nvs_flash.h"
 #include "esp_err.h"
@@ -505,16 +506,60 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     tmp.signal = signalStrength;
     payloads.push_back(tmp);
   }
-  // TODO: Make sure send data success when wake up counter is 0
 
   // Attempt to send
-  bool success = g_agClient->httpPostMeasures(g_remoteConfig.getConfigSchedule().pm02, payloads);
-  if (!success) {
-    // Consider network has a problem, retry in next schedule
-    ESP_LOGE(TAG, "send measures failed, retry in next schedule");
-    g_statusLed.set(StatusLed::Blink, 3000, 500); // Always show indicator when failed post
-    vTaskDelay(pdMS_TO_TICKS(2000));
-    return false;
+  bool postSuccess = false;
+  int attemptCounter = 0;
+  do {
+    attemptCounter = attemptCounter + 1;
+    postSuccess = g_agClient->httpPostMeasures(g_remoteConfig.getConfigSchedule().pm02, payloads);
+    if (postSuccess) {
+      // post success, exit the loop
+      break;
+    }
+
+    // Run failed post led indicator
+    g_statusLed.set(StatusLed::Blink, 3000, 500);
+
+    // Check if this is first boot, if not retry in next schedule
+    if (wakeUpCounter != 0) {
+      // retry in next schedule
+      ESP_LOGE(TAG, "Send measures failed, retry in next schedule");
+      vTaskDelay(pdMS_TO_TICKS(2000));
+      break;
+    }
+
+    // check post failed if because of client is not ready
+    if (g_agClient->isClientReady() == false) {
+      ESP_LOGE(TAG, "Send measures failed because of client is not ready, ensuring connection...");
+      g_ceAgSerial->setDebug(true);
+      if (g_agClient->ensureClientConnection(true) == false) {
+        ESP_LOGE(TAG, "Failed ensuring client connection, system restart in 4s");
+        g_statusLed.set(StatusLed::Blink, 4000, 500);
+        vTaskDelay(pdMS_TO_TICKS(4000));
+        esp_restart();
+      }
+      g_ceAgSerial->setDebug(false);
+
+      ESP_LOGI(TAG, "Client is ready now, retry post measures");
+      continue;
+    }
+
+    if (g_agClient->isRegisteredOnAgServer() == false) {
+      // TODO: What to do here? maybe just add new led indicator and just restart
+    }
+
+    // TODO: in here because of other status code, then what? maybe just retry in next schedule because this is server issue
+
+  } while (attemptCounter < 3);
+
+  // Check if still first boot, client is not ready and after 3 attempts is still failed post measures
+  if (wakeUpCounter == 0 && !postSuccess && g_agClient->isClientReady() == false) {
+    ESP_LOGE(TAG, "Give up after 3 attempts of failed post measures because of network reasons, "
+                  "restart systems in 6s");
+    g_statusLed.set(StatusLed::Blink, 6000, 500);
+    vTaskDelay(pdMS_TO_TICKS(6000));
+    esp_restart();
   }
 
   if (wakeUpCounter == 0) {
