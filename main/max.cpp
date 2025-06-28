@@ -514,7 +514,12 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     attemptCounter = attemptCounter + 1;
     postSuccess = g_agClient->httpPostMeasures(g_remoteConfig.getConfigSchedule().pm02, payloads);
     if (postSuccess) {
-      // post success, exit the loop
+      // post success, clean cache 
+      payloadCache.clean();
+      if (wakeUpCounter == 0) {
+        // Notify post success only on first boot
+        g_statusLed.set(StatusLed::Blink, 800, 100);
+      }
       break;
     }
 
@@ -546,12 +551,13 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     }
 
     if (g_agClient->isRegisteredOnAgServer() == false) {
-      // TODO: What to do here? maybe just add new led indicator and just restart
+      // TODO: What to do here? maybe just add new led indicator and never restart until user restart it manually
     }
 
-    // TODO: in here because of other status code, then what? maybe just retry in next schedule because this is server issue
+    ESP_LOGW(TAG, "Send measures failed because of server issue, retry in next schedule");
+    break;
 
-  } while (attemptCounter < 3);
+  } while (attemptCounter < 3 && !postSuccess);
 
   // Check if still first boot, client is not ready and after 3 attempts is still failed post measures
   if (wakeUpCounter == 0 && !postSuccess && g_agClient->isClientReady() == false) {
@@ -562,14 +568,7 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     esp_restart();
   }
 
-  if (wakeUpCounter == 0) {
-    // Notify post success
-    g_statusLed.set(StatusLed::Blink, 800, 100);
-  }
-
-  payloadCache.clean();
-
-  return true;
+  return postSuccess;
 }
 
 bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
