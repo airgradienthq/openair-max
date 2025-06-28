@@ -461,7 +461,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
 
     if (wakeUpCounter == 0) {
       ESP_LOGE(TAG, "Failed start airgradient client, retry in 10s");
-      g_statusLed.set(StatusLed::Blink, 10000, 1000);
+      g_statusLed.set(StatusLed::Blink, 10000, 500);
       vTaskDelay(pdMS_TO_TICKS(10000));
       ESP_LOGI(TAG, "Retry starting airgradient client...");
     } else {
@@ -514,7 +514,7 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     attemptCounter = attemptCounter + 1;
     postSuccess = g_agClient->httpPostMeasures(g_remoteConfig.getConfigSchedule().pm02, payloads);
     if (postSuccess) {
-      // post success, clean cache 
+      // post success, clean cache
       payloadCache.clean();
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
@@ -523,25 +523,24 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
       break;
     }
 
-    // Run failed post led indicator
-    g_statusLed.set(StatusLed::Blink, 3000, 500);
-
     // Check if this is first boot, if not retry in next schedule
     if (wakeUpCounter != 0) {
       // retry in next schedule
       ESP_LOGE(TAG, "Send measures failed, retry in next schedule");
+      g_statusLed.set(StatusLed::Blink, 3000, 500); // Run failed post led indicator
       vTaskDelay(pdMS_TO_TICKS(2000));
       break;
     }
 
-    // check post failed if because of client is not ready
+    // Check post failed if because of client is not ready
     if (g_agClient->isClientReady() == false) {
+      g_statusLed.set(StatusLed::Blink, 3000, 500); // Run failed post led indicator
       ESP_LOGE(TAG, "Send measures failed because of client is not ready, ensuring connection...");
       g_ceAgSerial->setDebug(true);
       if (g_agClient->ensureClientConnection(true) == false) {
-        ESP_LOGE(TAG, "Failed ensuring client connection, system restart in 4s");
-        g_statusLed.set(StatusLed::Blink, 4000, 500);
-        vTaskDelay(pdMS_TO_TICKS(4000));
+        ESP_LOGE(TAG, "Failed ensuring client connection, system restart in 5s");
+        g_statusLed.set(StatusLed::Blink, 5000, 500);
+        vTaskDelay(pdMS_TO_TICKS(5000));
         esp_restart();
       }
       g_ceAgSerial->setDebug(false);
@@ -555,6 +554,8 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     }
 
     ESP_LOGW(TAG, "Send measures failed because of server issue, retry in next schedule");
+    g_statusLed.set(StatusLed::Blink, 4000, 500); // Run failed post led indicator because of server issue
+    vTaskDelay(pdMS_TO_TICKS(2000));
     break;
 
   } while (attemptCounter < 3 && !postSuccess);
