@@ -474,6 +474,9 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   g_ceAgSerial->setDebug(false);
   g_networkReady = true;
 
+  // Wait for a moment for CE card is ready for transmission
+  vTaskDelay(pdMS_TO_TICKS(2000));
+
   return true;
 }
 
@@ -545,7 +548,8 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
       }
       g_ceAgSerial->setDebug(false);
 
-      ESP_LOGI(TAG, "Client is ready now, retry post measures");
+      ESP_LOGI(TAG, "Client is ready now, retry post measures in 5s");
+      vTaskDelay(pdMS_TO_TICKS(5000));
       continue;
     }
 
@@ -554,8 +558,9 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     }
 
     ESP_LOGW(TAG, "Send measures failed because of server issue, retry in next schedule");
-    g_statusLed.set(StatusLed::Blink, 4000, 500); // Run failed post led indicator because of server issue
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    // Run failed post led indicator because of server issue
+    g_statusLed.set(StatusLed::Blink, 4000, 500);
+    vTaskDelay(pdMS_TO_TICKS(3000));
     break;
 
   } while (attemptCounter < 3 && !postSuccess);
