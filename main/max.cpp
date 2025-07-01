@@ -526,17 +526,16 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
       break;
     }
 
-    // Check if this is first boot, if not retry in next schedule
     if (wakeUpCounter != 0) {
-      // retry in next schedule
+      // Check if this is first boot, if not retry in next schedule
       ESP_LOGE(TAG, "Send measures failed, retry in next schedule");
       g_statusLed.set(StatusLed::Blink, 3000, 500); // Run failed post led indicator
       vTaskDelay(pdMS_TO_TICKS(2000));
       break;
     }
 
-    // Check post failed if because of client is not ready
     if (g_agClient->isClientReady() == false) {
+      // Client is not ready
       g_statusLed.set(StatusLed::Blink, 3000, 500); // Run failed post led indicator
       ESP_LOGE(TAG, "Send measures failed because of client is not ready, ensuring connection...");
       g_ceAgSerial->setDebug(true);
