@@ -87,6 +87,8 @@ static void printWakeupReason(esp_sleep_wakeup_cause_t reason);
  */
 static std::string buildSerialNumber();
 
+static void ensureConnectionReady();
+
 /**
  * Attempt to initialize and connect to cellular network
  * If failed once, it will not re-attempt to initialize for its wake up cycle
@@ -410,6 +412,37 @@ std::string getFirmwareVersion() {
   return app_desc->version;
 }
 
+void ensureConnectionReady() {
+  bool reset = false;
+  uint32_t lastResetTime = MILLIS();
+
+  while (g_agClient->isClientReady() == false && MILLIS() < TIMEOUT_ENSURING_CONNECTION_ON_BOOT_MS) {
+    // Make sure watchdog not reset
+    resetExtWatchdog();
+    ESP_LOGI(TAG, "Ensuring client connection...");
+    if (g_agClient->ensureClientConnection(reset)) {
+      // Now its connected, set led notification and stop reconnection
+      ESP_LOGI(TAG, "Client connection is ready");
+      g_statusLed.set(StatusLed::Blink, 600, 100);
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      reset = false;
+      break;
+    }
+
+    // Still not connected
+    ESP_LOGE(TAG, "Airgradient client still not connected, retry in 10s");
+    g_statusLed.set(StatusLed::Blink, 10000, 500);
+    vTaskDelay(pdMS_TO_TICKS(10000));
+
+    if ((MILLIS() - lastResetTime) > RESET_CE_CARD_CYCLE_ON_RECONNECTION_MS) {
+      // If last reset CE card is more than 15 mins, then attempt restart
+      ESP_LOGI(TAG, "Will reset CE card in the next cycle");
+      reset = true;
+      lastResetTime = MILLIS();
+    }
+  }
+}
+
 bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   if (g_networkReady) {
     ESP_LOGI(TAG, "Network is already ready to use");
@@ -448,27 +481,25 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
 
-  // If first time boot, attempt to connect until watchdog trigger a reset
-  do {
-    if (g_agClient->begin(g_serialNumber)) {
-      // Connected
-      if (wakeUpCounter == 0) {
-        g_statusLed.set(StatusLed::Blink, 600, 100);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-      }
-      break;
-    }
+  resetExtWatchdog();
 
+  if (g_agClient->begin(g_serialNumber)) {
+    // Connected
     if (wakeUpCounter == 0) {
-      ESP_LOGE(TAG, "Failed start airgradient client, retry in 10s");
-      g_statusLed.set(StatusLed::Blink, 10000, 500);
-      vTaskDelay(pdMS_TO_TICKS(10000));
-      ESP_LOGI(TAG, "Retry starting airgradient client...");
-    } else {
-      ESP_LOGE(TAG, "Failed start airgradient client");
-      break;
+      g_statusLed.set(StatusLed::Blink, 600, 100);
+      vTaskDelay(pdMS_TO_TICKS(1000));
     }
-  } while (wakeUpCounter == 0);
+  } else {
+    // Not connected
+    ESP_LOGE(TAG, "Failed start airgradient client");
+    if (wakeUpCounter == 0) {
+      // When its a first boot, ensure connection is ready
+      ensureConnectionReady();
+    }
+  }
+
+  // Make sure watchdog not triggered for the rest of the code before sleep
+  resetExtWatchdog();
 
   // Disable again
   g_ceAgSerial->setDebug(false);
