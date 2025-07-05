@@ -419,7 +419,7 @@ void ensureConnectionReady() {
   while (g_agClient->isClientReady() == false && MILLIS() < TIMEOUT_ENSURING_CONNECTION_ON_BOOT_MS) {
     // Make sure watchdog not reset
     resetExtWatchdog();
-    ESP_LOGI(TAG, "Retry starting airgradient client...");
+    ESP_LOGI(TAG, "Ensuring client connection...");
     if (g_agClient->ensureClientConnection(reset)) {
       // Now its connected, set led notification and stop reconnection
       ESP_LOGI(TAG, "Client connection is ready");
@@ -430,7 +430,7 @@ void ensureConnectionReady() {
     }
 
     // Still not connected
-    ESP_LOGE(TAG, "Failed start airgradient client, retry in 10s");
+    ESP_LOGE(TAG, "Airgradient client still not connected, retry in 10s");
     g_statusLed.set(StatusLed::Blink, 10000, 500);
     vTaskDelay(pdMS_TO_TICKS(10000));
 
