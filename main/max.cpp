@@ -416,12 +416,13 @@ void ensureConnectionReady() {
   bool reset = false;
   uint32_t lastResetTime = MILLIS();
 
-  while (g_agClient->isClientReady() == false) {
+  while (g_agClient->isClientReady() == false && MILLIS() < TIMEOUT_ENSURING_CONNECTION_ON_BOOT_MS) {
     // Make sure watchdog not reset
     resetExtWatchdog();
     ESP_LOGI(TAG, "Retry starting airgradient client...");
     if (g_agClient->ensureClientConnection(reset)) {
       // Now its connected, set led notification and stop reconnection
+      ESP_LOGI(TAG, "Client connection is ready");
       g_statusLed.set(StatusLed::Blink, 600, 100);
       vTaskDelay(pdMS_TO_TICKS(1000));
       reset = false;
@@ -492,7 +493,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     // Not connected
     ESP_LOGE(TAG, "Failed start airgradient client");
     if (wakeUpCounter == 0) {
-      // When its a first boot, ensure cellular connection
+      // When its a first boot, ensure connection is ready
       ensureConnectionReady();
     }
   }
