@@ -125,8 +125,15 @@ bool Sensor::init(RemoteConfig::Model model) {
 
   ESP_LOGI(TAG, "Initialize finish");
 
-  return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
-          _tvocNoxAvailable && _tempHumAvailable);
+  if (model == RemoteConfig::O_M_1PPSTON_CE) {
+    return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
+            _tvocNoxAvailable && _tempHumAvailable && _alphaSenseGasAvailable &&
+            _alphaSenseTempAvailable);
+
+  } else {
+    return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
+            _tvocNoxAvailable && _tempHumAvailable);
+  }
 }
 
 bool Sensor::startMeasures(int iterations, int intervalMs) {
