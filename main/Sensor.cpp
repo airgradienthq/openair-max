@@ -10,6 +10,7 @@
 #include "AirgradientUART.h"
 #include "AlphaSenseSensor.h"
 #include "BQ25672.h"
+#include "RemoteConfig.h"
 #include "esp_log_level.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -22,7 +23,7 @@
 
 Sensor::Sensor(i2c_master_bus_handle_t busHandle) : _busHandle(busHandle) {}
 
-bool Sensor::init() {
+bool Sensor::init(RemoteConfig::Model model) {
   ESP_LOGI(TAG, "Initializing sensor...");
   esp_log_level_set(TAG, ESP_LOG_DEBUG);
 
@@ -71,12 +72,18 @@ bool Sensor::init() {
     charger_->getChargingStatus();
   }
 
-  // Alphasense sensor
-  alphaSense_ = new AlphaSenseSensor();
-  if (alphaSense_->initGas(_busHandle) == false) {
+  if (model == RemoteConfig::O_M_1PPSTON_CE) {
+    // Initialize alphasense sensor if model supported
+    alphaSense_ = new AlphaSenseSensor();
+    if (alphaSense_->initGas(_busHandle) == false) {
+      _alphaSenseGasAvailable = false;
+    }
+    if (alphaSense_->initTemperature(_busHandle) == false) {
+      _alphaSenseTempAvailable = false;
+    }
+  } else {
+    ESP_LOGI(TAG, "Skip O3/NO2 sensor, not supported on this model");
     _alphaSenseGasAvailable = false;
-  }
-  if (alphaSense_->initTemperature(_busHandle) == false) {
     _alphaSenseTempAvailable = false;
   }
 
@@ -118,8 +125,15 @@ bool Sensor::init() {
 
   ESP_LOGI(TAG, "Initialize finish");
 
-  return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
-          _tvocNoxAvailable && _tempHumAvailable);
+  if (model == RemoteConfig::O_M_1PPSTON_CE) {
+    return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
+            _tvocNoxAvailable && _tempHumAvailable && _alphaSenseGasAvailable &&
+            _alphaSenseTempAvailable);
+
+  } else {
+    return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
+            _tvocNoxAvailable && _tempHumAvailable);
+  }
 }
 
 bool Sensor::startMeasures(int iterations, int intervalMs) {

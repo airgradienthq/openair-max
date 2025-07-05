@@ -17,12 +17,13 @@
 #include "sht4x.h"
 #include "sgp4x.h"
 #include "AlphaSenseSensor.h"
+#include "RemoteConfig.h"
 
 class Sensor {
 public:
   Sensor(i2c_master_bus_handle_t busHandle);
   ~Sensor(){}
-  bool init();
+  bool init(RemoteConfig::Model model);
   bool startMeasures(int iterations, int intervalMs);
   void printMeasures();
   AirgradientClient::OpenAirMaxPayload getLastAverageMeasure();

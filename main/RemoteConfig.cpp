@@ -325,6 +325,18 @@ RemoteConfig::Firmware RemoteConfig::getConfigFirmware() { return _config.firmwa
 
 RemoteConfig::Schedule RemoteConfig::getConfigSchedule() { return _config.schedule; }
 
+
+RemoteConfig::Model RemoteConfig::getModel() {
+  if (_config.model == "O-M-1PPSTON-CE") {
+    return O_M_1PPSTON_CE;
+  } else if (_config.model == "O-M-1PPST-CE") {
+    return O_M_1PPST_CE;
+  }
+
+  // Default
+  return O_M_1PPST_CE;
+}
+
 void RemoteConfig::resetLedTestRequest() {
   _config.ledTestRequested = false;
   _saveConfig();
