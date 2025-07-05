@@ -182,7 +182,7 @@ extern "C" void app_main(void) {
   ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &bus_handle));
 
   Sensor sensor(bus_handle);
-  if (!sensor.init()) {
+  if (!sensor.init(g_remoteConfig.getModel())) {
     g_statusLed.set(StatusLed::Blink, 2000, 500);
     ESP_LOGW(
         TAG,
