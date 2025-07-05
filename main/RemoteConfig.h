@@ -22,6 +22,11 @@ public:
     std::string url;
   };
 
+  enum Model {
+    O_M_1PPST_CE = 0,
+    O_M_1PPSTON_CE
+  };
+
   struct Config {
     bool co2CalibrationRequested;
     bool ledTestRequested;
@@ -42,6 +47,7 @@ public:
   bool isLedTestRequested();
   Firmware getConfigFirmware();
   Schedule getConfigSchedule();
+  Model getModel();
 
   void resetLedTestRequest();
   void resetCO2CalibrationRequest();
