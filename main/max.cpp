@@ -416,7 +416,8 @@ void ensureConnectionReady() {
   bool reset = false;
   uint32_t lastResetTime = MILLIS();
 
-  while (g_agClient->isClientReady() == false && MILLIS() < TIMEOUT_ENSURING_CONNECTION_ON_BOOT_MS) {
+  while (g_agClient->isClientReady() == false &&
+         MILLIS() < TIMEOUT_ENSURING_CONNECTION_ON_BOOT_MS) {
     // Make sure watchdog not reset
     resetExtWatchdog();
     ESP_LOGI(TAG, "Ensuring client connection...");
@@ -460,9 +461,11 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   gpio_set_level(EN_CE_CARD, 1);
   vTaskDelay(pdMS_TO_TICKS(100));
 
+  uint32_t registrationTimeout = TIMEOUT_REGISTER_NETWORK_WAKEUP_CYCLE_MS;
   if (wakeUpCounter == 0) {
     // When currently initializing network, indicate using blink animation
     g_statusLed.set(StatusLed::Blink, 400, 100);
+    registrationTimeout = TIMEOUT_REGISTER_NETWORK_ON_FIRST_BOOT_MS;
   }
 
   g_ceAgSerial = new AirgradientUART();
@@ -483,6 +486,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
 
   resetExtWatchdog();
 
+  g_agClient->setNetworkRegistrationTimeoutMs(registrationTimeout);
   if (g_agClient->begin(g_serialNumber)) {
     // Connected
     if (wakeUpCounter == 0) {
