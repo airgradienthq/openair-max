@@ -15,7 +15,8 @@
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 
 constexpr gpio_num_t EN_CO2 = GPIO_NUM_5;
-constexpr gpio_num_t EN_PMS = GPIO_NUM_3;
+constexpr gpio_num_t EN_PMS1 = GPIO_NUM_3;
+constexpr gpio_num_t EN_PMS2 = GPIO_NUM_22;
 constexpr gpio_num_t EN_ALPHASENSE = GPIO_NUM_4;
 constexpr gpio_num_t IO_WDT = GPIO_NUM_2;
 constexpr gpio_num_t EN_CE_CARD = GPIO_NUM_15;
