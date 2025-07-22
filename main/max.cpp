@@ -162,8 +162,10 @@ extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
   vTaskDelay(pdMS_TO_TICKS(2000));
 
-  // Turn ON PMS and AlphaSense sensor load switch
-  gpio_set_level(EN_PMS, 1);
+  // Turn ON both PMS and AlphaSense sensor load switch
+  gpio_set_level(EN_PMS1, 1);
+  vTaskDelay(pdMS_TO_TICKS(100));
+  gpio_set_level(EN_PMS2, 1);
   vTaskDelay(pdMS_TO_TICKS(2000));
   gpio_set_level(EN_ALPHASENSE, 1);
   vTaskDelay(pdMS_TO_TICKS(200));
@@ -205,7 +207,8 @@ extern "C" void app_main(void) {
   }
 
   // Turn OFF PM sensor load switch
-  gpio_set_level(EN_PMS, 0);
+  gpio_set_level(EN_PMS1, 0);
+  gpio_set_level(EN_PMS2, 0);
   gpio_set_level(EN_ALPHASENSE, 0);
   vTaskDelay(pdMS_TO_TICKS(1000));
 
@@ -299,25 +302,27 @@ void initGPIO() {
   io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
   io_conf.intr_type = GPIO_INTR_DISABLE;
   if (xWakeUpCounter == 0) {
-    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CO2) |
+    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) | (1ULL << EN_CO2) |
                            (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   } else {
     // Ignore CO2 load switch IO since the state already retained
     io_conf.pin_bit_mask =
-        (1ULL << IO_WDT) | (1ULL << EN_PMS) | (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
+        (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) | (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   }
   gpio_config(&io_conf);
 
   // Load switch needs more IO current drive
   gpio_set_drive_capability(IO_WDT, GPIO_DRIVE_CAP_3);
-  gpio_set_drive_capability(EN_PMS, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_PMS1, GPIO_DRIVE_CAP_3);
+  gpio_set_drive_capability(EN_PMS2, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_CO2, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_ALPHASENSE, GPIO_DRIVE_CAP_3);
   gpio_set_drive_capability(EN_CE_CARD, GPIO_DRIVE_CAP_3);
 
   // Set default state to off
   gpio_set_level(IO_WDT, 0);
-  gpio_set_level(EN_PMS, 0);
+  gpio_set_level(EN_PMS1, 0);
+  gpio_set_level(EN_PMS2, 0);
   gpio_set_level(EN_ALPHASENSE, 0);
   gpio_set_level(EN_CE_CARD, 0);
 
