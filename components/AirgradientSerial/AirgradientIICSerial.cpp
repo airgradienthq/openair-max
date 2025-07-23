@@ -2,6 +2,7 @@
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
+#include <cstring>
 
 #define MAX_RETRY_IICSERIAL_UART_INIT 3
 
@@ -9,9 +10,7 @@ AirgradientIICSerial::AirgradientIICSerial(i2c_master_bus_handle_t i2c_bus_handl
                                            uint8_t subUartChannel, uint8_t IA1, uint8_t IA0)
     : _iicSerial(i2c_bus_handle, subUartChannel, IA1, IA0) {}
 
-bool AirgradientIICSerial::begin(int baud) {
-  return begin(baud, -1);
-}
+bool AirgradientIICSerial::begin(int baud) { return begin(baud, -1); }
 
 bool AirgradientIICSerial::begin(int baud, int iicResetIO) {
   if (isInitialized) {
@@ -62,22 +61,27 @@ void AirgradientIICSerial::print(const char *str) {
 #ifdef ARDUINO
     Serial.print(str);
 #else
-    printf("%s", str);
+    // Prevent carriage return to stdout so its not go back to beginning of the line on webserial API
+    // Specific for ATCommandHandler, it call this function for \r\n always in separate call
+    if (strcmp(str, "\r\n") == 0) {
+      printf("\n");
+    } else {
+      printf("%s", str);
+    }
 #endif
   }
 
   _iicSerial.print(str);
 }
 
-int AirgradientIICSerial::write(const uint8_t *data, int len)
-{
-//   if (isDebug) {
-// #ifdef ARDUINO
-//     Serial.print(str);
-// #else
-//     printf("%s", str);
-// #endif
-//   }
+int AirgradientIICSerial::write(const uint8_t *data, int len) {
+  //   if (isDebug) {
+  // #ifdef ARDUINO
+  //     Serial.print(str);
+  // #else
+  //     printf("%s", str);
+  // #endif
+  //   }
 
   return _iicSerial.write(data, len);
 }
@@ -88,7 +92,10 @@ int AirgradientIICSerial::read() {
 #ifdef ARDUINO
     Serial.write(b);
 #else
-    printf("%c", b);
+    // Prevent carriage return to stdout so its not go back to beginning of the line on webserial API
+    if (b != '\r') {
+      printf("%c", b);
+    }
 #endif
     return b;
   }
