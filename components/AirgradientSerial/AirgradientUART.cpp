@@ -64,7 +64,13 @@ void AirgradientUART::print(const char *str) {
 #ifdef ARDUINO
     Serial.print(str);
 #else
-    printf("%s", str);
+    // Prevent carriage return to stdout so its not go back to beginning of the line on webserial API
+    // Specific for ATCommandHandler, it call this function for \r\n always in separate call
+    if (strcmp(str, "\r\n") == 0) {
+      printf("\n");
+    } else {
+      printf("%s", str);
+    }
 #endif
   }
 
@@ -90,20 +96,22 @@ int AirgradientUART::read() {
     return -1;
   }
 
-  int data;
-  int len = uart_read_bytes(_port_num, &data, 1, 10 / portTICK_PERIOD_MS);
+  int b;
+  int len = uart_read_bytes(_port_num, &b, 1, 10 / portTICK_PERIOD_MS);
   if (len <= 0) {
     return -1;
   }
-
 
   if (isDebug) {
 #ifdef ARDUINO
     Serial.print(str);
 #else
-    printf("%c", data);
+    // Prevent carriage return to stdout so its not go back to beginning of the line on webserial API
+    if (b != '\r') {
+      printf("%c", b);
+    }
 #endif
   }
 
-  return data;
+  return b;
 }
