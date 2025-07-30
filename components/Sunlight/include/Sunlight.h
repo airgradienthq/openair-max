@@ -57,6 +57,7 @@ class Sunlight {
   static const uint16_t MEASUREMENT_PERIOD = 0x000B;
   static const uint16_t MEASUREMENT_SAMPLES = 0x000C;
   static const uint16_t METER_CONTROL = 0x0012;
+  static const uint16_t ABC_PERIOD = 0x000D;
 
   /* Measurement modes */
   static const uint16_t CONTINUOUS = 0x0000;
@@ -143,6 +144,8 @@ public:
   bool isABCEnabled();
 
   void setABC(bool enable);
+
+  bool setABCPeriod(uint16_t hours);
 
   void setNRDY(bool enable);
 

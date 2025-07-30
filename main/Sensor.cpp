@@ -35,6 +35,9 @@ bool Sensor::init(RemoteConfig::Model model) {
   } else {
     co2_ = new Sunlight(*agsCO2_);
     co2_->read_sensor_id();
+    co2_->setABC(true);
+    co2_->setABCPeriod(192); // NOTE: Hardcoded 8 days
+    ESP_LOGI(TAG, "CO2 ABC status: %d", co2_->isABCEnabled() ? 1 : 0);
     // NOTE: Since UART, need to check if its actually able to communicate?
   }
 
