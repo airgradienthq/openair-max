@@ -184,7 +184,7 @@ extern "C" void app_main(void) {
   ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &bus_handle));
 
   Sensor sensor(bus_handle);
-  if (!sensor.init(g_remoteConfig.getModel())) {
+  if (sensor.init(g_remoteConfig.getModel(), g_remoteConfig.getABCDays()) == false) {
     g_statusLed.set(StatusLed::Blink, 2000, 500);
     ESP_LOGW(
         TAG,
@@ -302,12 +302,12 @@ void initGPIO() {
   io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
   io_conf.intr_type = GPIO_INTR_DISABLE;
   if (xWakeUpCounter == 0) {
-    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) | (1ULL << EN_CO2) |
-                           (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
+    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) |
+                           (1ULL << EN_CO2) | (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   } else {
     // Ignore CO2 load switch IO since the state already retained
-    io_conf.pin_bit_mask =
-        (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) | (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
+    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) |
+                           (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   }
   gpio_config(&io_conf);
 

@@ -23,7 +23,7 @@
 
 Sensor::Sensor(i2c_master_bus_handle_t busHandle) : _busHandle(busHandle) {}
 
-bool Sensor::init(RemoteConfig::Model model) {
+bool Sensor::init(RemoteConfig::Model model, int co2ABCDays) {
   ESP_LOGI(TAG, "Initializing sensor...");
   esp_log_level_set(TAG, ESP_LOG_DEBUG);
 
@@ -35,6 +35,9 @@ bool Sensor::init(RemoteConfig::Model model) {
   } else {
     co2_ = new Sunlight(*agsCO2_);
     co2_->read_sensor_id();
+    co2_->setABC(true);
+    co2_->setABCPeriod(co2ABCDays * 24); // Convert to hours
+    ESP_LOGI(TAG, "CO2 ABC status: %d", co2_->isABCEnabled() ? 1 : 0);
     // NOTE: Since UART, need to check if its actually able to communicate?
   }
 

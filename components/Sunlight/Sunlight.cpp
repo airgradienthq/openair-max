@@ -587,29 +587,62 @@ bool Sunlight::setMeterControlBit(uint8_t target, bool newValue, uint8_t bit) {
   uint16_t meterControlVal = values[0];
   bool isHigh = bitRead(meterControlVal, bit) == 0;
 
-  if (isHigh != newValue) {
-    /* Not match change it */
-    if (newValue) {
-      bitClear(meterControlVal, bit);
-    } else {
-      bitSet(meterControlVal, bit);
-    }
-    uint16_t change[] = {meterControlVal};
-    if (write_multiple_registers(target, METER_CONTROL, numReg, change) != 0) {
-      ESP_LOGE(TAG, "Failed to change ABC status");
-      return false;
-    }
+  if (isHigh == newValue) {
+    ESP_LOGD(TAG, "Meter control already in desired status");
     return true;
   }
 
-  return false;
+  if (newValue) {
+    // Enabling
+    bitClear(meterControlVal, bit);
+  } else {
+    // Disabling
+    bitSet(meterControlVal, bit);
+  }
+
+  uint16_t change[] = {meterControlVal};
+  if (write_multiple_registers(target, METER_CONTROL, numReg, change) != 0) {
+    ESP_LOGE(TAG, "Failed to change meter control status");
+    return false;
+  }
+
+  return true;
 }
 
 void Sunlight::setABC(bool enable) {
   if (!this->setMeterControlBit(CO2_SUNLIGHT_ADDR, enable, 1)) {
-    DBG("ABC value change not needed");
+    ESP_LOGE(TAG, "Failed to set ABC period");
   }
+  ESP_LOGI(TAG, "ABC period already in desired value");
 }
+
+bool Sunlight::setABCPeriod(uint16_t hours) {
+  const uint16_t registerAddr = ABC_PERIOD;
+  const uint16_t numReg = 1;
+
+  // Read current value to avoid unnecessary writes
+  int error = read_holding_registers(CO2_SUNLIGHT_ADDR, registerAddr, numReg);
+  if (error != 0) {
+    ESP_LOGE(TAG, "Failed to read ABC period register (%d)", error);
+    return false;
+  }
+
+  if (values[0] == hours) {
+    ESP_LOGI(TAG, "ABC period already set to desired value");
+    return true;
+  }
+
+  uint16_t newValue[] = {hours};
+  error = write_multiple_registers(CO2_SUNLIGHT_ADDR, registerAddr, numReg, newValue);
+  if (error != 0) {
+    ESP_LOGE(TAG, "Failed to write ABC period (%d)", error);
+    return false;
+  }
+
+  ESP_LOGD(TAG, "Success set ABC period");
+  return true;
+}
+
 void Sunlight::setNRDY(bool enable) {
   if (!this->setMeterControlBit(CO2_SUNLIGHT_ADDR, enable, 0)) {
     DBG("nRDY value change not needed");
