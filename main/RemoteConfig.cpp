@@ -15,6 +15,7 @@
 #define REMOTE_CONFIG_NVS_STORAGE_NAME "remote-config"
 #define NVS_KEY_CO2_CALIBRATION_REQUESTED "co2CalibReq"
 #define NVS_KEY_LED_TEST_REQUESTED "ledTestReq"
+#define NVS_KEY_ABC_DAYS "abcDays"
 #define NVS_KEY_MODEL "model"
 #define NVS_KEY_SCHEDULE_PM02 "pm02"
 #define NVS_KEY_SCHEDULE_CONTINUOUS "cont"
@@ -36,6 +37,7 @@ bool RemoteConfig::load() {
   ESP_LOGI(TAG, "**** REMOTE CONFIGURATION ****");
   ESP_LOGI(TAG, "co2CalibrationRequested: %d", _config.co2CalibrationRequested);
   ESP_LOGI(TAG, "ledTestRequested: %d", _config.ledTestRequested);
+  ESP_LOGI(TAG, "abcDays: %d", _config.abcDays);
   ESP_LOGI(TAG, "model: %s", _config.model.c_str());
   ESP_LOGI(TAG, "firmware.target: %s", _config.firmware.target.c_str());
   ESP_LOGI(TAG, "firmware.url: %s", _config.firmware.url.c_str());
@@ -66,6 +68,16 @@ bool RemoteConfig::parse(const std::string &config) {
     }
   } else {
     ESP_LOGW(TAG, "co2CalibrationRequested field not found");
+  }
+
+  if (json_obj_get_int(&jctx, "abcDays", &int_val) == OS_SUCCESS) {
+    if (_config.abcDays != int_val) {
+      ESP_LOGI(TAG, "abcDays value changed from %d to %d", _config.abcDays, int_val);
+      _config.abcDays = int_val;
+      _configChanged = true;
+    }
+  } else {
+    ESP_LOGW(TAG, "abcDays field not found");
   }
 
   if (json_obj_get_bool(&jctx, "ledTestRequested", &bool_val) == OS_SUCCESS) {
@@ -179,6 +191,15 @@ bool RemoteConfig::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get ledTestRequested");
   }
 
+  // ABC DAYS
+  uint16_t abcDays;
+  err = nvs_get_u16(handle, NVS_KEY_ABC_DAYS, &abcDays);
+  if (err == ESP_OK) {
+    _config.abcDays = abcDays;
+  } else {
+    ESP_LOGW(TAG, "Failed to get abcDays");
+  }
+
   // MODEL
   size_t requiredSize = 0;
   err = nvs_get_str(handle, NVS_KEY_MODEL, NULL, &requiredSize);
@@ -273,6 +294,12 @@ bool RemoteConfig::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save ledTestRequested");
   }
 
+  // ABC DAYS
+  err = nvs_set_u16(handle, NVS_KEY_ABC_DAYS, _config.abcDays);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save abcDays");
+  }
+
   // MODEL
   err = nvs_set_str(handle, NVS_KEY_MODEL, _config.model.c_str());
   if (err != ESP_OK) {
@@ -321,10 +348,11 @@ bool RemoteConfig::isCO2CalibrationRequested() { return _config.co2CalibrationRe
 
 bool RemoteConfig::isLedTestRequested() { return _config.ledTestRequested; }
 
+int RemoteConfig::getABCDays() { return _config.abcDays; }
+
 RemoteConfig::Firmware RemoteConfig::getConfigFirmware() { return _config.firmware; }
 
 RemoteConfig::Schedule RemoteConfig::getConfigSchedule() { return _config.schedule; }
-
 
 RemoteConfig::Model RemoteConfig::getModel() {
   if (_config.model == "O-M-1PPSTON-CE") {
@@ -350,6 +378,7 @@ void RemoteConfig::resetCO2CalibrationRequest() {
 void RemoteConfig::_setConfigToDefault() {
   _config.co2CalibrationRequested = false;
   _config.ledTestRequested = false;
+  _config.abcDays = DEFAULT_ABC_PERIOD_DAYS;
   _config.model = "O-M-1PPSTON-CE";
   _config.firmware.target = "";
   _config.firmware.url = "";

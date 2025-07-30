@@ -28,6 +28,7 @@ public:
   };
 
   struct Config {
+    int abcDays;
     bool co2CalibrationRequested;
     bool ledTestRequested;
     std::string model;
@@ -45,6 +46,7 @@ public:
   bool isConfigChanged();
   bool isCO2CalibrationRequested();
   bool isLedTestRequested();
+  int getABCDays();
   Firmware getConfigFirmware();
   Schedule getConfigSchedule();
   Model getModel();

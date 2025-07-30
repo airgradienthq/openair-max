@@ -23,7 +23,7 @@ class Sensor {
 public:
   Sensor(i2c_master_bus_handle_t busHandle);
   ~Sensor(){}
-  bool init(RemoteConfig::Model model);
+  bool init(RemoteConfig::Model model, int co2ABCDays);
   bool startMeasures(int iterations, int intervalMs);
   void printMeasures();
   AirgradientClient::OpenAirMaxPayload getLastAverageMeasure();
