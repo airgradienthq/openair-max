@@ -350,7 +350,7 @@ void RemoteConfig::resetCO2CalibrationRequest() {
 void RemoteConfig::_setConfigToDefault() {
   _config.co2CalibrationRequested = false;
   _config.ledTestRequested = false;
-  _config.model = "";
+  _config.model = "O-M-1PPSTON-CE";
   _config.firmware.target = "";
   _config.firmware.url = "";
   _config.schedule.pm02 = MEASURE_CYCLE_INTERVAL_SECONDS;
