@@ -302,12 +302,12 @@ void initGPIO() {
   io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
   io_conf.intr_type = GPIO_INTR_DISABLE;
   if (xWakeUpCounter == 0) {
-    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) | (1ULL << EN_CO2) |
-                           (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
+    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) |
+                           (1ULL << EN_CO2) | (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   } else {
     // Ignore CO2 load switch IO since the state already retained
-    io_conf.pin_bit_mask =
-        (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) | (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
+    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) |
+                           (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   }
   gpio_config(&io_conf);
 
