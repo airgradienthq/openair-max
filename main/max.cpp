@@ -6,6 +6,7 @@
  */
 
 #include <cstdint>
+#include <ratio>
 #include <stdio.h>
 #include <inttypes.h>
 #include <string>
@@ -58,13 +59,25 @@ static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
+static WiFiManager g_wifiManager;
+
+static QueueHandle_t bootButtonQueue = NULL;
+static void IRAM_ATTR bootButtonISRHandler(void *arg) {
+  (void)arg;
+  int level = gpio_get_level(IO_BOOT_BUTTON);
+  xQueueSendFromISR(bootButtonQueue, &level, NULL);
+}
 
 /**
  * Re-initialize console for logging
  */
 static void initConsole();
 
-void initGPIO();
+static void initGPIO();
+
+static void bootButtonTask(void *arg);
+
+static void initBootButton();
 
 /**
  * Reset monitor external watchdog timer
@@ -121,6 +134,8 @@ extern "C" void app_main(void) {
 
   // Initialize every peripheral GPIOs to OFF state
   initGPIO();
+
+  initBootButton();
 
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
@@ -332,6 +347,44 @@ void initGPIO() {
     gpio_set_level(EN_CO2, 1);
     gpio_hold_en(EN_CO2);
   }
+}
+
+void bootButtonTask(void *arg) {
+  uint32_t startTimeButtonPressed = 0;
+  int level;
+  while (1) {
+    if (xQueueReceive(bootButtonQueue, &level, portMAX_DELAY)) {
+      if (level == 0) {
+        // Button pressed
+        startTimeButtonPressed = MILLIS();
+      } else {
+        // Button released
+        if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
+          g_remoteConfig.switchNetworkOption();
+        }
+        startTimeButtonPressed = 0;
+      }
+    }
+  }
+}
+
+void initBootButton() {
+  gpio_config_t io_conf = {};
+  io_conf.intr_type = GPIO_INTR_ANYEDGE;
+  io_conf.pin_bit_mask = (1ULL << IO_BOOT_BUTTON);
+  io_conf.mode = GPIO_MODE_INPUT;
+  io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+  gpio_config(&io_conf);
+
+  //create a queue to handle gpio event from isr
+  bootButtonQueue = xQueueCreate(3, sizeof(uint32_t));
+  //start gpio task
+  xTaskCreate(bootButtonTask, "boot_button", 2048, NULL, 10, NULL);
+
+  //install gpio isr service
+  gpio_install_isr_service(0);
+  //hook isr handler for specific gpio pin
+  gpio_isr_handler_add(IO_BOOT_BUTTON, bootButtonISRHandler, nullptr);
 }
 
 void printResetReason() {

@@ -8,6 +8,7 @@
 #ifndef REMOTE_CONFIG_H
 #define REMOTE_CONFIG_H
 
+#include "MaxConfig.h"
 #include <string>
 
 class RemoteConfig {
@@ -34,6 +35,7 @@ public:
     std::string model;
     Schedule schedule;
     Firmware firmware;
+    NetworkOption networkOption;
   };
 
   RemoteConfig() {}
@@ -50,6 +52,10 @@ public:
   Firmware getConfigFirmware();
   Schedule getConfigSchedule();
   Model getModel();
+
+  // Setter
+  void switchNetworkOption();
+  NetworkOption getNetworkOption();
 
   void resetLedTestRequest();
   void resetCO2CalibrationRequest();

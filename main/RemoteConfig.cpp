@@ -21,6 +21,7 @@
 #define NVS_KEY_SCHEDULE_CONTINUOUS "cont"
 #define NVS_KEY_FIRMWARE_URL "furl"
 #define NVS_KEY_FIRMWARE_TARGET "ftarget"
+#define NVS_KEY_NETWORK_OPTION "netOpt"
 
 bool RemoteConfig::load() {
   // At first, set every configuration to default
@@ -44,6 +45,9 @@ bool RemoteConfig::load() {
   ESP_LOGI(TAG, "schedule.pm02: %d", _config.schedule.pm02);
   ESP_LOGI(TAG, "schedule.continuous: %d", _config.schedule.continuous);
   ESP_LOGI(TAG, "**** ****");
+
+  ESP_LOGI(TAG, "networkOption: %s",
+           _config.networkOption == NetworkOption::Cellular ? "Cellular" : "WiFi");
 
   return true;
 }
@@ -267,6 +271,15 @@ bool RemoteConfig::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get schedule.pm02");
   }
 
+  // NETWORK OPTION
+  uint8_t netopt;
+  err = nvs_get_u8(handle, NVS_KEY_NETWORK_OPTION, &netopt);
+  if (err == ESP_OK) {
+    _config.networkOption = static_cast<NetworkOption>(netopt);
+  } else {
+    ESP_LOGW(TAG, "Failed to get schedule.continuous");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -330,6 +343,12 @@ bool RemoteConfig::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save schedule.pm02");
   }
 
+  // NETWORK OPTION
+  err = nvs_set_u8(handle, NVS_KEY_NETWORK_OPTION, static_cast<uint8_t>(_config.networkOption));
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save schedule.pm02");
+  }
+
   // Commit changes
   err = nvs_commit(handle);
   if (err != ESP_OK) {
@@ -365,6 +384,19 @@ RemoteConfig::Model RemoteConfig::getModel() {
   return O_M_1PPST_CE;
 }
 
+void RemoteConfig::switchNetworkOption() {
+  if (_config.networkOption == NetworkOption::Cellular) {
+    ESP_LOGI(TAG, "Switch network option to WiFi");
+    _config.networkOption = NetworkOption::WiFi;
+  } else {
+    ESP_LOGI(TAG, "Switch network option to Cellular");
+    _config.networkOption = NetworkOption::Cellular;
+  }
+  _saveConfig();
+}
+
+NetworkOption RemoteConfig::getNetworkOption() { return _config.networkOption; }
+
 void RemoteConfig::resetLedTestRequest() {
   _config.ledTestRequested = false;
   _saveConfig();
@@ -384,4 +416,5 @@ void RemoteConfig::_setConfigToDefault() {
   _config.firmware.url = "";
   _config.schedule.pm02 = MEASURE_CYCLE_INTERVAL_SECONDS;
   _config.schedule.continuous = false;
+  _config.networkOption = NetworkOption::Cellular;
 }
