@@ -1,4 +1,5 @@
 #include "WiFiManager.h"
+#include "esp_log_level.h"
 #include "wm_config.h"
 #include "esp_mac.h"
 #include "esp_system.h"
@@ -30,8 +31,8 @@ WiFiManager::WiFiManager()
       _ipEventHandler(nullptr), _lastConxResult(WL_IDLE_STATUS), _portalAbortResult(false),
       _configPortalStart(0), _connectStart(0), _dnsTaskHandle(nullptr), _dnsSocket(-1),
       _dnsRunning(false), _initialized(false), _cleanupInProgress(false) {
-  WM_LOGI("WiFiManager constructor");
-  // Don't call init() here - it will be called when needed
+  // Set wifi driver log level to only warning, to reduce unnecessary information
+  esp_log_level_set("wifi", ESP_LOG_WARN);
 }
 
 WiFiManager::~WiFiManager() {
