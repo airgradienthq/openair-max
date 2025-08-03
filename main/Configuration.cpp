@@ -5,7 +5,7 @@
  * CC BY-SA 4.0 Attribution-ShareAlike 4.0 International License
  */
 
-#include "RemoteConfig.h"
+#include "Configuration.h"
 #include "MaxConfig.h"
 #include "esp_log.h"
 #include "json_parser.h"
@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <cstring>
 
-#define REMOTE_CONFIG_NVS_STORAGE_NAME "remote-config"
+#define REMOTE_CONFIG_NVS_STORAGE_NAME "remote-config" //!NOTE: Don't change this value!
 #define NVS_KEY_CO2_CALIBRATION_REQUESTED "co2CalibReq"
 #define NVS_KEY_LED_TEST_REQUESTED "ledTestReq"
 #define NVS_KEY_ABC_DAYS "abcDays"
@@ -25,7 +25,7 @@
 #define NVS_KEY_NETWORK_OPTION "netOpt"
 #define NVS_KEY_WIFI_CONFIGURED "wifiset"
 
-bool RemoteConfig::load() {
+bool Configuration::load() {
   // At first, set every configuration to default
   //   to accomodate some config that are failed to read from NVS
   _setConfigToDefault();
@@ -37,7 +37,7 @@ bool RemoteConfig::load() {
   }
 
   // Printout configurations
-  ESP_LOGI(TAG, "**** REMOTE CONFIGURATION ****");
+  ESP_LOGI(TAG, "**** CONFIGURATION ****");
   ESP_LOGI(TAG, "co2CalibrationRequested: %d", _config.co2CalibrationRequested);
   ESP_LOGI(TAG, "ledTestRequested: %d", _config.ledTestRequested);
   ESP_LOGI(TAG, "abcDays: %d", _config.abcDays);
@@ -55,7 +55,7 @@ bool RemoteConfig::load() {
   return true;
 }
 
-bool RemoteConfig::parse(const std::string &config) {
+bool Configuration::parseRemoteConfig(const std::string &config) {
   jparse_ctx_t jctx;
   int ret = json_parse_start(&jctx, config.c_str(), config.length());
   if (ret != OS_SUCCESS) {
@@ -171,8 +171,8 @@ bool RemoteConfig::parse(const std::string &config) {
   return true;
 }
 
-bool RemoteConfig::_loadConfig() {
-  ESP_LOGI(TAG, "Reading remote configuration from NVS");
+bool Configuration::_loadConfig() {
+  ESP_LOGI(TAG, "Reading configurations from NVS");
   nvs_handle_t handle;
   esp_err_t err = nvs_open(REMOTE_CONFIG_NVS_STORAGE_NAME, NVS_READONLY, &handle);
   if (err != ESP_OK) {
@@ -298,8 +298,8 @@ bool RemoteConfig::_loadConfig() {
   return true;
 }
 
-bool RemoteConfig::_saveConfig() {
-  ESP_LOGI(TAG, "Saving remote configuration to NVS");
+bool Configuration::_saveConfig() {
+  ESP_LOGI(TAG, "Saving configurations to NVS");
   nvs_handle_t handle;
   esp_err_t err = nvs_open(REMOTE_CONFIG_NVS_STORAGE_NAME, NVS_READWRITE, &handle);
   if (err != ESP_OK) {
@@ -379,19 +379,19 @@ bool RemoteConfig::_saveConfig() {
   return true;
 }
 
-bool RemoteConfig::isConfigChanged() { return _configChanged; }
+bool Configuration::isConfigChanged() { return _configChanged; }
 
-bool RemoteConfig::isCO2CalibrationRequested() { return _config.co2CalibrationRequested; }
+bool Configuration::isCO2CalibrationRequested() { return _config.co2CalibrationRequested; }
 
-bool RemoteConfig::isLedTestRequested() { return _config.ledTestRequested; }
+bool Configuration::isLedTestRequested() { return _config.ledTestRequested; }
 
-int RemoteConfig::getABCDays() { return _config.abcDays; }
+int Configuration::getABCDays() { return _config.abcDays; }
 
-RemoteConfig::Firmware RemoteConfig::getConfigFirmware() { return _config.firmware; }
+Configuration::Firmware Configuration::getConfigFirmware() { return _config.firmware; }
 
-RemoteConfig::Schedule RemoteConfig::getConfigSchedule() { return _config.schedule; }
+Configuration::Schedule Configuration::getConfigSchedule() { return _config.schedule; }
 
-RemoteConfig::Model RemoteConfig::getModel() {
+Configuration::Model Configuration::getModel() {
   if (_config.model == "O-M-1PPSTON-CE") {
     return O_M_1PPSTON_CE;
   } else if (_config.model == "O-M-1PPST-CE") {
@@ -402,37 +402,17 @@ RemoteConfig::Model RemoteConfig::getModel() {
   return O_M_1PPST_CE;
 }
 
-NetworkOption RemoteConfig::getNetworkOption() { return _config.networkOption; }
-
-bool RemoteConfig::isWifiConfigured() { return _config.isWifiConfigured; }
-
-void RemoteConfig::switchNetworkOption() {
-  if (_config.networkOption == NetworkOption::Cellular) {
-    ESP_LOGI(TAG, "Switch network option to WiFi");
-    _config.networkOption = NetworkOption::WiFi;
-  } else {
-    ESP_LOGI(TAG, "Switch network option to Cellular");
-    _config.networkOption = NetworkOption::Cellular;
-  }
-  _saveConfig();
-}
-
-void RemoteConfig::setIsWifiConfigured(bool state) {
-  _config.isWifiConfigured = state;
-  _saveConfig();
-}
-
-void RemoteConfig::resetLedTestRequest() {
+void Configuration::resetLedTestRequest() {
   _config.ledTestRequested = false;
   _saveConfig();
 }
 
-void RemoteConfig::resetCO2CalibrationRequest() {
+void Configuration::resetCO2CalibrationRequest() {
   _config.co2CalibrationRequested = false;
   _saveConfig();
 }
 
-void RemoteConfig::_setConfigToDefault() {
+void Configuration::_setConfigToDefault() {
   _config.co2CalibrationRequested = false;
   _config.ledTestRequested = false;
   _config.abcDays = DEFAULT_ABC_PERIOD_DAYS;
