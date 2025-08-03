@@ -1,16 +1,16 @@
-/**
+/*
  * AirGradient
  * https://airgradient.com
  *
  * CC BY-SA 4.0 Attribution-ShareAlike 4.0 International License
  */
 
-#ifndef REMOTE_CONFIG_H
-#define REMOTE_CONFIG_H
+#ifndef CONFIGURATION_H
+#define CONFIGURATION_H
 
 #include <string>
 
-class RemoteConfig {
+class Configuration {
 public:
   struct Schedule {
     bool continuous;
@@ -36,8 +36,8 @@ public:
     Firmware firmware;
   };
 
-  RemoteConfig() {}
-  ~RemoteConfig() {}
+  Configuration() {}
+  ~Configuration() {}
   bool load();
   bool reset();
   bool parse(const std::string &config);
@@ -55,7 +55,7 @@ public:
   void resetCO2CalibrationRequest();
 
 private:
-  const char *const TAG = "RemoteConfig";
+  const char *const TAG = "Configuration";
   Config _config;
   bool _configChanged = false;
 
@@ -64,4 +64,4 @@ private:
   void _setConfigToDefault();
 };
 
-#endif // !REMOTE_CONFIG_H
+#endif // !CONFIGURATION_H

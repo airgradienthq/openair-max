@@ -10,7 +10,6 @@
 #include "AirgradientUART.h"
 #include "AlphaSenseSensor.h"
 #include "BQ25672.h"
-#include "RemoteConfig.h"
 #include "esp_log_level.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -23,7 +22,7 @@
 
 Sensor::Sensor(i2c_master_bus_handle_t busHandle) : _busHandle(busHandle) {}
 
-bool Sensor::init(RemoteConfig::Model model, int co2ABCDays) {
+bool Sensor::init(Configuration::Model model, int co2ABCDays) {
   ESP_LOGI(TAG, "Initializing sensor...");
   esp_log_level_set(TAG, ESP_LOG_DEBUG);
 
@@ -75,7 +74,7 @@ bool Sensor::init(RemoteConfig::Model model, int co2ABCDays) {
     charger_->getChargingStatus();
   }
 
-  if (model == RemoteConfig::O_M_1PPSTON_CE) {
+  if (model == Configuration::O_M_1PPSTON_CE) {
     // Initialize alphasense sensor if model supported
     alphaSense_ = new AlphaSenseSensor();
     if (alphaSense_->initGas(_busHandle) == false) {
@@ -128,7 +127,7 @@ bool Sensor::init(RemoteConfig::Model model, int co2ABCDays) {
 
   ESP_LOGI(TAG, "Initialize finish");
 
-  if (model == RemoteConfig::O_M_1PPSTON_CE) {
+  if (model == Configuration::O_M_1PPSTON_CE) {
     return (_co2Available && _pms1Available && _pms2Available && _chargerAvailable &&
             _tvocNoxAvailable && _tempHumAvailable && _alphaSenseGasAvailable &&
             _alphaSenseTempAvailable);
