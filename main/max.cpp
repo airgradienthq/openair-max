@@ -41,6 +41,7 @@
 #include "airgradientCellularClient.h"
 #include "cellularModuleA7672xx.h"
 #include "airgradientOtaCellular.h"
+#include "WiFiManager.h"
 
 #define CONSOLE_MAX_CMDLINE_ARGS 8
 #define CONSOLE_MAX_CMDLINE_LENGTH 256
@@ -135,7 +136,11 @@ extern "C" void app_main(void) {
   // Initialize every peripheral GPIOs to OFF state
   initGPIO();
 
-  initBootButton();
+  if (xWakeUpCounter == 0) {
+    // Initialize boot button event handler only on the first boot
+    // So on next boot onwards, boot button will not function
+    initBootButton();
+  }
 
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
@@ -163,6 +168,27 @@ extern "C" void app_main(void) {
 
   // Load remote configuration that saved on NVS
   g_remoteConfig.load();
+
+  if (g_remoteConfig.getNetworkOption() == NetworkOption::WiFi) {
+    std::string ssid = std::string("airgradient-") + g_serialNumber;
+    if (g_remoteConfig.isWifiConfigured() == false && xWakeUpCounter == 0) {
+      // TODO: Run led notification here
+      ESP_LOGI(TAG, "Credentials haven't set yet, running portal");
+      g_wifiManager.setConfigPortalTimeout(180); // 3 minutes
+      g_wifiManager.setConnectTimeout(30);       // 30 seconds
+      g_wifiManager.setMinimumSignalQuality(8);
+      g_wifiManager.setRemoveDuplicateAPs(true);
+      g_wifiManager.setConfigPortalBlocking(true);
+      bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
+      if (!success) {
+        // Portal either timeout or canceled or failed to connect to wifi using provided credentials
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+      }
+      g_remoteConfig.setIsWifiConfigured(true);
+    }
+    ESP_LOGI(TAG, "Application continue using wifi...");
+  }
 
   // Run led test if requested
   if (g_remoteConfig.isLedTestRequested()) {
@@ -357,10 +383,12 @@ void bootButtonTask(void *arg) {
       if (level == 0) {
         // Button pressed
         startTimeButtonPressed = MILLIS();
+        // TODO: Maybe add led animation here
       } else {
         // Button released
         if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
           g_remoteConfig.switchNetworkOption();
+          // TODO: Add restart here
         }
         startTimeButtonPressed = 0;
       }
