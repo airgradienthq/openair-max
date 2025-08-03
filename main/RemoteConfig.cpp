@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "json_parser.h"
 #include "nvs.h"
+#include <cstdint>
 #include <cstring>
 
 #define REMOTE_CONFIG_NVS_STORAGE_NAME "remote-config"
@@ -22,6 +23,7 @@
 #define NVS_KEY_FIRMWARE_URL "furl"
 #define NVS_KEY_FIRMWARE_TARGET "ftarget"
 #define NVS_KEY_NETWORK_OPTION "netOpt"
+#define NVS_KEY_WIFI_CONFIGURED "wifiset"
 
 bool RemoteConfig::load() {
   // At first, set every configuration to default
@@ -48,6 +50,7 @@ bool RemoteConfig::load() {
 
   ESP_LOGI(TAG, "networkOption: %s",
            _config.networkOption == NetworkOption::Cellular ? "Cellular" : "WiFi");
+  ESP_LOGI(TAG, "isWifiConfigured: %d", _config.isWifiConfigured);
 
   return true;
 }
@@ -271,13 +274,22 @@ bool RemoteConfig::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get schedule.pm02");
   }
 
+  // Is wifi configured
+  uint8_t wifiConfigured;
+  err = nvs_get_u8(handle, NVS_KEY_WIFI_CONFIGURED, &wifiConfigured);
+  if (err == ESP_OK) {
+    _config.isWifiConfigured = wifiConfigured;
+  } else {
+    ESP_LOGW(TAG, "Failed to get isWifiConfigured");
+  }
+
   // NETWORK OPTION
   uint8_t netopt;
   err = nvs_get_u8(handle, NVS_KEY_NETWORK_OPTION, &netopt);
   if (err == ESP_OK) {
     _config.networkOption = static_cast<NetworkOption>(netopt);
   } else {
-    ESP_LOGW(TAG, "Failed to get schedule.continuous");
+    ESP_LOGW(TAG, "Failed to get networkOption");
   }
 
   // Close NVS
@@ -346,7 +358,13 @@ bool RemoteConfig::_saveConfig() {
   // NETWORK OPTION
   err = nvs_set_u8(handle, NVS_KEY_NETWORK_OPTION, static_cast<uint8_t>(_config.networkOption));
   if (err != ESP_OK) {
-    ESP_LOGW(TAG, "Failed to save schedule.pm02");
+    ESP_LOGW(TAG, "Failed to save networkOption");
+  }
+
+  // WiFi configured
+  err = nvs_set_u8(handle, NVS_KEY_WIFI_CONFIGURED, _config.isWifiConfigured);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save isWifiConfigured");
   }
 
   // Commit changes
@@ -384,6 +402,10 @@ RemoteConfig::Model RemoteConfig::getModel() {
   return O_M_1PPST_CE;
 }
 
+NetworkOption RemoteConfig::getNetworkOption() { return _config.networkOption; }
+
+bool RemoteConfig::isWifiConfigured() { return _config.isWifiConfigured; }
+
 void RemoteConfig::switchNetworkOption() {
   if (_config.networkOption == NetworkOption::Cellular) {
     ESP_LOGI(TAG, "Switch network option to WiFi");
@@ -395,7 +417,10 @@ void RemoteConfig::switchNetworkOption() {
   _saveConfig();
 }
 
-NetworkOption RemoteConfig::getNetworkOption() { return _config.networkOption; }
+void RemoteConfig::setIsWifiConfigured(bool state) {
+  _config.isWifiConfigured = state;
+  _saveConfig();
+}
 
 void RemoteConfig::resetLedTestRequest() {
   _config.ledTestRequested = false;
@@ -417,4 +442,5 @@ void RemoteConfig::_setConfigToDefault() {
   _config.schedule.pm02 = MEASURE_CYCLE_INTERVAL_SECONDS;
   _config.schedule.continuous = false;
   _config.networkOption = NetworkOption::Cellular;
+  _config.isWifiConfigured = false;
 }
