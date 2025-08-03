@@ -46,11 +46,10 @@ bool Configuration::load() {
   ESP_LOGI(TAG, "firmware.url: %s", _config.firmware.url.c_str());
   ESP_LOGI(TAG, "schedule.pm02: %d", _config.schedule.pm02);
   ESP_LOGI(TAG, "schedule.continuous: %d", _config.schedule.continuous);
-  ESP_LOGI(TAG, "**** ****");
-
   ESP_LOGI(TAG, "networkOption: %s",
            _config.networkOption == NetworkOption::Cellular ? "Cellular" : "WiFi");
   ESP_LOGI(TAG, "isWifiConfigured: %d", _config.isWifiConfigured);
+  ESP_LOGI(TAG, "**** ****");
 
   return true;
 }
@@ -400,6 +399,26 @@ Configuration::Model Configuration::getModel() {
 
   // Default
   return O_M_1PPST_CE;
+}
+
+NetworkOption Configuration::getNetworkOption() { return _config.networkOption; }
+
+bool Configuration::isWifiConfigured() { return _config.isWifiConfigured; }
+
+void Configuration::switchNetworkOption() {
+  if (_config.networkOption == NetworkOption::Cellular) {
+    ESP_LOGI(TAG, "Switch network option to WiFi");
+    _config.networkOption = NetworkOption::WiFi;
+  } else {
+    ESP_LOGI(TAG, "Switch network option to Cellular");
+    _config.networkOption = NetworkOption::Cellular;
+  }
+  _saveConfig();
+}
+
+void Configuration::setIsWifiConfigured(bool state) {
+  _config.isWifiConfigured = state;
+  _saveConfig();
 }
 
 void Configuration::resetLedTestRequest() {

@@ -169,9 +169,9 @@ extern "C" void app_main(void) {
   // Load configuration that saved on NVS
   g_configuration.load();
 
-  if (g_remoteConfig.getNetworkOption() == NetworkOption::WiFi) {
+  if (g_configuration.getNetworkOption() == NetworkOption::WiFi) {
     std::string ssid = std::string("airgradient-") + g_serialNumber;
-    if (g_remoteConfig.isWifiConfigured() == false && xWakeUpCounter == 0) {
+    if (g_configuration.isWifiConfigured() == false && xWakeUpCounter == 0) {
       // TODO: Run led notification here
       ESP_LOGI(TAG, "Credentials haven't set yet, running portal");
       g_wifiManager.setConfigPortalTimeout(180); // 3 minutes
@@ -185,7 +185,7 @@ extern "C" void app_main(void) {
         vTaskDelay(pdMS_TO_TICKS(5000));
         esp_restart();
       }
-      g_remoteConfig.setIsWifiConfigured(true);
+      g_configuration.setIsWifiConfigured(true);
     }
     ESP_LOGI(TAG, "Application continue using wifi...");
   }
@@ -387,7 +387,7 @@ void bootButtonTask(void *arg) {
       } else {
         // Button released
         if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
-          g_remoteConfig.switchNetworkOption();
+          g_configuration.switchNetworkOption();
           // TODO: Add restart here
         }
         startTimeButtonPressed = 0;
