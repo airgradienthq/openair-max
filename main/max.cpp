@@ -29,7 +29,7 @@
 #include "driver/i2c_master.h"
 
 #include "MaxConfig.h"
-#include "RemoteConfig.h"
+#include "Configuration.h"
 #include "PayloadCache.h"
 #include "StatusLed.h"
 #include "Sensor.h"
@@ -53,7 +53,7 @@ static const char *const TAG = "APP";
 static std::string g_serialNumber;
 static bool g_networkReady = false;
 static std::string g_fimwareVersion;
-static RemoteConfig g_remoteConfig;
+static Configuration g_configuration;
 static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
@@ -92,7 +92,7 @@ static void ensureConnectionReady();
 /**
  * Attempt to initialize and connect to cellular network
  * If failed once, it will not re-attempt to initialize for its wake up cycle
- * Called when post measure, check remote configuraiton and check for firmware update
+ * Called when post measure, check remote configuration and check for firmware update
  */
 static bool initializeCellularNetwork(unsigned long wakeUpCounter);
 
@@ -146,14 +146,14 @@ extern "C" void app_main(void) {
   g_serialNumber = buildSerialNumber();
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
 
-  // Load remote configuration that saved on NVS
-  g_remoteConfig.load();
+  // Load configuration that saved on NVS
+  g_configuration.load();
 
   // Run led test if requested
-  if (g_remoteConfig.isLedTestRequested()) {
+  if (g_configuration.isLedTestRequested()) {
     g_statusLed.set(StatusLed::Blink, 5000, 100);
     vTaskDelay(pdMS_TO_TICKS(5000));
-    g_remoteConfig.resetLedTestRequest();
+    g_configuration.resetLedTestRequest();
   }
 
   // Reset external WDT
@@ -184,16 +184,16 @@ extern "C" void app_main(void) {
   ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &bus_handle));
 
   Sensor sensor(bus_handle);
-  if (sensor.init(g_remoteConfig.getModel(), g_remoteConfig.getABCDays()) == false) {
+  if (sensor.init(g_configuration.getModel(), g_configuration.getABCDays()) == false) {
     g_statusLed.set(StatusLed::Blink, 2000, 500);
     ESP_LOGW(
         TAG,
         "One or more sensor were failed to initialize, will not measure those on this iteration");
   }
 
-  if (g_remoteConfig.isCO2CalibrationRequested()) {
+  if (g_configuration.isCO2CalibrationRequested()) {
     sensor.co2AttemptManualCalibration();
-    g_remoteConfig.resetCO2CalibrationRequest();
+    g_configuration.resetCO2CalibrationRequest();
   }
 
   // Start measure sensor sequence that if success,
@@ -234,7 +234,7 @@ extern "C" void app_main(void) {
 
   // Calculate how long to sleep to keep measurement cycle the same
   uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
-  int toSleepMs = (g_remoteConfig.getConfigSchedule().pm02 * 1000) - aliveTimeSpendMillis;
+  int toSleepMs = (g_configuration.getConfigSchedule().pm02 * 1000) - aliveTimeSpendMillis;
   if (toSleepMs < 0) {
     // TODO: if its 0 means, no need to sleep, right? if so need to move to loop
     toSleepMs = 0;
@@ -555,7 +555,7 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   int attemptCounter = 0;
   do {
     attemptCounter = attemptCounter + 1;
-    postSuccess = g_agClient->httpPostMeasures(g_remoteConfig.getConfigSchedule().pm02, payloads);
+    postSuccess = g_agClient->httpPostMeasures(g_configuration.getConfigSchedule().pm02, payloads);
     if (postSuccess) {
       // post success, clean cache
       payloadCache.clean();
@@ -674,11 +674,11 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
     return false;
   }
 
-  if (g_remoteConfig.parse(result) == false) {
+  if (g_configuration.parseRemoteConfig(result) == false) {
     return false;
   }
 
-  if (g_remoteConfig.isConfigChanged()) {
+  if (g_configuration.isConfigChanged()) {
     ESP_LOGI(TAG, "Changed configuration will be applied on next wakeup cycle onwards");
   }
 
