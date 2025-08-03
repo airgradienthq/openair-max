@@ -48,7 +48,7 @@ bool Configuration::load() {
   return true;
 }
 
-bool Configuration::parse(const std::string &config) {
+bool Configuration::parseRemoteConfig(const std::string &config) {
   jparse_ctx_t jctx;
   int ret = json_parse_start(&jctx, config.c_str(), config.length());
   if (ret != OS_SUCCESS) {

@@ -674,7 +674,7 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
     return false;
   }
 
-  if (g_configuration.parse(result) == false) {
+  if (g_configuration.parseRemoteConfig(result) == false) {
     return false;
   }
 

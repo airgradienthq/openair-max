@@ -40,7 +40,7 @@ public:
   ~Configuration() {}
   bool load();
   bool reset();
-  bool parse(const std::string &config);
+  bool parseRemoteConfig(const std::string &config);
 
   // Getter
   bool isConfigChanged();
