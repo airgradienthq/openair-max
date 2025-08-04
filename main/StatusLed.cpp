@@ -121,7 +121,7 @@ void StatusLed::_start(void *params) {
         break;
       case Blink:
         lastLedLevel = !lastLedLevel;
-        gpio_set_level(pLed->_ioLed, lastLedLevel); // turn on first
+        gpio_set_level(pLed->_ioLed, lastLedLevel);
         waitNotificationTick = currentStatus.interval / portTICK_PERIOD_MS;
         blinkStartTime = MILLIS();
         break;
@@ -133,11 +133,15 @@ void StatusLed::_start(void *params) {
     // The rest is for blink mode
 
     // Check if duration is UP and duration is not set to forever (0)
-    if ((MILLIS() - blinkStartTime) > currentStatus.duration && currentStatus.duration > 0) {
+    if ((MILLIS() - blinkStartTime) >= currentStatus.duration && currentStatus.duration > 0) {
       if (lastStatus.duration == 0 && lastStatus.mode == Blink) {
         // If last status duration expected to forever, go back to last status after this animation
         currentStatus = lastStatus;
-        gpio_set_level(pLed->_ioLed, 1); // turn on first
+
+        // Set starting level negate from current level
+        lastLedLevel = !lastLedLevel;
+        gpio_set_level(pLed->_ioLed, lastLedLevel);
+
         waitNotificationTick = currentStatus.interval / portTICK_PERIOD_MS;
         blinkStartTime = MILLIS();
       }
