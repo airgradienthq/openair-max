@@ -124,6 +124,7 @@ void StatusLed::_start(void *params) {
         gpio_set_level(pLed->_ioLed, lastLedLevel);
         waitNotificationTick = currentStatus.interval / portTICK_PERIOD_MS;
         blinkStartTime = MILLIS();
+        vTaskDelay(5);
         break;
       }
 
