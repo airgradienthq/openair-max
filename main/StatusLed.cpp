@@ -59,6 +59,17 @@ void StatusLed::disable() {
   // gpio_hold_en(_ioLed);
 }
 
+void StatusLed::on() { set(On); }
+
+void StatusLed::off() { set(Off); }
+
+void StatusLed::blinkAsync(int durationMs, int intervalMs) { set(Blink, durationMs, intervalMs); }
+
+void StatusLed::blink(int durationMs, int intervalMs) {
+  set(Blink, durationMs, intervalMs);
+  vTaskDelay(pdMS_TO_TICKS(durationMs));
+}
+
 void StatusLed::set(Mode mode, int durationMs, int intervalMs) {
   _newStatus.mode = mode;
   _newStatus.duration = durationMs;
@@ -101,13 +112,16 @@ void StatusLed::_start(void *params) {
       case Off:
         gpio_set_level(pLed->_ioLed, 0);
         waitNotificationTick = portMAX_DELAY;
+        lastLedLevel = 0;
         break;
       case On:
         gpio_set_level(pLed->_ioLed, 1);
         waitNotificationTick = portMAX_DELAY;
+        lastLedLevel = 1;
         break;
       case Blink:
-        gpio_set_level(pLed->_ioLed, 1); // turn on first
+        lastLedLevel = !lastLedLevel;
+        gpio_set_level(pLed->_ioLed, lastLedLevel); // turn on first
         waitNotificationTick = currentStatus.interval / portTICK_PERIOD_MS;
         blinkStartTime = MILLIS();
         break;
@@ -130,8 +144,10 @@ void StatusLed::_start(void *params) {
 
       if (lastStatus.mode == On) {
         gpio_set_level(pLed->_ioLed, 1);
+        lastLedLevel = 1;
       } else {
         gpio_set_level(pLed->_ioLed, 0);
+        lastLedLevel = 0;
       }
       currentStatus.mode = lastStatus.mode;
       currentStatus.duration = 0;

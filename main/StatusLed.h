@@ -28,6 +28,11 @@ public:
   void stop();
   void disable();
 
+  void on();
+  void off();
+  void blink(int durationMs = 0, int intervalMs = 0);
+  void blinkAsync(int durationMs = 0, int intervalMs = 0);
+
   /**
    * @brief set led notification based on provided Mode
    *
