@@ -30,14 +30,14 @@ bool AlphaSenseSensor::initTemperature(i2c_master_bus_handle_t busHandle) {
   return true;
 }
 
-float AlphaSenseSensor::getO3WorkingElectrode() { return readChannel(ads1_, ADS1115_COMP_0_GND); }
+float AlphaSenseSensor::getO3WorkingElectrode() { return readChannel(ads1_, ADS1115_COMP_2_GND); }
 
-float AlphaSenseSensor::getO3AuxiliaryElectrode() { return readChannel(ads1_, ADS1115_COMP_1_GND); }
+float AlphaSenseSensor::getO3AuxiliaryElectrode() { return readChannel(ads1_, ADS1115_COMP_3_GND); }
 
-float AlphaSenseSensor::getNO2WorkingElectrode() { return readChannel(ads1_, ADS1115_COMP_2_GND); }
+float AlphaSenseSensor::getNO2WorkingElectrode() { return readChannel(ads1_, ADS1115_COMP_0_GND); }
 
 float AlphaSenseSensor::getNO2AuxiliaryElectrode() {
-  return readChannel(ads2_, ADS1115_COMP_3_GND);
+  return readChannel(ads1_, ADS1115_COMP_1_GND);
 }
 
 float AlphaSenseSensor::getTemperature() { return readChannel(ads2_, ADS1115_COMP_0_GND); }

@@ -112,6 +112,7 @@ bool Sensor::init(Configuration::Model model, int co2ABCDays) {
   _warmUpSensor();
 
   // Ensure PMS1 is available since the sensor using UART
+  ESP_LOGI(TAG, "Checking PM sensor connection");
   if (_pms1Available) {
     if (pms1_->isConnected() == false) {
       ESP_LOGE(TAG, "PMS1 is not connected");

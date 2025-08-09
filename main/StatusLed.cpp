@@ -59,6 +59,17 @@ void StatusLed::disable() {
   // gpio_hold_en(_ioLed);
 }
 
+void StatusLed::on() { set(On); }
+
+void StatusLed::off() { set(Off); }
+
+void StatusLed::blinkAsync(int durationMs, int intervalMs) { set(Blink, durationMs, intervalMs); }
+
+void StatusLed::blink(int durationMs, int intervalMs) {
+  set(Blink, durationMs, intervalMs);
+  vTaskDelay(pdMS_TO_TICKS(durationMs));
+}
+
 void StatusLed::set(Mode mode, int durationMs, int intervalMs) {
   _newStatus.mode = mode;
   _newStatus.duration = durationMs;
@@ -101,15 +112,19 @@ void StatusLed::_start(void *params) {
       case Off:
         gpio_set_level(pLed->_ioLed, 0);
         waitNotificationTick = portMAX_DELAY;
+        lastLedLevel = 0;
         break;
       case On:
         gpio_set_level(pLed->_ioLed, 1);
         waitNotificationTick = portMAX_DELAY;
+        lastLedLevel = 1;
         break;
       case Blink:
-        gpio_set_level(pLed->_ioLed, 1); // turn on first
+        lastLedLevel = !lastLedLevel;
+        gpio_set_level(pLed->_ioLed, lastLedLevel);
         waitNotificationTick = currentStatus.interval / portTICK_PERIOD_MS;
         blinkStartTime = MILLIS();
+        vTaskDelay(5);
         break;
       }
 
@@ -119,19 +134,25 @@ void StatusLed::_start(void *params) {
     // The rest is for blink mode
 
     // Check if duration is UP and duration is not set to forever (0)
-    if ((MILLIS() - blinkStartTime) > currentStatus.duration && currentStatus.duration > 0) {
+    if ((MILLIS() - blinkStartTime) >= currentStatus.duration && currentStatus.duration > 0) {
       if (lastStatus.duration == 0 && lastStatus.mode == Blink) {
         // If last status duration expected to forever, go back to last status after this animation
         currentStatus = lastStatus;
-        gpio_set_level(pLed->_ioLed, 1); // turn on first
+
+        // Set starting level negate from current level
+        lastLedLevel = !lastLedLevel;
+        gpio_set_level(pLed->_ioLed, lastLedLevel);
+
         waitNotificationTick = currentStatus.interval / portTICK_PERIOD_MS;
         blinkStartTime = MILLIS();
       }
 
       if (lastStatus.mode == On) {
         gpio_set_level(pLed->_ioLed, 1);
+        lastLedLevel = 1;
       } else {
         gpio_set_level(pLed->_ioLed, 0);
+        lastLedLevel = 0;
       }
       currentStatus.mode = lastStatus.mode;
       currentStatus.duration = 0;
