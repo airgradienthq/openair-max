@@ -1,0 +1,80 @@
+/* WiFiManager CSS */
+.invert {
+    background: #fff !important;
+    color: #000 !important;
+}
+
+.invert input {
+    background: #fff !important;
+    color: #000 !important;
+    border: 1px solid #ccc !important;
+}
+
+.invert .network {
+    background: #f0f0f0 !important;
+    border: 1px solid #ccc !important;
+    color: #000 !important;
+}
+
+.invert .network:hover {
+    background: #e0e0e0 !important;
+}
+
+.invert .network.selected {
+    background: #1fa3ec !important;
+    color: #fff !important;
+}
+
+.invert hr {
+    border-color: #ccc !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    .wrap {
+        padding: 10px;
+        margin: 0;
+    }
+    
+    .menu {
+        flex-direction: column;
+    }
+    
+    .menu a {
+        min-width: auto;
+        margin-bottom: 5px;
+    }
+}
+
+/* Custom parameter styling */
+.custom-param {
+    margin: 10px 0;
+}
+
+.custom-param label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.custom-param input,
+.custom-param select,
+.custom-param textarea {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #555;
+    background: #333;
+    color: #eee;
+}
+
+.custom-param input[type="checkbox"] {
+    width: auto;
+    margin-right: 5px;
+}
+
+/* Signal strength indicators */
+.signal-1 { opacity: 0.2; }
+.signal-2 { opacity: 0.4; }
+.signal-3 { opacity: 0.6; }
+.signal-4 { opacity: 0.8; }
+.signal-5 { opacity: 1.0; } 

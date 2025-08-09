@@ -8,6 +8,7 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
+#include "MaxConfig.h"
 #include <string>
 
 class Configuration {
@@ -22,10 +23,7 @@ public:
     std::string url;
   };
 
-  enum Model {
-    O_M_1PPST_CE = 0,
-    O_M_1PPSTON_CE
-  };
+  enum Model { O_M_1PPST_CE = 0, O_M_1PPSTON_CE };
 
   struct Config {
     int abcDays;
@@ -34,6 +32,8 @@ public:
     std::string model;
     Schedule schedule;
     Firmware firmware;
+    NetworkOption networkOption;
+    bool isWifiConfigured;
   };
 
   Configuration() {}
@@ -50,6 +50,12 @@ public:
   Firmware getConfigFirmware();
   Schedule getConfigSchedule();
   Model getModel();
+  NetworkOption getNetworkOption();
+  bool isWifiConfigured();
+
+  // Setter
+  void switchNetworkOption();
+  void setIsWifiConfigured(bool state);
 
   void resetLedTestRequest();
   void resetCO2CalibrationRequest();

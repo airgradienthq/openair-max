@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <title>Configure WiFi</title>
+    <style>
+        body {
+            font-family: verdana, sans-serif;
+            background: #252525;
+            color: #eee;
+            margin: 0;
+            padding: 0;
+        }
+        .wrap {
+            max-width: 320px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 1.5em;
+        }
+        .back-link {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .back-link a {
+            color: #1fa3ec;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+        .networks {
+            margin: 20px 0;
+        }
+        .networks h3 {
+            margin: 10px 0;
+            color: #1fa3ec;
+        }
+        .network {
+            padding: 12px;
+            margin: 5px 0;
+            background: #333;
+            border: 1px solid #555;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-radius: 3px;
+        }
+        .network:hover {
+            background: #444;
+        }
+        .network.selected {
+            background: #1fa3ec;
+            border-color: #1fa3ec;
+        }
+        .network-name {
+            font-weight: bold;
+        }
+        .network-info {
+            font-size: 0.8em;
+            color: #aaa;
+            margin-top: 2px;
+        }
+        .network.selected .network-info {
+            color: #ddd;
+        }
+        .signal {
+            font-size: 1.2em;
+        }
+        .form-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 3px;
+        }
+        .form-section h3 {
+            margin: 0 0 15px 0;
+            color: #1fa3ec;
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #eee;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            font-size: 1em;
+            border: 1px solid #555;
+            background: #444;
+            color: #eee;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #1fa3ec;
+            background: #555;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-weight: normal;
+            cursor: pointer;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .button-group button {
+            flex: 1;
+            padding: 12px;
+            font-size: 1em;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-primary {
+            background: #1fa3ec;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #1890d0;
+        }
+        .btn-secondary {
+            background: #666;
+            color: #fff;
+        }
+        .btn-secondary:hover {
+            background: #777;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #aaa;
+        }
+        .error {
+            background: rgba(216, 44, 44, 0.1);
+            border-left: 4px solid #d82c2c;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 3px;
+        }
+        .refresh-link {
+            text-align: center;
+            margin: 10px 0;
+        }
+        .refresh-link a {
+            color: #1fa3ec;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        .refresh-link a:hover {
+            text-decoration: underline;
+        }
+        
+        /* WiFi Signal Bars */
+        .wifi-signal {
+            display: inline-flex;
+            align-items: flex-end;
+            height: 16px;
+            gap: 1px;
+        }
+        .wifi-signal .bar {
+            width: 3px;
+            background-color: currentColor;
+            opacity: 0.3;
+        }
+        .wifi-signal .bar1 { height: 3px; }
+        .wifi-signal .bar2 { height: 6px; }
+        .wifi-signal .bar3 { height: 9px; }
+        .wifi-signal .bar4 { height: 12px; }
+        
+        /* Signal strength classes */
+        .wifi-signal.signal-0 .bar { opacity: 0.3; }
+        .wifi-signal.signal-1 .bar1 { opacity: 1; }
+        .wifi-signal.signal-2 .bar1, .wifi-signal.signal-2 .bar2 { opacity: 1; }
+        .wifi-signal.signal-3 .bar1, .wifi-signal.signal-3 .bar2, .wifi-signal.signal-3 .bar3 { opacity: 1; }
+        .wifi-signal.signal-4 .bar { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="back-link">
+            <a href="/">&lt; Back to Home</a>
+        </div>
+        
+        <h1>Configure WiFi</h1>
+        
+        <div class="networks">
+            <h3>Available Networks</h3>
+            <div id="networks">
+                <div class="loading">Scanning networks...</div>
+            </div>
+            <div class="refresh-link">
+                <a href="javascript:loadNetworks()">🔄 Refresh</a>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h3>WiFi Credentials</h3>
+            <form action="/wifisave" method="post" onsubmit="return validateForm()">
+                <div class="form-group">
+                    <label for="s">SSID</label>
+                    <input id="s" name="s" type="text" placeholder="Enter network name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="p">Password</label>
+                    <input id="p" name="p" type="password" placeholder="Enter password">
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="showPass" onchange="togglePassword()">
+                    <label for="showPass">Show Password</label>
+                </div>
+                
+                <div class="button-group">
+                    <button type="submit" class="btn-primary">Save</button>
+                    <button type="button" class="btn-secondary" onclick="location.reload()">Refresh</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        let selectedNetwork = null;
+        
+        function loadNetworks() {
+            const container = document.getElementById('networks');
+            container.innerHTML = '<div class="loading">Scanning networks...</div>';
+            
+            fetch('/scan')
+                .then(response => response.json())
+                .then(networks => {
+                    if (networks.length === 0) {
+                        container.innerHTML = '<div class="error">No networks found</div>';
+                        return;
+                    }
+                    
+                    // Sort networks by signal strength
+                    networks.sort((a, b) => b.rssi - a.rssi);
+                    
+                    container.innerHTML = '';
+                    networks.forEach(network => {
+                        if (!network.ssid || network.ssid.trim() === '') return;
+                        
+                        const div = document.createElement('div');
+                        div.className = 'network';
+                        div.onclick = () => selectNetwork(network.ssid, div);
+                        
+                        const signalIcon = getSignalIcon(network.rssi);
+                        const security = network.encryption > 0 ? '🔒' : '🔓';
+                        
+                        div.innerHTML = `
+                            <div>
+                                <div class="network-name">${escapeHtml(network.ssid)} ${security}</div>
+                                <div class="network-info">Channel ${network.channel}, ${network.rssi}dBm</div>
+                            </div>
+                            <div class="signal">${signalIcon}</div>
+                        `;
+                        
+                        container.appendChild(div);
+                    });
+                })
+                .catch(error => {
+                    console.error('Network scan failed:', error);
+                    container.innerHTML = '<div class="error">Error loading networks</div>';
+                });
+        }
+        
+        function selectNetwork(ssid, element) {
+            if (selectedNetwork) {
+                selectedNetwork.classList.remove('selected');
+            }
+            selectedNetwork = element;
+            element.classList.add('selected');
+            document.getElementById('s').value = ssid;
+            
+            // Focus the password field for immediate typing
+            document.getElementById('p').focus();
+        }
+        
+        function getSignalIcon(rssi) {
+            let bars = '';
+            let color = '#dc3545'; // Default red for weak
+            
+            if (rssi > -30) {
+                bars = '4';
+                color = '#28a745'; // Green for excellent
+            } else if (rssi > -50) {
+                bars = '3'; 
+                color = '#28a745'; // Green for good
+            } else if (rssi > -60) {
+                bars = '2';
+                color = '#ffc107'; // Yellow for fair
+            } else if (rssi > -70) {
+                bars = '1';
+                color = '#fd7e14'; // Orange for poor
+            } else {
+                bars = '0';
+                color = '#dc3545'; // Red for weak
+            }
+            
+            return `<div class="wifi-signal signal-${bars}" style="color: ${color};">
+                        <div class="bar bar1"></div>
+                        <div class="bar bar2"></div>
+                        <div class="bar bar3"></div>
+                        <div class="bar bar4"></div>
+                    </div>`;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function togglePassword() {
+            const passwordField = document.getElementById('p');
+            const checkbox = document.getElementById('showPass');
+            passwordField.type = checkbox.checked ? 'text' : 'password';
+        }
+        
+        function validateForm() {
+            const ssid = document.getElementById('s').value.trim();
+            if (!ssid) {
+                alert('Please select or enter a network SSID');
+                return false;
+            }
+            return true;
+        }
+        
+        // Load networks on page load
+        window.onload = function() {
+            loadNetworks();
+        };
+    </script>
+</body>
+</html> 

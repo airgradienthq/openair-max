@@ -6,11 +6,13 @@
  */
 
 #include <cstdint>
+#include <ratio>
 #include <stdio.h>
 #include <inttypes.h>
 #include <string>
 
 #include <fcntl.h>
+#include "airgradientWifiClient.h"
 #include "esp_console.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
@@ -40,6 +42,7 @@
 #include "airgradientCellularClient.h"
 #include "cellularModuleA7672xx.h"
 #include "airgradientOtaCellular.h"
+#include "WiFiManager.h"
 
 #define CONSOLE_MAX_CMDLINE_ARGS 8
 #define CONSOLE_MAX_CMDLINE_LENGTH 256
@@ -58,13 +61,25 @@ static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
+static WiFiManager g_wifiManager;
+
+static QueueHandle_t bootButtonQueue = NULL;
+static void IRAM_ATTR bootButtonISRHandler(void *arg) {
+  (void)arg;
+  int level = gpio_get_level(IO_BOOT_BUTTON);
+  xQueueSendFromISR(bootButtonQueue, &level, NULL);
+}
 
 /**
  * Re-initialize console for logging
  */
 static void initConsole();
 
-void initGPIO();
+static void initGPIO();
+
+static void bootButtonTask(void *arg);
+
+static void initBootButton();
 
 /**
  * Reset monitor external watchdog timer
@@ -88,6 +103,10 @@ static void printWakeupReason(esp_sleep_wakeup_cause_t reason);
 static std::string buildSerialNumber();
 
 static void ensureConnectionReady();
+
+static bool initializeNetwork(unsigned long wakeUpCounter);
+
+static bool initializeWiFiNetwork(unsigned long wakeUpCounter);
 
 /**
  * Attempt to initialize and connect to cellular network
@@ -122,6 +141,12 @@ extern "C" void app_main(void) {
   // Initialize every peripheral GPIOs to OFF state
   initGPIO();
 
+  if (xWakeUpCounter == 0) {
+    // Initialize boot button event handler only on the first boot
+    // So on next boot onwards, boot button will not function
+    initBootButton();
+  }
+
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -148,6 +173,27 @@ extern "C" void app_main(void) {
 
   // Load configuration that saved on NVS
   g_configuration.load();
+
+  if (g_configuration.getNetworkOption() == NetworkOption::WiFi) {
+    std::string ssid = std::string("airgradient-") + g_serialNumber;
+    if (g_configuration.isWifiConfigured() == false && xWakeUpCounter == 0) {
+      // TODO: Run led notification here
+      ESP_LOGI(TAG, "Credentials haven't set yet, running portal");
+      g_wifiManager.setConfigPortalBlocking(true);
+      bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
+      if (!success) {
+        // Portal either timeout or canceled or failed to connect to wifi using provided credentials
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+      }
+      g_configuration.setIsWifiConfigured(true);
+      // Wifi is ready from the start, initialize wifi client
+      g_networkReady = true;
+      g_agClient = new AirgradientWifiClient;
+      g_agClient->begin(g_serialNumber);
+    }
+    ESP_LOGI(TAG, "Application continue using wifi...");
+  }
 
   // Run led test if requested
   if (g_configuration.isLedTestRequested()) {
@@ -333,6 +379,46 @@ void initGPIO() {
   }
 }
 
+void bootButtonTask(void *arg) {
+  uint32_t startTimeButtonPressed = 0;
+  int level;
+  while (1) {
+    if (xQueueReceive(bootButtonQueue, &level, portMAX_DELAY)) {
+      if (level == 0) {
+        // Button pressed
+        startTimeButtonPressed = MILLIS();
+        // TODO: Maybe add led animation here
+      } else {
+        // Button released
+        if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
+          g_configuration.switchNetworkOption();
+          // TODO: Add restart here
+        }
+        startTimeButtonPressed = 0;
+      }
+    }
+  }
+}
+
+void initBootButton() {
+  gpio_config_t io_conf = {};
+  io_conf.intr_type = GPIO_INTR_ANYEDGE;
+  io_conf.pin_bit_mask = (1ULL << IO_BOOT_BUTTON);
+  io_conf.mode = GPIO_MODE_INPUT;
+  io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+  gpio_config(&io_conf);
+
+  //create a queue to handle gpio event from isr
+  bootButtonQueue = xQueueCreate(3, sizeof(uint32_t));
+  //start gpio task
+  xTaskCreate(bootButtonTask, "boot_button", 2048, NULL, 10, NULL);
+
+  //install gpio isr service
+  gpio_install_isr_service(0);
+  //hook isr handler for specific gpio pin
+  gpio_isr_handler_add(IO_BOOT_BUTTON, bootButtonISRHandler, nullptr);
+}
+
 void printResetReason() {
   esp_reset_reason_t reason = esp_reset_reason();
   switch (reason) {
@@ -446,12 +532,25 @@ void ensureConnectionReady() {
   }
 }
 
-bool initializeCellularNetwork(unsigned long wakeUpCounter) {
+bool initializeNetwork(unsigned long wakeUpCounter) {
   if (g_networkReady) {
     ESP_LOGI(TAG, "Network is already ready to use");
     return true;
   }
 
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    g_networkReady = initializeCellularNetwork(wakeUpCounter);
+  } else {
+    g_networkReady = initializeWiFiNetwork(wakeUpCounter);
+  }
+
+  // Make sure watchdog not triggered for the rest of the code before sleep
+  resetExtWatchdog();
+
+  return g_networkReady;
+}
+
+bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   if (g_ceAgSerial != nullptr || g_cellularCard != nullptr || g_agClient != nullptr) {
     ESP_LOGW(
         TAG,
@@ -502,15 +601,27 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     }
   }
 
-  // Make sure watchdog not triggered for the rest of the code before sleep
-  resetExtWatchdog();
-
   // Disable again
   g_ceAgSerial->setDebug(false);
-  g_networkReady = true;
 
   // Wait for a moment for CE card is ready for transmission
   vTaskDelay(pdMS_TO_TICKS(2000));
+
+  return true;
+}
+
+bool initializeWiFiNetwork(unsigned long wakeUpCounter) {
+  if (wakeUpCounter == 0) {
+    // When currently initializing network, indicate using blink animation
+    g_statusLed.blinkAsync(400, 100);
+  }
+
+  if (g_wifiManager.autoConnect(true) == false) {
+    return false;
+  }
+
+  g_agClient = new AirgradientWifiClient;
+  g_agClient->begin(g_serialNumber);
 
   return true;
 }
@@ -650,8 +761,8 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
     return true;
   }
 
-  if (!initializeCellularNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check remote configuration");
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to network, skip check remote configuration");
     return false;
   }
 
