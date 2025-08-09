@@ -55,6 +55,8 @@ bool Configuration::load() {
 }
 
 bool Configuration::parseRemoteConfig(const std::string &config) {
+  ESP_LOGI(TAG, "Parsing configuration: %s", config.c_str());
+
   jparse_ctx_t jctx;
   int ret = json_parse_start(&jctx, config.c_str(), config.length());
   if (ret != OS_SUCCESS) {

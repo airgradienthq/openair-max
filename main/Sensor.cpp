@@ -181,7 +181,7 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
     if (toDelay < 0) {
       toDelay = 0;
     }
-    ESP_LOGI(TAG, "Iteration %d takes %ums to finish, next iteration in %ums", i, timeSpendMs,
+    ESP_LOGI(TAG, "Iteration %d took %ums to finish, next iteration in %ums", i, timeSpendMs,
              toDelay);
     vTaskDelay(pdMS_TO_TICKS(toDelay));
   }

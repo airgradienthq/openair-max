@@ -12,6 +12,7 @@
 #include <string>
 
 #include <fcntl.h>
+#include "airgradientWifiClient.h"
 #include "esp_console.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
@@ -103,6 +104,10 @@ static std::string buildSerialNumber();
 
 static void ensureConnectionReady();
 
+static bool initializeNetwork(unsigned long wakeUpCounter);
+
+static bool initializeWiFiNetwork(unsigned long wakeUpCounter);
+
 /**
  * Attempt to initialize and connect to cellular network
  * If failed once, it will not re-attempt to initialize for its wake up cycle
@@ -174,10 +179,6 @@ extern "C" void app_main(void) {
     if (g_configuration.isWifiConfigured() == false && xWakeUpCounter == 0) {
       // TODO: Run led notification here
       ESP_LOGI(TAG, "Credentials haven't set yet, running portal");
-      g_wifiManager.setConfigPortalTimeout(180); // 3 minutes
-      g_wifiManager.setConnectTimeout(30);       // 30 seconds
-      g_wifiManager.setMinimumSignalQuality(8);
-      g_wifiManager.setRemoveDuplicateAPs(true);
       g_wifiManager.setConfigPortalBlocking(true);
       bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
       if (!success) {
@@ -186,6 +187,10 @@ extern "C" void app_main(void) {
         esp_restart();
       }
       g_configuration.setIsWifiConfigured(true);
+      // Wifi is ready from the start, initialize wifi client
+      g_networkReady = true;
+      g_agClient = new AirgradientWifiClient;
+      g_agClient->begin(g_serialNumber);
     }
     ESP_LOGI(TAG, "Application continue using wifi...");
   }
@@ -527,12 +532,25 @@ void ensureConnectionReady() {
   }
 }
 
-bool initializeCellularNetwork(unsigned long wakeUpCounter) {
+bool initializeNetwork(unsigned long wakeUpCounter) {
   if (g_networkReady) {
     ESP_LOGI(TAG, "Network is already ready to use");
     return true;
   }
 
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    g_networkReady = initializeCellularNetwork(wakeUpCounter);
+  } else {
+    g_networkReady = initializeWiFiNetwork(wakeUpCounter);
+  }
+
+  // Make sure watchdog not triggered for the rest of the code before sleep
+  resetExtWatchdog();
+
+  return g_networkReady;
+}
+
+bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   if (g_ceAgSerial != nullptr || g_cellularCard != nullptr || g_agClient != nullptr) {
     ESP_LOGW(
         TAG,
@@ -583,15 +601,27 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     }
   }
 
-  // Make sure watchdog not triggered for the rest of the code before sleep
-  resetExtWatchdog();
-
   // Disable again
   g_ceAgSerial->setDebug(false);
-  g_networkReady = true;
 
   // Wait for a moment for CE card is ready for transmission
   vTaskDelay(pdMS_TO_TICKS(2000));
+
+  return true;
+}
+
+bool initializeWiFiNetwork(unsigned long wakeUpCounter) {
+  if (wakeUpCounter == 0) {
+    // When currently initializing network, indicate using blink animation
+    g_statusLed.blinkAsync(400, 100);
+  }
+
+  if (g_wifiManager.autoConnect(true) == false) {
+    return false;
+  }
+
+  g_agClient = new AirgradientWifiClient;
+  g_agClient->begin(g_serialNumber);
 
   return true;
 }
@@ -731,8 +761,8 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
     return true;
   }
 
-  if (!initializeCellularNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check remote configuration");
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to network, skip check remote configuration");
     return false;
   }
 
