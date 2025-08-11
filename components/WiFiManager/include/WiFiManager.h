@@ -68,6 +68,7 @@ public:
   bool isWiFiConnected();
   bool reconnectWiFi();
   bool reconnectWiFi(uint32_t timeoutSeconds);
+  int getSignal();
 
   // Timeout configuration
   void setConfigPortalTimeout(uint32_t seconds);

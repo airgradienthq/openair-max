@@ -214,9 +214,20 @@ bool WiFiManager::reconnectWiFi(uint32_t timeoutSeconds) {
   return false;
 }
 
+int WiFiManager::getSignal() {
+  wifi_ap_record_t ap_info;
+  if (esp_wifi_sta_get_ap_info(&ap_info) != ESP_OK) {
+    return 0;
+  }
+
+  WM_LOGD(TAG, "RSSI: %d dBm", ap_info.rssi);
+  return ap_info.rssi;
+}
+
 // Core connection methods
 bool WiFiManager::autoConnect(bool skipPortal) {
-  return autoConnect(_apName.c_str(), _apPassword.empty() ? nullptr : _apPassword.c_str(), skipPortal);
+  return autoConnect(_apName.c_str(), _apPassword.empty() ? nullptr : _apPassword.c_str(),
+                     skipPortal);
 }
 
 bool WiFiManager::autoConnect(const char *apName) { return autoConnect(apName, nullptr, false); }

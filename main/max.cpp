@@ -104,6 +104,8 @@ static std::string buildSerialNumber();
 
 static void ensureConnectionReady();
 
+static int getNetworkSignalStrength();
+
 static bool initializeNetwork(unsigned long wakeUpCounter);
 
 static bool initializeWiFiNetwork(unsigned long wakeUpCounter);
@@ -535,6 +537,23 @@ void ensureConnectionReady() {
   }
 }
 
+static int getNetworkSignalStrength() {
+  int signalStrength = 99;
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    auto result = g_cellularCard->retrieveSignal();
+    if (result.status == CellReturnStatus::Ok && result.data != 99) {
+      int dbm = g_cellularCard->csqToDbm(result.data);
+      if (dbm != 0) {
+        signalStrength = dbm;
+      }
+    }
+  } else {
+    signalStrength = g_wifiManager.getSignal();
+  }
+
+  return signalStrength;
+}
+
 bool initializeNetwork(unsigned long wakeUpCounter) {
   if (g_networkReady) {
     ESP_LOGI(TAG, "Network is already ready to use");
@@ -642,11 +661,7 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   }
 
   // Push back signal same value to each payload
-  auto result = g_cellularCard->retrieveSignal();
-  int signalStrength = -1;
-  if (result.status == CellReturnStatus::Ok && result.data != 99) {
-    signalStrength = result.data;
-  }
+  int signalStrength = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", signalStrength);
 
   // Retrieve measurements from the cache
