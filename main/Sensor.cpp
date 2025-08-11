@@ -162,7 +162,7 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
   _averageMeasure.no2AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
   _averageMeasure.afeTemp = DEFAULT_INVALID_VOLT;
 
-  AirgradientClient::OpenAirMaxPayload iterationData;
+  AirgradientClient::MaxSensorPayload iterationData;
 
   for (int i = 1; i <= iterations; i++) {
     uint32_t startIteration = MILLIS();
@@ -215,7 +215,7 @@ void Sensor::printMeasures() {
   ESP_LOGI(TAG, "AFE Temperature: %.3fmV", _averageMeasure.afeTemp);
 }
 
-AirgradientClient::OpenAirMaxPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
+AirgradientClient::MaxSensorPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
 
 bool Sensor::co2AttemptManualCalibration() {
   ESP_LOGI(TAG, "Attempt to do manual calibration");
@@ -229,7 +229,7 @@ bool Sensor::co2AttemptManualCalibration() {
   return true;
 }
 
-void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
+void Sensor::_measure(AirgradientClient::MaxSensorPayload &data) {
   // Set measure data to invalid for indication if respective sensor failed
   data.rco2 = DEFAULT_INVALID_CO2;
   data.atmp = DEFAULT_INVALID_TEMPERATURE;
@@ -369,7 +369,7 @@ void Sensor::_measure(AirgradientClient::OpenAirMaxPayload &data) {
   }
 }
 
-void Sensor::_applyIteration(AirgradientClient::OpenAirMaxPayload &data) {
+void Sensor::_applyIteration(AirgradientClient::MaxSensorPayload &data) {
   if (IS_CO2_VALID(data.rco2)) {
     if (_averageMeasure.rco2 == DEFAULT_INVALID_CO2) {
       _averageMeasure.rco2 = data.rco2;

@@ -13,7 +13,7 @@
 #include "esp_log.h"
 
 // Store serialized data in RTC Memory
-RTC_DATA_ATTR char rtcStorage[sizeof(PayloadType) * MAX_PAYLOAD_CACHE];
+RTC_DATA_ATTR char rtcStorage[sizeof(PayloadCacheType) * MAX_PAYLOAD_CACHE];
 RTC_DATA_ATTR uint16_t rtcHead;
 RTC_DATA_ATTR uint16_t rtcTail;
 
@@ -53,7 +53,7 @@ void PayloadCache::clean() {
   backupToRTC(); // Save changes to RTC
 }
 
-void PayloadCache::push(PayloadType *payload) {
+void PayloadCache::push(PayloadCacheType *payload) {
   payloads[tail] = *payload;
   tail = (tail + 1) % maxCacheSize;
   if (tail == head) { // Queue overflow, move head
@@ -62,7 +62,7 @@ void PayloadCache::push(PayloadType *payload) {
   backupToRTC(); // Save changes to RTC
 }
 
-bool PayloadCache::pop(PayloadType *payload) {
+bool PayloadCache::pop(PayloadCacheType *payload) {
   if (head == tail) {
     return false; // Queue is empty
   }
@@ -72,7 +72,7 @@ bool PayloadCache::pop(PayloadType *payload) {
   return true;
 }
 
-bool PayloadCache::peekAtIndex(uint16_t index, PayloadType *payload) {
+bool PayloadCache::peekAtIndex(uint16_t index, PayloadCacheType *payload) {
   if (index >= getSize()) {
     return false; // Index out of range
   }

@@ -26,14 +26,14 @@ public:
   bool init(Configuration::Model model, int co2ABCDays);
   bool startMeasures(int iterations, int intervalMs);
   void printMeasures();
-  AirgradientClient::OpenAirMaxPayload getLastAverageMeasure();
+  AirgradientClient::MaxSensorPayload getLastAverageMeasure();
   bool co2AttemptManualCalibration();
 
 private:
   const char *const TAG = "Sensor";
 
-  void _measure(AirgradientClient::OpenAirMaxPayload &data);
-  void _applyIteration(AirgradientClient::OpenAirMaxPayload &data);
+  void _measure(AirgradientClient::MaxSensorPayload &data);
+  void _applyIteration(AirgradientClient::MaxSensorPayload &data);
   void _calculateMeasuresAverage();
   void _warmUpSensor();
 
@@ -53,7 +53,7 @@ private:
   int _no2WEIterationOkCount = 0;
   int _no2AEIterationOkCount = 0;
   int _afeTempIterationOkCount = 0;
-  AirgradientClient::OpenAirMaxPayload _averageMeasure;
+  AirgradientClient::MaxSensorPayload _averageMeasure;
   i2c_master_bus_handle_t _busHandle;
 
   bool _co2Available = true;

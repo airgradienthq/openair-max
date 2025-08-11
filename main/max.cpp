@@ -102,6 +102,8 @@ static void printWakeupReason(esp_sleep_wakeup_cause_t reason);
  */
 static std::string buildSerialNumber();
 
+static AirgradientClient::PayloadType getPayloadType();
+
 static void ensureConnectionReady();
 
 static int getNetworkSignalStrength();
@@ -192,7 +194,7 @@ extern "C" void app_main(void) {
       // Wifi is ready from the start, initialize wifi client
       g_networkReady = true;
       g_agClient = new AirgradientWifiClient;
-      g_agClient->begin(g_serialNumber);
+      g_agClient->begin(g_serialNumber, getPayloadType());
     }
     ESP_LOGI(TAG, "Application continue using wifi...");
   }
@@ -507,6 +509,15 @@ std::string getFirmwareVersion() {
   return app_desc->version;
 }
 
+
+AirgradientClient::PayloadType getPayloadType() {
+  if (g_configuration.getModel() == Configuration::O_M_1PPSTON_CE) {
+    return AirgradientClient::MAX_WITH_O3_NO2;
+  } else {
+    return AirgradientClient::MAX_WITHOUT_O3_NO2;
+  }
+}
+
 void ensureConnectionReady() {
   bool reset = false;
   uint32_t lastResetTime = MILLIS();
@@ -609,7 +620,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   resetExtWatchdog();
 
   g_agClient->setNetworkRegistrationTimeoutMs(registrationTimeout);
-  if (g_agClient->begin(g_serialNumber)) {
+  if (g_agClient->begin(g_serialNumber, getPayloadType())) {
     // Connected
     if (wakeUpCounter == 0) {
       g_statusLed.blink(600, 100);
@@ -643,7 +654,7 @@ bool initializeWiFiNetwork(unsigned long wakeUpCounter) {
   }
 
   g_agClient = new AirgradientWifiClient;
-  g_agClient->begin(g_serialNumber);
+  g_agClient->begin(g_serialNumber, getPayloadType());
 
   return true;
 }
@@ -655,31 +666,33 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
     return true;
   }
 
-  if (!initializeCellularNetwork(wakeUpCounter)) {
+  if (!initializeNetwork(wakeUpCounter)) {
     ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
     return false;
   }
 
-  // Push back signal same value to each payload
-  int signalStrength = getNetworkSignalStrength();
-  ESP_LOGI(TAG, "Signal strength: %d", signalStrength);
-
   // Retrieve measurements from the cache
-  std::vector<AirgradientClient::OpenAirMaxPayload> payloads;
-  PayloadType tmp;
+  std::vector<AirgradientClient::MaxSensorPayload> sensorPayload;
+  PayloadCacheType tmp;
   ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
   for (int i = 0; i < payloadCache.getSize(); i++) {
     payloadCache.peekAtIndex(i, &tmp);
-    tmp.signal = signalStrength;
-    payloads.push_back(tmp);
+    sensorPayload.push_back(tmp);
   }
+
+  AirgradientClient::AirgradientPayload payload;
+  payload.sensor = &sensorPayload;
+  payload.measureInterval = g_configuration.getConfigSchedule().pm02;
+  payload.signal = getNetworkSignalStrength();
+  ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
   // Attempt to send
   bool postSuccess = false;
   int attemptCounter = 0;
+
   do {
     attemptCounter = attemptCounter + 1;
-    postSuccess = g_agClient->httpPostMeasures(g_configuration.getConfigSchedule().pm02, payloads);
+    postSuccess = g_agClient->httpPostMeasures(payload);
     if (postSuccess) {
       // post success, clean cache
       payloadCache.clean();
