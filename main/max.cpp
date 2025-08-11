@@ -387,12 +387,15 @@ void bootButtonTask(void *arg) {
       if (level == 0) {
         // Button pressed
         startTimeButtonPressed = MILLIS();
+        g_statusLed.blinkAsync(0, 1000);
         // TODO: Maybe add led animation here
       } else {
         // Button released
         if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
           g_configuration.switchNetworkOption();
-          // TODO: Add restart here
+          ESP_LOGI(TAG, "Restart in 2s..");
+          vTaskDelay(pdMS_TO_TICKS(2000));
+          esp_restart();
         }
         startTimeButtonPressed = 0;
       }
