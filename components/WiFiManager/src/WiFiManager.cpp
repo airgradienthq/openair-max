@@ -1,5 +1,6 @@
 #include "WiFiManager.h"
 #include "esp_log_level.h"
+#include "freertos/projdefs.h"
 #include "wm_config.h"
 #include "esp_mac.h"
 #include "esp_system.h"
@@ -32,7 +33,7 @@ WiFiManager::WiFiManager()
       _configPortalStart(0), _connectStart(0), _dnsTaskHandle(nullptr), _dnsSocket(-1),
       _dnsRunning(false), _initialized(false), _cleanupInProgress(false) {
   // Set wifi driver log level to only warning, to reduce unnecessary information
-  esp_log_level_set("wifi", ESP_LOG_WARN);
+  esp_log_level_set("wifi", ESP_LOG_NONE);
 }
 
 WiFiManager::~WiFiManager() {
@@ -239,7 +240,9 @@ bool WiFiManager::autoConnect(const char *apName, const char *apPassword) {
 bool WiFiManager::autoConnect(const char *apName, const char *apPassword, bool skipPortal) {
   std::lock_guard<std::mutex> lock(_mutex);
 
-  WM_LOGI("AutoConnect called with AP: %s", apName ? apName : "null");
+  if (!skipPortal) {
+    WM_LOGI("AutoConnect called with AP: %s", apName ? apName : "null");
+  }
 
   // Initialize if not already done
   init();
@@ -837,6 +840,24 @@ std::string WiFiManager::getPassword() const {
   // TODO: Get current password (should we return this?)
   WM_LOGD("getPassword placeholder");
   return std::string();
+}
+
+bool WiFiManager::disconnect(bool wifioff) {
+  std::lock_guard<std::mutex> lock(_mutex);
+
+  WM_LOGI("Disconnecting from WiFi..");
+
+  // Disconnect from current WiFi
+  esp_err_t err = esp_wifi_disconnect();
+  if (err != ESP_OK) {
+    WM_LOGW("Failed disconnect from WiFi");
+    return false;
+  }
+
+  // TODO: Add deinit and stop wifi
+
+  WM_LOGI("Wi-Fi disconnected successfully");
+  return true;
 }
 
 // Event handlers
