@@ -23,6 +23,7 @@ set (
   AirgradientClient
   AirgradientOTA
   console 
+  arduinojson
   esp_driver_usb_serial_jtag
 )
 

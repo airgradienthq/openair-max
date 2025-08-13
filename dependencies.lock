@@ -1,10 +1,18 @@
 dependencies:
+  bblanchon/arduinojson:
+    component_hash: b1c2f0b0bc26969af19809cee80b220fb882481d59cc75f8e79ebceecdc69f06
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 7.4.2
   idf:
     source:
       type: idf
     version: 5.4.1
 direct_dependencies:
+- bblanchon/arduinojson
 - idf
-manifest_hash: 8028f5a3af478070ea133ddcfcf6082b8591e09885325e7be01ce9027a8efc40
+manifest_hash: 4f6c3156279aa65448aad722950db7f69699edeeba20a77452c5a112d4e5be82
 target: esp32c6
 version: 2.0.0

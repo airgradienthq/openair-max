@@ -2085,14 +2085,6 @@ CONFIG_HTTPREAD_CHUNK_SIZE=1000
 CONFIG_DELAY_HTTPREAD_ITERATION_ENABLED=y
 # end of Cellular module
 # end of Airgradient Client
-
-#
-# jsmn
-#
-# CONFIG_JSMN_PARENT_LINKS is not set
-# CONFIG_JSMN_STRICT is not set
-# CONFIG_JSMN_STATIC is not set
-# end of jsmn
 # end of Component config
 
 # CONFIG_IDF_EXPERIMENTAL_FEATURES is not set
