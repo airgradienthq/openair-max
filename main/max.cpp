@@ -12,6 +12,7 @@
 #include <string>
 
 #include <fcntl.h>
+#include "airgradientOtaWifi.h"
 #include "airgradientWifiClient.h"
 #include "esp_console.h"
 #include "driver/usb_serial_jtag.h"
@@ -794,13 +795,19 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
     return true;
   }
 
-  if (!initializeCellularNetwork(wakeUpCounter)) {
+  if (!initializeNetwork(wakeUpCounter)) {
     ESP_LOGI(TAG, "Cannot connect to cellular network, skip check firmware update");
     return false;
   }
 
-  AirgradientOTACellular agOta(g_cellularCard, g_agClient->getICCID());
-  auto result = agOta.updateIfAvailable(g_serialNumber, g_fimwareVersion);
+  AirgradientOTA *agOta = nullptr;
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    agOta = new AirgradientOTACellular(g_cellularCard, g_agClient->getICCID());
+  }
+  else {
+    agOta = new AirgradientOTAWifi;
+  }
+  auto result = agOta->updateIfAvailable(g_serialNumber, g_fimwareVersion);
 
   switch (result) {
   case AirgradientOTA::Failed:
