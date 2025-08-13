@@ -13,6 +13,6 @@ dependencies:
 direct_dependencies:
 - bblanchon/arduinojson
 - idf
-manifest_hash: 4f6c3156279aa65448aad722950db7f69699edeeba20a77452c5a112d4e5be82
+manifest_hash: 1583561a5cc8fb3b1a5ea8857e7b93b8828d85071975197f0f1c10cd6827ae60
 target: esp32c6
 version: 2.0.0
