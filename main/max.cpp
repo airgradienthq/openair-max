@@ -173,7 +173,7 @@ extern "C" void app_main(void) {
   if (g_configuration.getNetworkOption() == NetworkOption::WiFi) {
     std::string ssid = std::string("airgradient-") + g_serialNumber;
     if (g_configuration.isWifiConfigured() == false && xWakeUpCounter == 0) {
-      g_statusLed.blinkAsync(0, 200);
+      g_statusLed.blinkAsync(0, 100);
       ESP_LOGI(TAG, "Credentials haven't set yet, running portal");
       g_wifiManager.setConfigPortalBlocking(true);
       bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
@@ -388,7 +388,6 @@ void bootButtonTask(void *arg) {
       if (level == 0) {
         // Button pressed
         startTimeButtonPressed = MILLIS();
-        g_statusLed.blinkAsync(0, 1000);
       } else {
         // Button released
         if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {

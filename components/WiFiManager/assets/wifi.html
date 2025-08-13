@@ -306,16 +306,16 @@
             let bars = '';
             let color = '#dc3545'; // Default red for weak
             
-            if (rssi > -30) {
+            if (rssi > -50) {
                 bars = '4';
                 color = '#28a745'; // Green for excellent
-            } else if (rssi > -50) {
+            } else if (rssi > -60) {
                 bars = '3'; 
                 color = '#28a745'; // Green for good
-            } else if (rssi > -60) {
+            } else if (rssi > -70) {
                 bars = '2';
                 color = '#ffc107'; // Yellow for fair
-            } else if (rssi > -70) {
+            } else if (rssi > -75) {
                 bars = '1';
                 color = '#fd7e14'; // Orange for poor
             } else {
