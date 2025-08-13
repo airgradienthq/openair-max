@@ -54,6 +54,12 @@ bool Configuration::load() {
   return true;
 }
 
+void Configuration::reset() {
+  ESP_LOGI(TAG, "Resetting configuration..");
+  _setConfigToDefault();
+  _saveConfig();
+}
+
 bool Configuration::parseRemoteConfig(const std::string &config) {
   JsonDocument doc;
 

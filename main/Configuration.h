@@ -39,7 +39,7 @@ public:
   Configuration() {}
   ~Configuration() {}
   bool load();
-  bool reset();
+  void reset();
   bool parseRemoteConfig(const std::string &config);
 
   // Getter
