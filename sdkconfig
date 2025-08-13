@@ -2111,14 +2111,6 @@ CONFIG_WM_DEFAULT_CONNECT_TIMEOUT=30
 CONFIG_WM_DEFAULT_PORTAL_TIMEOUT=180
 CONFIG_WM_MAX_CUSTOM_PARAMS=10
 # end of WiFiManager Configuration
-
-#
-# jsmn
-#
-# CONFIG_JSMN_PARENT_LINKS is not set
-# CONFIG_JSMN_STRICT is not set
-# CONFIG_JSMN_STATIC is not set
-# end of jsmn
 # end of Component config
 
 # CONFIG_IDF_EXPERIMENTAL_FEATURES is not set

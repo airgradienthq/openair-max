@@ -388,6 +388,7 @@ bool Configuration::_saveConfig() {
   }
 
   // Commit changes
+  ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Failed to commit configuration to NVS");

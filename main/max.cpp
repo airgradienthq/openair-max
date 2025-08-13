@@ -102,6 +102,11 @@ static void printWakeupReason(esp_sleep_wakeup_cause_t reason);
  */
 static std::string buildSerialNumber();
 
+/**
+ * Retrieve currently running firmware version
+ */
+static std::string getFirmwareVersion();
+
 static AirgradientClient::PayloadType getPayloadType();
 
 static void ensureConnectionReady();
@@ -119,15 +124,12 @@ static bool initializeWiFiNetwork(unsigned long wakeUpCounter);
  */
 static bool initializeCellularNetwork(unsigned long wakeUpCounter);
 
-/**
- * Retrieve currently running firmware version
- */
-static std::string getFirmwareVersion();
-
 // Return false if failed init network or failed send
 // TODO: Add description
+static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
+                               AirgradientClient::MaxSensorPayload sensorPayload);
+static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 static bool checkRemoteConfiguration(unsigned long wakeUpCounter);
-static bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
 
 extern "C" void app_main(void) {
@@ -191,10 +193,10 @@ extern "C" void app_main(void) {
         esp_restart();
       }
       g_configuration.setIsWifiConfigured(true);
-      // Wifi is ready from the start, initialize wifi client
+      // Wifi is ready from the start
       g_networkReady = true;
-      g_agClient = new AirgradientWifiClient;
-      g_agClient->begin(g_serialNumber, getPayloadType());
+      // Reset because wifi portal triggered and wifi successfully connected
+      wakeUpMillis = MILLIS();
     }
     ESP_LOGI(TAG, "Application continue using wifi...");
   }
@@ -245,15 +247,10 @@ extern "C" void app_main(void) {
     g_configuration.resetCO2CalibrationRequest();
   }
 
-  // Start measure sensor sequence that if success,
-  //   push new measure cycle to payload cache to send later
-  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
-  if (sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT,
-                           DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION)) {
-    sensor.printMeasures();
-    auto averageMeasures = sensor.getLastAverageMeasure();
-    payloadCache.push(&averageMeasures);
-  }
+  // Start measure sensor sequence
+  sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
+  sensor.printMeasures();
+  auto averageMeasures = sensor.getLastAverageMeasure();
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
@@ -264,16 +261,27 @@ extern "C" void app_main(void) {
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
-  sendMeasuresWhenReady(wakeUpCounter, payloadCache);
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
+    payloadCache.push(&averageMeasures);
+    sendMeasuresByCellular(wakeUpCounter, payloadCache);
+  } else {
+    sendMeasuresByWiFi(wakeUpCounter, averageMeasures);
+  }
   checkRemoteConfiguration(wakeUpCounter);
   checkForFirmwareUpdate(wakeUpCounter);
 
-  // Only poweroff when all transmission attempt is done
-  if (g_ceAgSerial != nullptr || g_networkReady) {
-    g_cellularCard->powerOff();
+  // Turn of network network
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Only poweroff when all transmission attempt is done
+    if (g_ceAgSerial != nullptr || g_networkReady) {
+      g_cellularCard->powerOff();
+    }
+    // Turn OFF Cellular Card load switch
+    gpio_set_level(EN_CE_CARD, 0);
+  } else {
+    g_wifiManager.disconnect(true);
   }
-  // Turn OFF Cellular Card load switch
-  gpio_set_level(EN_CE_CARD, 0);
 
   // Reset external watchdog before sleep to make sure its not trigger while in sleep
   //   before system wakeup
@@ -509,7 +517,6 @@ std::string getFirmwareVersion() {
   return app_desc->version;
 }
 
-
 AirgradientClient::PayloadType getPayloadType() {
   if (g_configuration.getModel() == Configuration::O_M_1PPSTON_CE) {
     return AirgradientClient::MAX_WITH_O3_NO2;
@@ -650,19 +657,17 @@ bool initializeWiFiNetwork(unsigned long wakeUpCounter) {
   }
 
   if (g_wifiManager.autoConnect(true) == false) {
+    ESP_LOGE(TAG, "Failed connect to WiFi");
     return false;
   }
-
-  g_agClient = new AirgradientWifiClient;
-  g_agClient->begin(g_serialNumber, getPayloadType());
 
   return true;
 }
 
-bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
+bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
   // Check if pass criteria to post measures
   if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to post measures, skip");
+    ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
     return true;
   }
 
@@ -748,6 +753,37 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   }
 
   return postSuccess;
+}
+
+bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
+                        AirgradientClient::MaxSensorPayload sensorPayload) {
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+    return false;
+  }
+
+  g_agClient = new AirgradientWifiClient;
+  g_agClient->begin(g_serialNumber, getPayloadType());
+
+  AirgradientClient::AirgradientPayload payload;
+  payload.sensor = &sensorPayload;
+  payload.signal = getNetworkSignalStrength();
+  ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
+
+  bool postSuccess = g_agClient->httpPostMeasures(payload);
+  if (!postSuccess) {
+    ESP_LOGE(TAG, "Send measures failed, retry in next schedule");
+    // Run failed post led indicator
+    g_statusLed.blink(3000, 500);
+    return false;
+  }
+
+  if (wakeUpCounter == 0) {
+    // Notify post success only on first boot
+    g_statusLed.blinkAsync(800, 100);
+  }
+
+  return true;
 }
 
 bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
