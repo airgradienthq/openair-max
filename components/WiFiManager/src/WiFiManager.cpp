@@ -102,7 +102,7 @@ std::string WiFiManager::generateDefaultAPName() {
 void WiFiManager::stopServers() {
   std::lock_guard<std::mutex> lock(_mutex);
 
-  WM_LOGI("🛑 Manually stopping servers...");
+  WM_LOGI("Manually stopping servers...");
 
   if (!_cleanupInProgress) {
     _cleanupInProgress = true;
@@ -111,7 +111,7 @@ void WiFiManager::stopServers() {
     stopDNSServer();
 
     _cleanupInProgress = false;
-    WM_LOGI("✅ Servers stopped successfully");
+    WM_LOGI("Servers stopped successfully");
   } else {
     WM_LOGD("Server cleanup already in progress");
   }
@@ -120,7 +120,7 @@ void WiFiManager::stopServers() {
 bool WiFiManager::resetSettings() {
   std::lock_guard<std::mutex> lock(_mutex);
 
-  WM_LOGI("🔄 Resetting WiFi credentials...");
+  WM_LOGI("Resetting WiFi credentials...");
 
   // Disconnect from current WiFi
   esp_wifi_disconnect();
@@ -128,11 +128,11 @@ bool WiFiManager::resetSettings() {
   // Clear WiFi credentials from ESP-IDF's NVS storage
   esp_err_t ret = esp_wifi_restore();
   if (ret != ESP_OK) {
-    WM_LOGE("❌ Failed to clear WiFi credentials: %s", esp_err_to_name(ret));
+    WM_LOGE("Failed to clear WiFi credentials: %s", esp_err_to_name(ret));
     return false;
   }
 
-  WM_LOGI("✅ WiFi credentials reset successfully - device will need reconfiguration");
+  WM_LOGI("WiFi credentials reset successfully - device will need reconfiguration");
   return true;
 }
 
@@ -153,13 +153,13 @@ bool WiFiManager::reconnectWiFi() {
 }
 
 bool WiFiManager::reconnectWiFi(uint32_t timeoutSeconds) {
-  WM_LOGI("🔄 Attempting WiFi reconnection (timeout: %lu seconds)...", timeoutSeconds);
+  WM_LOGI("Attempting WiFi reconnection (timeout: %lu seconds)...", timeoutSeconds);
 
   // Check if we have saved credentials
   wifi_config_t wifi_config = {};
   esp_err_t ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
   if (ret != ESP_OK || strlen((char *)wifi_config.sta.ssid) == 0) {
-    WM_LOGE("❌ No saved WiFi credentials found");
+    WM_LOGE("No saved WiFi credentials found");
     return false;
   }
 
@@ -170,11 +170,11 @@ bool WiFiManager::reconnectWiFi(uint32_t timeoutSeconds) {
   // Attempt to connect
   ret = esp_wifi_connect();
   if (ret != ESP_OK) {
-    WM_LOGE("❌ Failed to initiate WiFi connection: %s", esp_err_to_name(ret));
+    WM_LOGE("Failed to initiate WiFi connection: %s", esp_err_to_name(ret));
     return false;
   }
 
-  WM_LOGI("📡 WiFi connection attempt initiated for SSID: %s", wifi_config.sta.ssid);
+  WM_LOGI("WiFi connection attempt initiated for SSID: %s", wifi_config.sta.ssid);
 
   // Wait for connection result
   const uint32_t timeout_ms = timeoutSeconds * 1000;
@@ -184,19 +184,19 @@ bool WiFiManager::reconnectWiFi(uint32_t timeoutSeconds) {
   while (elapsed_ms < timeout_ms) {
     // Check if we're connected
     if (isWiFiConnected()) {
-      WM_LOGI("✅ WiFi reconnection successful!");
+      WM_LOGI("WiFi reconnection successful!");
       return true;
     }
 
     // Check if connection failed
     if (_lastConxResult == WL_WRONG_PASSWORD) {
-      WM_LOGE("❌ WiFi reconnection failed: Wrong password");
+      WM_LOGE("WiFi reconnection failed: Wrong password");
       return false;
     } else if (_lastConxResult == WL_NO_SSID_AVAIL) {
-      WM_LOGE("❌ WiFi reconnection failed: Network not found");
+      WM_LOGE("WiFi reconnection failed: Network not found");
       return false;
     } else if (_lastConxResult == WL_CONNECT_FAILED) {
-      WM_LOGE("❌ WiFi reconnection failed: Connection error");
+      WM_LOGE("WiFi reconnection failed: Connection error");
       return false;
     }
 
@@ -206,12 +206,12 @@ bool WiFiManager::reconnectWiFi(uint32_t timeoutSeconds) {
 
     // Log progress every 2.5 seconds
     if (elapsed_ms % 2500 == 0) {
-      WM_LOGD("⏱️  Waiting for WiFi connection... (%lu/%lu seconds)", elapsed_ms / 1000,
+      WM_LOGD("Waiting for WiFi connection... (%lu/%lu seconds)", elapsed_ms / 1000,
               timeout_ms / 1000);
     }
   }
 
-  WM_LOGE("❌ WiFi reconnection failed: Timeout after %lu seconds", timeoutSeconds);
+  WM_LOGE("WiFi reconnection failed: Timeout after %lu seconds", timeoutSeconds);
   return false;
 }
 
@@ -303,15 +303,15 @@ bool WiFiManager::autoConnect(const char *apName, const char *apPassword, bool s
 
   // If successful connection via portal, switch to STA-only mode
   if (portalResult && _state == WM_STATE_RUN_STA) {
-    WM_LOGI("🎉 WiFi connected successfully! Switching to STA-only mode...");
+    WM_LOGI("WiFi connected successfully! Switching to STA-only mode...");
 
     // Switch to STA-only mode (servers remain running for manual control)
     esp_err_t ret = esp_wifi_set_mode(WIFI_MODE_STA);
     if (ret == ESP_OK) {
-      WM_LOGI("✅ Successfully switched to STA-only mode");
-      WM_LOGI("💡 Servers still running - call stopServers() manually to stop them");
+      WM_LOGI("Successfully switched to STA-only mode");
+      WM_LOGI("Servers still running - call stopServers() manually to stop them");
     } else {
-      WM_LOGW("⚠️ Failed to switch to STA mode: %s", esp_err_to_name(ret));
+      WM_LOGW("Failed to switch to STA mode: %s", esp_err_to_name(ret));
     }
   }
 
@@ -351,31 +351,31 @@ bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPa
   _portalAbortResult = false;
   _configPortalStart = esp_timer_get_time();
 
-  WM_LOGI("🔧 Setting up WiFi subsystem...");
+  WM_LOGI("Setting up WiFi subsystem...");
   // Setup WiFi if not already done
   if (!setupWiFi()) {
-    WM_LOGE("❌ Failed to setup WiFi");
+    WM_LOGE("Failed to setup WiFi");
     return false;
   }
 
-  WM_LOGI("📡 Starting AP mode with SSID: %s", _apName.c_str());
+  WM_LOGI("Starting AP mode with SSID: %s", _apName.c_str());
   // Start AP mode
   if (!startAP(_apName.c_str(), _apPassword.empty() ? nullptr : _apPassword.c_str())) {
-    WM_LOGE("❌ Failed to start AP");
+    WM_LOGE("Failed to start AP");
     return false;
   }
 
-  WM_LOGI("🌐 Starting HTTP server...");
+  WM_LOGI("Starting HTTP server...");
   // Start HTTP server
   if (!startHTTPServer()) {
-    WM_LOGE("❌ Failed to start HTTP server");
+    WM_LOGE("Failed to start HTTP server");
     return false;
   }
 
-  WM_LOGI("🔍 Starting DNS server for captive portal...");
+  WM_LOGI("Starting DNS server for captive portal...");
   // Start DNS server for captive portal
   if (_captivePortalEnable && !startDNSServer()) {
-    WM_LOGW("⚠️  Failed to start DNS server");
+    WM_LOGW("Failed to start DNS server");
   }
 
   _state = WM_STATE_RUN_PORTAL;
@@ -385,9 +385,9 @@ bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPa
     _apCallback(this);
   }
 
-  WM_LOGI("✅ Config portal started successfully!");
-  WM_LOGI("📱 Connect to WiFi network: %s", _apName.c_str());
-  WM_LOGI("🌐 Open browser to: http://192.168.4.1");
+  WM_LOGI("Config portal started successfully!");
+  WM_LOGI("Connect to WiFi network: %s", _apName.c_str());
+  WM_LOGI("Open browser to: http://192.168.4.1");
 
   if (_configPortalBlocking) {
     // Blocking mode - wait for completion
@@ -406,11 +406,11 @@ bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPa
 
     // Check final state but don't cleanup servers yet
     if (_state == WM_STATE_RUN_STA) {
-      WM_LOGI("✅ Config portal completed successfully");
+      WM_LOGI("Config portal completed successfully");
       return true;
     } else {
-      WM_LOGI("⏰ Config portal completed with timeout/abort");
-      WM_LOGI("💡 Servers still running - call stopServers() manually to stop them");
+      WM_LOGI("Config portal completed with timeout/abort");
+      WM_LOGI("Servers still running - call stopServers() manually to stop them");
       return false;
     }
   }
@@ -563,7 +563,7 @@ bool WiFiManager::startSTA() {
 }
 
 bool WiFiManager::startAP(const char *ssid, const char *password) {
-  WM_LOGI("🚀 Starting AP mode: %s", ssid);
+  WM_LOGI("Starting AP mode: %s", ssid);
 
   // Configure AP
   wifi_config_t wifi_config = {};
@@ -576,40 +576,40 @@ bool WiFiManager::startAP(const char *ssid, const char *password) {
   if (password && strlen(password) > 0) {
     wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
     strncpy((char *)wifi_config.ap.password, password, sizeof(wifi_config.ap.password) - 1);
-    WM_LOGI("🔒 AP configured with WPA2-PSK security");
+    WM_LOGI("AP configured with WPA2-PSK security");
   } else {
     wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-    WM_LOGI("🔓 AP configured as open network");
+    WM_LOGI("AP configured as open network");
   }
 
   WM_LOGI("🔧 Setting WiFi mode to AP...");
   esp_err_t ret = esp_wifi_set_mode(WIFI_MODE_AP);
   if (ret != ESP_OK) {
-    WM_LOGE("❌ Failed to set WiFi mode: %s", esp_err_to_name(ret));
+    WM_LOGE("Failed to set WiFi mode: %s", esp_err_to_name(ret));
     return false;
   }
 
-  WM_LOGI("⚙️  Setting AP configuration...");
+  WM_LOGI("Setting AP configuration...");
   ret = esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
   if (ret != ESP_OK) {
-    WM_LOGE("❌ Failed to set AP config: %s", esp_err_to_name(ret));
+    WM_LOGE("Failed to set AP config: %s", esp_err_to_name(ret));
     return false;
   }
 
-  WM_LOGI("🎯 Starting WiFi driver...");
+  WM_LOGI("Starting WiFi driver...");
   ret = esp_wifi_start();
   if (ret != ESP_OK) {
-    WM_LOGE("❌ Failed to start WiFi: %s", esp_err_to_name(ret));
+    WM_LOGE("Failed to start WiFi: %s", esp_err_to_name(ret));
     return false;
   }
 
   // Wait a bit for AP to fully start
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  WM_LOGI("✅ AP started successfully!");
-  WM_LOGI("📡 SSID: %s", ssid);
-  WM_LOGI("🔢 Channel: %d", WM_DEFAULT_AP_CHANNEL);
-  WM_LOGI("🌐 IP: 192.168.4.1");
+  WM_LOGI("AP started successfully!");
+  WM_LOGI("SSID: %s", ssid);
+  WM_LOGI("Channel: %d", WM_DEFAULT_AP_CHANNEL);
+  WM_LOGI("IP: 192.168.4.1");
 
   return true;
 }
@@ -698,14 +698,14 @@ bool WiFiManager::startHTTPServer() {
 
 void WiFiManager::stopHTTPServer() {
   if (_httpServer) {
-    WM_LOGI("🛑 Stopping HTTP server...");
+    WM_LOGI("Stopping HTTP server...");
 
     esp_err_t ret = httpd_stop(_httpServer);
     if (ret == ESP_OK) {
-      WM_LOGI("✅ HTTP server stopped successfully");
+      WM_LOGI("HTTP server stopped successfully");
       _httpServer = nullptr;
     } else {
-      WM_LOGW("⚠️ Error stopping HTTP server: %s", esp_err_to_name(ret));
+      WM_LOGW("Error stopping HTTP server: %s", esp_err_to_name(ret));
       _httpServer = nullptr; // Clear handle anyway to prevent issues
     }
   } else {
@@ -742,7 +742,7 @@ void WiFiManager::stopDNSServer() {
     return;
   }
 
-  WM_LOGI("🛑 Stopping DNS server...");
+  WM_LOGI("Stopping DNS server...");
   _dnsRunning = false;
 
   // Close socket to wake up task
@@ -763,7 +763,7 @@ void WiFiManager::stopDNSServer() {
     _dnsTaskHandle = nullptr;
   }
 
-  WM_LOGI("✅ DNS server stopped successfully");
+  WM_LOGI("DNS server stopped successfully");
 }
 
 void WiFiManager::updateState() {
@@ -1154,7 +1154,7 @@ void WiFiManager::performWiFiScan(bool async) {
     return;
   }
 
-  WM_LOGI("🔍 Starting WiFi scan (async: %s)", async ? "true" : "false");
+  WM_LOGI("Starting WiFi scan (async: %s)", async ? "true" : "false");
   _scanInProgress = true;
 
   // Get current WiFi mode
@@ -1164,10 +1164,10 @@ void WiFiManager::performWiFiScan(bool async) {
   // If we're in pure AP mode, temporarily switch to AP+STA for scanning
   bool mode_changed = false;
   if (current_mode == WIFI_MODE_AP) {
-    WM_LOGI("🔄 Switching to AP+STA mode for scanning...");
+    WM_LOGI("Switching to AP+STA mode for scanning...");
     esp_err_t ret = esp_wifi_set_mode(WIFI_MODE_APSTA);
     if (ret != ESP_OK) {
-      WM_LOGE("❌ Failed to set APSTA mode for scanning: %s", esp_err_to_name(ret));
+      WM_LOGE("Failed to set APSTA mode for scanning: %s", esp_err_to_name(ret));
       _scanInProgress = false;
       return;
     }
@@ -1188,7 +1188,7 @@ void WiFiManager::performWiFiScan(bool async) {
 
   esp_err_t ret = esp_wifi_scan_start(&scan_config, !async);
   if (ret != ESP_OK) {
-    WM_LOGE("❌ WiFi scan failed: %s", esp_err_to_name(ret));
+    WM_LOGE("WiFi scan failed: %s", esp_err_to_name(ret));
     _scanInProgress = false;
 
     // Restore original mode if we changed it
@@ -1206,13 +1206,13 @@ void WiFiManager::performWiFiScan(bool async) {
     if (ap_count > 0) {
       _rawScanResults.resize(ap_count);
       esp_wifi_scan_get_ap_records(&ap_count, _rawScanResults.data());
-      WM_LOGI("✅ Found %d WiFi networks", ap_count);
+      WM_LOGI("Found %d WiFi networks", ap_count);
 
       // Filter and sort results
       filterScanResults();
     } else {
       _rawScanResults.clear();
-      WM_LOGW("⚠️  No WiFi networks found");
+      WM_LOGW("No WiFi networks found");
     }
 
     _lastScanTime = esp_timer_get_time();
@@ -1220,7 +1220,7 @@ void WiFiManager::performWiFiScan(bool async) {
 
     // Restore original mode if we changed it
     if (mode_changed) {
-      WM_LOGI("🔄 Restoring AP mode after scan...");
+      WM_LOGI("Restoring AP mode after scan...");
       esp_wifi_set_mode(current_mode);
     }
   }
@@ -1625,10 +1625,10 @@ esp_err_t WiFiManager::handleWifiSave(httpd_req_t *req) {
   }
 
   // Switch to AP+STA mode to allow STA configuration
-  WM_LOGI("🔄 Switching to AP+STA mode for connection...");
+  WM_LOGI("Switching to AP+STA mode for connection...");
   esp_err_t err = esp_wifi_set_mode(WIFI_MODE_APSTA);
   if (err != ESP_OK) {
-    WM_LOGE("❌ Failed to set AP+STA mode: %s", esp_err_to_name(err));
+    WM_LOGE("Failed to set AP+STA mode: %s", esp_err_to_name(err));
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
@@ -1643,20 +1643,20 @@ esp_err_t WiFiManager::handleWifiSave(httpd_req_t *req) {
     strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
   }
 
-  WM_LOGI("🔧 Setting STA configuration...");
+  WM_LOGI("Setting STA configuration...");
   err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
   if (err != ESP_OK) {
-    WM_LOGE("❌ Failed to set WiFi config: %s", esp_err_to_name(err));
+    WM_LOGE("Failed to set WiFi config: %s", esp_err_to_name(err));
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
 
   // Attempt connection
-  WM_LOGI("🌐 Attempting to connect to WiFi...");
+  WM_LOGI("Attempting to connect to WiFi...");
   esp_wifi_disconnect();
   err = esp_wifi_connect();
   if (err != ESP_OK) {
-    WM_LOGE("❌ Failed to start WiFi connection: %s", esp_err_to_name(err));
+    WM_LOGE("Failed to start WiFi connection: %s", esp_err_to_name(err));
     // Don't return error here, connection might still succeed
   }
 
@@ -1674,20 +1674,20 @@ esp_err_t WiFiManager::handleWifiSave(httpd_req_t *req) {
       "<script>setTimeout(function(){window.location.href='/';}, 5000);</script>"
       "</body></html>";
 
-  WM_LOGI("📤 Sending HTTP response...");
+  WM_LOGI("Sending HTTP response...");
   esp_err_t send_ret = httpd_resp_send(req, success_msg, strlen(success_msg));
   if (send_ret != ESP_OK) {
-    WM_LOGE("❌ Failed to send HTTP response: %s", esp_err_to_name(send_ret));
+    WM_LOGE("Failed to send HTTP response: %s", esp_err_to_name(send_ret));
     return send_ret;
   }
 
   // CRITICAL: Ensure the response is actually transmitted over the network
-  WM_LOGI("⏳ Waiting for HTTP response transmission to complete...");
+  WM_LOGI("Waiting for HTTP response transmission to complete...");
 
   // Give TCP stack time to actually send the data over WiFi
   vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second should be enough for small response
 
-  WM_LOGI("✅ HTTP response transmission complete");
+  WM_LOGI("HTTP response transmission complete");
   return ESP_OK;
 }
 

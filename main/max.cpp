@@ -111,27 +111,16 @@ static std::string getFirmwareVersion();
 static AirgradientClient::PayloadType getPayloadType();
 
 static void ensureConnectionReady();
-
 static int getNetworkSignalStrength();
-
 static bool initializeNetwork(unsigned long wakeUpCounter);
-
 static bool initializeWiFiNetwork(unsigned long wakeUpCounter);
-
-/**
- * Attempt to initialize and connect to cellular network
- * If failed once, it will not re-attempt to initialize for its wake up cycle
- * Called when post measure, check remote configuration and check for firmware update
- */
 static bool initializeCellularNetwork(unsigned long wakeUpCounter);
 
-// Return false if failed init network or failed send
-// TODO: Add description
-static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
-                               AirgradientClient::MaxSensorPayload sensorPayload);
-static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 static bool checkRemoteConfiguration(unsigned long wakeUpCounter);
 static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
+static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache);
+static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
+                               AirgradientClient::MaxSensorPayload sensorPayload);
 
 extern "C" void app_main(void) {
   // Re-initialize console for logging only if it just wake up after deepsleep
@@ -288,8 +277,6 @@ extern "C" void app_main(void) {
   // Reset external watchdog before sleep to make sure its not trigger while in sleep
   //   before system wakeup
   resetExtWatchdog();
-
-  // TODO: Print cache size before sleep
 
   // Calculate how long to sleep to keep measurement cycle the same
   uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
