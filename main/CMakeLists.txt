@@ -22,8 +22,8 @@ set (
   ADS1115
   AirgradientClient
   AirgradientOTA
-  json_parser
   console 
+  arduinojson
   esp_driver_usb_serial_jtag
 )
 
