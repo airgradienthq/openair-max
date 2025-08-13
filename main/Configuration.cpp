@@ -8,7 +8,7 @@
 #include "Configuration.h"
 #include "MaxConfig.h"
 #include "esp_log.h"
-#include "json_parser.h"
+#include "ArduinoJson.h"
 #include "nvs.h"
 #include <cstdint>
 #include <cstring>
@@ -55,115 +55,134 @@ bool Configuration::load() {
 }
 
 bool Configuration::parseRemoteConfig(const std::string &config) {
-  ESP_LOGI(TAG, "Parsing configuration: %s", config.c_str());
+  JsonDocument doc;
 
-  jparse_ctx_t jctx;
-  int ret = json_parse_start(&jctx, config.c_str(), config.length());
-  if (ret != OS_SUCCESS) {
-    ESP_LOGE(TAG, "Failed parse remote configuration");
+  DeserializationError error = deserializeJson(doc, config.c_str(), config.length());
+  if (error) {
+    ESP_LOGE(TAG, "Failed to parse remote configuration: %s", error.c_str());
     return false;
   }
 
-  char str_val[64];
-  int int_val;
-  bool bool_val;
+  // Get the root object.
+  JsonObject root = doc.as<JsonObject>();
 
-  if (json_obj_get_bool(&jctx, "co2CalibrationRequested", &bool_val) == OS_SUCCESS) {
+  bool bool_val;
+  int int_val;
+  std::string str_val; // Using std::string for direct assignment
+
+  // co2CalibrationRequested
+  if (root["co2CalibrationRequested"].is<bool>()) {
+    bool_val = root["co2CalibrationRequested"].as<bool>();
     if (_config.co2CalibrationRequested != bool_val) {
       ESP_LOGI(TAG, "co2CalibrationRequested value changed to %d", bool_val);
       _config.co2CalibrationRequested = bool_val;
       _configChanged = true;
     }
   } else {
-    ESP_LOGW(TAG, "co2CalibrationRequested field not found");
+    ESP_LOGW(TAG, "co2CalibrationRequested field not found or not a boolean");
   }
 
-  if (json_obj_get_int(&jctx, "abcDays", &int_val) == OS_SUCCESS) {
+  // abcDays
+  if (root["abcDays"].is<int>()) {
+    int_val = root["abcDays"].as<int>();
     if (_config.abcDays != int_val) {
       ESP_LOGI(TAG, "abcDays value changed from %d to %d", _config.abcDays, int_val);
       _config.abcDays = int_val;
       _configChanged = true;
     }
   } else {
-    ESP_LOGW(TAG, "abcDays field not found");
+    ESP_LOGW(TAG, "abcDays field not found or not an integer");
   }
 
-  if (json_obj_get_bool(&jctx, "ledTestRequested", &bool_val) == OS_SUCCESS) {
+  // ledTestRequested
+  if (root["ledTestRequested"].is<bool>()) {
+    bool_val = root["ledTestRequested"].as<bool>();
     if (_config.ledTestRequested != bool_val) {
       ESP_LOGI(TAG, "ledTestRequested value changed to %d", bool_val);
       _config.ledTestRequested = bool_val;
       _configChanged = true;
     }
   } else {
-    ESP_LOGW(TAG, "ledTestRequested field not found");
+    ESP_LOGW(TAG, "ledTestRequested field not found or not a boolean");
   }
 
-  if (json_obj_get_string(&jctx, "model", str_val, sizeof(str_val)) == OS_SUCCESS) {
+  // model
+  if (root["model"].is<const char *>()) {
+    str_val = root["model"].as<std::string>(); // Directly cast to std::string
     if (_config.model != str_val) {
-      ESP_LOGI(TAG, "model value changed from %s to %s", _config.model.c_str(), str_val);
+      ESP_LOGI(TAG, "model value changed from %s to %s", _config.model.c_str(), str_val.c_str());
       _config.model = str_val;
       _configChanged = true;
     }
   } else {
-    ESP_LOGW(TAG, "model field not found");
+    ESP_LOGW(TAG, "model field not found or not a string");
   }
 
-  if (json_obj_get_object(&jctx, "schedule") == OS_SUCCESS) {
-    if (json_obj_get_bool(&jctx, "continuous", &bool_val) == OS_SUCCESS) {
+  // schedule object
+  if (root["schedule"].is<JsonObject>()) {
+    JsonObject schedule = root["schedule"].as<JsonObject>();
+
+    // schedule.continuous
+    if (schedule["continuous"].is<bool>()) {
+      bool_val = schedule["continuous"].as<bool>();
       if (_config.schedule.continuous != bool_val) {
         ESP_LOGI(TAG, "schedule.continuous value changed to %d", bool_val);
         _config.schedule.continuous = bool_val;
         _configChanged = true;
       }
     } else {
-      ESP_LOGW(TAG, "schedule.continuous field not found");
+      ESP_LOGW(TAG, "schedule.continuous field not found or not a boolean");
     }
 
-    if (json_obj_get_int(&jctx, "pm02", &int_val) == OS_SUCCESS) {
+    // schedule.pm02
+    if (schedule["pm02"].is<int>()) {
+      int_val = schedule["pm02"].as<int>();
       if (_config.schedule.pm02 != int_val) {
         ESP_LOGI(TAG, "schedule.pm02 value changed from %d to %d", _config.schedule.pm02, int_val);
         _config.schedule.pm02 = int_val;
         _configChanged = true;
       }
     } else {
-      ESP_LOGW(TAG, "schedule.pm02 field not found");
+      ESP_LOGW(TAG, "schedule.pm02 field not found or not an integer");
     }
-    // Go back to root object
-    json_obj_leave_object(&jctx);
   } else {
-    ESP_LOGW(TAG, "schedule field not found");
+    ESP_LOGW(TAG, "schedule field not found or not an object");
   }
 
-  if (json_obj_get_object(&jctx, "firmware") == OS_SUCCESS) {
-    if (json_obj_get_string(&jctx, "target", str_val, sizeof(str_val)) == OS_SUCCESS) {
+  // firmware object
+  if (root["firmware"].is<JsonObject>()) {
+    JsonObject firmware = root["firmware"].as<JsonObject>();
+
+    // firmware.target
+    if (firmware["target"].is<const char *>()) {
+      str_val = firmware["target"].as<std::string>();
       if (_config.firmware.target != str_val) {
         ESP_LOGI(TAG, "firmware.target value changed from %s to %s",
-                 _config.firmware.target.c_str(), str_val);
+                 _config.firmware.target.c_str(), str_val.c_str());
         _config.firmware.target = str_val;
         _configChanged = true;
       }
     } else {
-      ESP_LOGW(TAG, "firmware.target field not found");
+      ESP_LOGW(TAG, "firmware.target field not found or not a string");
     }
 
-    if (json_obj_get_string(&jctx, "url", str_val, sizeof(str_val)) == OS_SUCCESS) {
+    // firmware.url
+    if (firmware["url"].is<const char *>()) {
+      str_val = firmware["url"].as<std::string>();
       if (_config.firmware.url != str_val) {
         ESP_LOGI(TAG, "firmware.url value changed from %s to %s", _config.firmware.url.c_str(),
-                 str_val);
+                 str_val.c_str());
         _config.firmware.url = str_val;
         _configChanged = true;
       }
     } else {
-      ESP_LOGW(TAG, "firmware.url field not found");
+      ESP_LOGW(TAG, "firmware.url field not found or not a string");
     }
-    // Go back to root object
-    json_obj_leave_object(&jctx);
   } else {
-    ESP_LOGW(TAG, "firmware field not found");
+    ESP_LOGW(TAG, "firmware field not found or not an object");
   }
 
   ESP_LOGI(TAG, "Finish parsing remote configuration");
-  json_parse_end(&jctx);
 
   if (_configChanged) {
     _saveConfig();
