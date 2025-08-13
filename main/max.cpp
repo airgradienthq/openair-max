@@ -183,7 +183,7 @@ extern "C" void app_main(void) {
   if (g_configuration.getNetworkOption() == NetworkOption::WiFi) {
     std::string ssid = std::string("airgradient-") + g_serialNumber;
     if (g_configuration.isWifiConfigured() == false && xWakeUpCounter == 0) {
-      // TODO: Run led notification here
+      g_statusLed.blinkAsync(0, 200);
       ESP_LOGI(TAG, "Credentials haven't set yet, running portal");
       g_wifiManager.setConfigPortalBlocking(true);
       bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
@@ -197,6 +197,7 @@ extern "C" void app_main(void) {
       g_networkReady = true;
       // Reset because wifi portal triggered and wifi successfully connected
       wakeUpMillis = MILLIS();
+      g_statusLed.on();
     }
     ESP_LOGI(TAG, "Application continue using wifi...");
   }
@@ -400,17 +401,18 @@ void bootButtonTask(void *arg) {
         // Button pressed
         startTimeButtonPressed = MILLIS();
         g_statusLed.blinkAsync(0, 1000);
-        // TODO: Maybe add led animation here
       } else {
         // Button released
         if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
           g_configuration.switchNetworkOption();
           ESP_LOGI(TAG, "Restart in 2s..");
-          vTaskDelay(pdMS_TO_TICKS(2000));
+          g_statusLed.blink(2000, 200);
           esp_restart();
         }
         startTimeButtonPressed = 0;
       }
+
+      // TODO: Factory reset wifi configuration also
     }
   }
 }
