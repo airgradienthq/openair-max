@@ -388,18 +388,18 @@ void bootButtonTask(void *arg) {
       if (level == 0) {
         // Button pressed
         startTimeButtonPressed = MILLIS();
-      } else {
-        // Button released
-        if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
-          g_configuration.switchNetworkOption();
-          ESP_LOGI(TAG, "Restart in 2s..");
-          g_statusLed.blink(2000, 200);
-          esp_restart();
-        }
-        startTimeButtonPressed = 0;
+        continue;
       }
+      // Button released
 
-      // TODO: Factory reset wifi configuration also
+      if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
+        bool currentState = g_configuration.runSystemSettings();
+        g_configuration.setRunSystemSettings(!currentState);
+        ESP_LOGI(TAG, "Restarting in 2s...");
+        g_statusLed.blink(2000, 200);
+        esp_restart();
+      }
+      startTimeButtonPressed = 0;
     }
   }
 }
@@ -789,8 +789,7 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
   AirgradientOTA *agOta = nullptr;
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     agOta = new AirgradientOTACellular(g_cellularCard, g_agClient->getICCID());
-  }
-  else {
+  } else {
     agOta = new AirgradientOTAWifi;
   }
   auto result = agOta->updateIfAvailable(g_serialNumber, g_fimwareVersion);
