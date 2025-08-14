@@ -10,11 +10,15 @@
 #include "AirgradientUART.h"
 #include "AlphaSenseSensor.h"
 #include "BQ25672.h"
+#include "driver/gpio.h"
 #include "esp_log_level.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/projdefs.h"
+#include "freertos/task.h"
 #include "MaxConfig.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 #include <cmath>
 
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
@@ -34,6 +38,89 @@ bool Sensor::init(Configuration::Model model, int co2ABCDays) {
   } else {
     co2_ = new Sunlight(*agsCO2_);
     co2_->read_sensor_id();
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    
+    // Check if measurement samples have been configured before (using NVS)
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("co2_config", NVS_READWRITE, &nvs_handle);
+    
+    uint8_t samples_configured = 0;
+    if (err == ESP_OK) {
+      size_t required_size = sizeof(samples_configured);
+      nvs_get_blob(nvs_handle, "samples_set", &samples_configured, &required_size);
+    }
+    
+    // Set measurement samples only if not configured before
+    if (samples_configured == 0) {
+      ESP_LOGI(TAG, "First time setup - configuring measurement samples...");
+      bool samplesChanged = co2_->set_measurement_samples(2); // Set to use 2 samples for balance between power and accuracy
+      
+      if (samplesChanged) {
+        // Restart CO2 sensor to apply measurement samples setting
+        ESP_LOGI(TAG, "Restarting CO2 sensor to apply measurement samples setting...");
+        
+        // Disable GPIO hold before reset
+        gpio_hold_dis(EN_CO2);
+        
+        gpio_set_level(EN_CO2, 0); // Turn off CO2 sensor
+        vTaskDelay(pdMS_TO_TICKS(2000)); // Wait 2 seconds
+        gpio_set_level(EN_CO2, 1); // Turn on CO2 sensor
+        vTaskDelay(pdMS_TO_TICKS(3000)); // Wait 3 seconds for sensor to stabilize
+        
+        // Enable GPIO hold after reset
+        gpio_hold_en(EN_CO2);
+        
+        // Re-initialize sensor after restart
+        co2_->read_sensor_id();
+        
+        // Wait for valid CO2 reading (non-zero value)
+        ESP_LOGI(TAG, "Waiting for valid CO2 reading after restart...");
+        int16_t co2_reading = 0;
+        int retry_count = 0;
+        const int max_retries = 30; // Maximum 30 attempts (about 30 seconds)
+        
+        do {
+          co2_reading = co2_->read_sensor_measurements();
+          retry_count++;
+          ESP_LOGI(TAG, "CO2 reading attempt %d: %d ppm", retry_count, co2_reading);
+          
+          if (co2_reading > 0) {
+            ESP_LOGI(TAG, "Valid CO2 reading obtained: %d ppm", co2_reading);
+            break;
+          }
+        
+        if (retry_count >= max_retries) {
+          ESP_LOGW(TAG, "Maximum retry attempts reached, proceeding with current reading");
+          break;
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Wait 1 second before next attempt
+      } while (co2_reading <= 0);
+      
+      // Mark samples as configured in NVS
+      if (err == ESP_OK) {
+        samples_configured = 1;
+        err = nvs_set_blob(nvs_handle, "samples_set", &samples_configured, sizeof(samples_configured));
+        if (err == ESP_OK) {
+          ESP_LOGI(TAG, "Samples configuration status saved to NVS");
+          nvs_commit(nvs_handle);
+        } else {
+          ESP_LOGW(TAG, "Failed to save samples configuration status to NVS: %s", esp_err_to_name(err));
+        }
+      }
+    } else {
+      ESP_LOGI(TAG, "Measurement samples setting unchanged or failed - no restart needed");
+    }
+    } else {
+      ESP_LOGI(TAG, "Measurement samples already configured, skipping setup...");
+    }
+    
+    // Close NVS handle
+    if (err == ESP_OK) {
+      nvs_close(nvs_handle);
+    }
+    
+    co2_->read_sensor_config(); // Check measurement samples setting
     co2_->setABC(true);
     co2_->setABCPeriod(co2ABCDays * 24); // Convert to hours
     ESP_LOGI(TAG, "CO2 ABC status: %d", co2_->isABCEnabled() ? 1 : 0);

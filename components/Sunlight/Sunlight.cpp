@@ -431,17 +431,14 @@ bool Sunlight::set_measurement_samples(uint16_t number) {
     return false;
   }
 
-  if (values[0] != number) {
-    ESP_LOGI(TAG, "Changing measurement samples to %d", number);
-    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg, change) != 0) {
-      ESP_LOGE(TAG, "Failed to change Measurement samples");
-      return false;
-    }
-
-    ESP_LOGI(TAG, "Sensor restart is required to apply changes");
-    return true;
+  ESP_LOGI(TAG, "Changing measurement samples to %d", number);
+  if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg, change) != 0) {
+    ESP_LOGE(TAG, "Failed to change Measurement samples");
+    return false;
   }
-  return false;
+
+  ESP_LOGI(TAG, "Sensor restart is required to apply changes");
+  return true;
 }
 
 int16_t Sunlight::read_sensor_measurements() {
