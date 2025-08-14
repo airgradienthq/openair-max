@@ -24,6 +24,7 @@
 #define NVS_KEY_FIRMWARE_TARGET "ftarget"
 #define NVS_KEY_NETWORK_OPTION "netOpt"
 #define NVS_KEY_WIFI_CONFIGURED "wifiset"
+#define NVS_KEY_SYSTEM_SETTINGS "sysset"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -49,6 +50,7 @@ bool Configuration::load() {
   ESP_LOGI(TAG, "networkOption: %s",
            _config.networkOption == NetworkOption::Cellular ? "Cellular" : "WiFi");
   ESP_LOGI(TAG, "isWifiConfigured: %d", _config.isWifiConfigured);
+  ESP_LOGI(TAG, "runSystemSettings: %d", _config.runSystemSettings);
   ESP_LOGI(TAG, "**** ****");
 
   return true;
@@ -318,6 +320,15 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get networkOption");
   }
 
+  // Run system setting
+  uint8_t runSystemSettings;
+  err = nvs_get_u8(handle, NVS_KEY_SYSTEM_SETTINGS, &runSystemSettings);
+  if (err == ESP_OK) {
+    _config.runSystemSettings = runSystemSettings;
+  } else {
+    ESP_LOGW(TAG, "Failed to get runSystemSettings");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -393,6 +404,12 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save isWifiConfigured");
   }
 
+  // Run System Settings
+  err = nvs_set_u8(handle, NVS_KEY_SYSTEM_SETTINGS, _config.runSystemSettings);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save runSystemSettings");
+  }
+
   // Commit changes
   ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
@@ -433,6 +450,8 @@ NetworkOption Configuration::getNetworkOption() { return _config.networkOption; 
 
 bool Configuration::isWifiConfigured() { return _config.isWifiConfigured; }
 
+bool Configuration::runSystemSettings() { return _config.runSystemSettings; }
+
 void Configuration::switchNetworkOption() {
   if (_config.networkOption == NetworkOption::Cellular) {
     ESP_LOGI(TAG, "Switch network option to WiFi");
@@ -446,6 +465,11 @@ void Configuration::switchNetworkOption() {
 
 void Configuration::setIsWifiConfigured(bool state) {
   _config.isWifiConfigured = state;
+  _saveConfig();
+}
+
+void Configuration::setRunSystemSettings(bool state) {
+  _config.runSystemSettings = state;
   _saveConfig();
 }
 
@@ -470,4 +494,5 @@ void Configuration::_setConfigToDefault() {
   _config.schedule.continuous = false;
   _config.networkOption = NetworkOption::Cellular;
   _config.isWifiConfigured = false;
+  _config.runSystemSettings = false;
 }

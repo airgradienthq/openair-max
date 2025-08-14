@@ -34,6 +34,7 @@ public:
     Firmware firmware;
     NetworkOption networkOption;
     bool isWifiConfigured;
+    bool runSystemSettings;
   };
 
   Configuration() {}
@@ -52,10 +53,12 @@ public:
   Model getModel();
   NetworkOption getNetworkOption();
   bool isWifiConfigured();
+  bool runSystemSettings();
 
   // Setter
   void switchNetworkOption();
   void setIsWifiConfigured(bool state);
+  void setRunSystemSettings(bool state);
 
   void resetLedTestRequest();
   void resetCO2CalibrationRequest();
