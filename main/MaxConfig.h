@@ -10,6 +10,11 @@
 
 #include "soc/gpio_num.h"
 
+enum class NetworkOption {
+  WiFi = 0,
+  Cellular
+};
+
 #define MAX_PAYLOAD_CACHE 100
 
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
@@ -23,6 +28,7 @@ constexpr gpio_num_t EN_CE_CARD = GPIO_NUM_15;
 constexpr gpio_num_t IO_CE_POWER = GPIO_NUM_23;
 constexpr gpio_num_t IO_IIC_RESET = GPIO_NUM_21;
 constexpr gpio_num_t IO_LED_INDICATOR = GPIO_NUM_10;
+constexpr gpio_num_t IO_BOOT_BUTTON = GPIO_NUM_9;
 
 #define UART_RX_SUNLIGHT 0
 #define UART_TX_SUNLIGHT 1

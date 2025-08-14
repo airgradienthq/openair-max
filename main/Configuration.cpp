@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "ArduinoJson.h"
 #include "nvs.h"
+#include <cstdint>
 #include <cstring>
 
 #define REMOTE_CONFIG_NVS_STORAGE_NAME "remote-config" //!NOTE: Don't change this value!
@@ -21,6 +22,8 @@
 #define NVS_KEY_SCHEDULE_CONTINUOUS "cont"
 #define NVS_KEY_FIRMWARE_URL "furl"
 #define NVS_KEY_FIRMWARE_TARGET "ftarget"
+#define NVS_KEY_NETWORK_OPTION "netOpt"
+#define NVS_KEY_WIFI_CONFIGURED "wifiset"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -43,9 +46,18 @@ bool Configuration::load() {
   ESP_LOGI(TAG, "firmware.url: %s", _config.firmware.url.c_str());
   ESP_LOGI(TAG, "schedule.pm02: %d", _config.schedule.pm02);
   ESP_LOGI(TAG, "schedule.continuous: %d", _config.schedule.continuous);
+  ESP_LOGI(TAG, "networkOption: %s",
+           _config.networkOption == NetworkOption::Cellular ? "Cellular" : "WiFi");
+  ESP_LOGI(TAG, "isWifiConfigured: %d", _config.isWifiConfigured);
   ESP_LOGI(TAG, "**** ****");
 
   return true;
+}
+
+void Configuration::reset() {
+  ESP_LOGI(TAG, "Resetting configuration..");
+  _setConfigToDefault();
+  _saveConfig();
 }
 
 bool Configuration::parseRemoteConfig(const std::string &config) {
@@ -288,6 +300,24 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get schedule.pm02");
   }
 
+  // Is wifi configured
+  uint8_t wifiConfigured;
+  err = nvs_get_u8(handle, NVS_KEY_WIFI_CONFIGURED, &wifiConfigured);
+  if (err == ESP_OK) {
+    _config.isWifiConfigured = wifiConfigured;
+  } else {
+    ESP_LOGW(TAG, "Failed to get isWifiConfigured");
+  }
+
+  // NETWORK OPTION
+  uint8_t netopt;
+  err = nvs_get_u8(handle, NVS_KEY_NETWORK_OPTION, &netopt);
+  if (err == ESP_OK) {
+    _config.networkOption = static_cast<NetworkOption>(netopt);
+  } else {
+    ESP_LOGW(TAG, "Failed to get networkOption");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -351,7 +381,20 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save schedule.pm02");
   }
 
+  // NETWORK OPTION
+  err = nvs_set_u8(handle, NVS_KEY_NETWORK_OPTION, static_cast<uint8_t>(_config.networkOption));
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save networkOption");
+  }
+
+  // WiFi configured
+  err = nvs_set_u8(handle, NVS_KEY_WIFI_CONFIGURED, _config.isWifiConfigured);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save isWifiConfigured");
+  }
+
   // Commit changes
+  ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Failed to commit configuration to NVS");
@@ -386,6 +429,26 @@ Configuration::Model Configuration::getModel() {
   return O_M_1PPST_CE;
 }
 
+NetworkOption Configuration::getNetworkOption() { return _config.networkOption; }
+
+bool Configuration::isWifiConfigured() { return _config.isWifiConfigured; }
+
+void Configuration::switchNetworkOption() {
+  if (_config.networkOption == NetworkOption::Cellular) {
+    ESP_LOGI(TAG, "Switch network option to WiFi");
+    _config.networkOption = NetworkOption::WiFi;
+  } else {
+    ESP_LOGI(TAG, "Switch network option to Cellular");
+    _config.networkOption = NetworkOption::Cellular;
+  }
+  _saveConfig();
+}
+
+void Configuration::setIsWifiConfigured(bool state) {
+  _config.isWifiConfigured = state;
+  _saveConfig();
+}
+
 void Configuration::resetLedTestRequest() {
   _config.ledTestRequested = false;
   _saveConfig();
@@ -405,4 +468,6 @@ void Configuration::_setConfigToDefault() {
   _config.firmware.url = "";
   _config.schedule.pm02 = MEASURE_CYCLE_INTERVAL_SECONDS;
   _config.schedule.continuous = false;
+  _config.networkOption = NetworkOption::Cellular;
+  _config.isWifiConfigured = false;
 }
