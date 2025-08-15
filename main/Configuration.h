@@ -35,6 +35,7 @@ public:
     NetworkOption networkOption;
     bool isWifiConfigured;
     bool runSystemSettings;
+    std::string apn;
   };
 
   Configuration() {}
@@ -54,11 +55,13 @@ public:
   NetworkOption getNetworkOption();
   bool isWifiConfigured();
   bool runSystemSettings();
+  std::string getAPN();
 
   // Setter
-  void switchNetworkOption();
+  void setNetworkOption(NetworkOption option);
   void setIsWifiConfigured(bool state);
   void setRunSystemSettings(bool state);
+  void setAPN(const std::string &apn);
 
   void resetLedTestRequest();
   void resetCO2CalibrationRequest();

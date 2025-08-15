@@ -7,6 +7,7 @@
 
 #include "Configuration.h"
 #include "MaxConfig.h"
+#include "airgradientCellularClient.h"
 #include "esp_log.h"
 #include "ArduinoJson.h"
 #include "nvs.h"
@@ -25,6 +26,7 @@
 #define NVS_KEY_NETWORK_OPTION "netOpt"
 #define NVS_KEY_WIFI_CONFIGURED "wifiset"
 #define NVS_KEY_SYSTEM_SETTINGS "sysset"
+#define NVS_KEY_APN "apn"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -51,6 +53,7 @@ bool Configuration::load() {
            _config.networkOption == NetworkOption::Cellular ? "Cellular" : "WiFi");
   ESP_LOGI(TAG, "isWifiConfigured: %d", _config.isWifiConfigured);
   ESP_LOGI(TAG, "runSystemSettings: %d", _config.runSystemSettings);
+  ESP_LOGI(TAG, "apn: %s", _config.apn.c_str());
   ESP_LOGI(TAG, "**** ****");
 
   return true;
@@ -329,6 +332,22 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get runSystemSettings");
   }
 
+  requiredSize = 0;
+  err = nvs_get_str(handle, NVS_KEY_APN, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_APN, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.apn = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get apn");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get apn");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -410,6 +429,11 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save runSystemSettings");
   }
 
+  err = nvs_set_str(handle, NVS_KEY_APN, _config.apn.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save apn");
+  }
+
   // Commit changes
   ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
@@ -452,14 +476,10 @@ bool Configuration::isWifiConfigured() { return _config.isWifiConfigured; }
 
 bool Configuration::runSystemSettings() { return _config.runSystemSettings; }
 
-void Configuration::switchNetworkOption() {
-  if (_config.networkOption == NetworkOption::Cellular) {
-    ESP_LOGI(TAG, "Switch network option to WiFi");
-    _config.networkOption = NetworkOption::WiFi;
-  } else {
-    ESP_LOGI(TAG, "Switch network option to Cellular");
-    _config.networkOption = NetworkOption::Cellular;
-  }
+std::string Configuration::getAPN() { return _config.apn; }
+
+void Configuration::setNetworkOption(NetworkOption option) {
+  _config.networkOption = option;
   _saveConfig();
 }
 
@@ -470,6 +490,11 @@ void Configuration::setIsWifiConfigured(bool state) {
 
 void Configuration::setRunSystemSettings(bool state) {
   _config.runSystemSettings = state;
+  _saveConfig();
+}
+
+void Configuration::setAPN(const std::string &apn) {
+  _config.apn = apn;
   _saveConfig();
 }
 
@@ -495,4 +520,5 @@ void Configuration::_setConfigToDefault() {
   _config.networkOption = NetworkOption::Cellular;
   _config.isWifiConfigured = false;
   _config.runSystemSettings = false;
+  _config.apn = DEFAULT_AIRGRADIENT_APN;
 }
