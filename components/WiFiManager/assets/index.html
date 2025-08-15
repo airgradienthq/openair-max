@@ -120,30 +120,21 @@
                 .then(data => {
                     const statusDiv = document.getElementById('status');
                     const statusInfo = document.getElementById('statusInfo');
-
-                    switch (data.mode) {
-                        case 'cellular':
-                            if (data.connected) {
-                                statusDiv.className = 'status status-success';
-                                statusInfo.innerHTML = `Mode: <strong>Cellular</strong><br>Operator: <strong>${data.operator || 'Unknown'}</strong><br>IP Address: ${data.ip}`;
-                            } else {
-                                statusDiv.className = 'status status-error';
-                                statusInfo.innerHTML = `Mode: <strong>Cellular</strong><br>Connection failed. Check APN and signal.`;
-                            }
-                            break;
-                        case 'wifi':
-                            if (data.connected) {
-                                statusDiv.className = 'status status-success';
-                                statusInfo.innerHTML = `Mode: <strong>WiFi</strong><br>Connected to: <strong>${data.ssid}</strong><br>IP Address: ${data.ip}`;
-                            } else {
-                                statusDiv.className = 'status status-error';
-                                statusInfo.innerHTML = `Mode: <strong>WiFi</strong><br>Failed to connect to saved network.`;
-                            }
-                            break;
-                        default:
-                            statusDiv.className = 'status';
-                            statusInfo.innerHTML = 'No network configured. Open System Settings to begin.';
-                            break;
+                    if (data.net_mode === 'wifi') {
+                        statusDiv.style.display = 'block'; // Make the block visible
+                        if (data.connected) {
+                            statusDiv.className = 'status status-success';
+                            statusInfo.innerHTML = `Connected to: <strong>${data.ssid}</strong><br>IP Address: ${data.ip}`;
+                        } else if (data.saved_ssid) {
+                            statusDiv.className = 'status status-error';
+                            statusInfo.innerHTML = `Not connected to: <strong>${data.saved_ssid}</strong><br>AP not found or connection failed`;
+                        } else {
+                            statusDiv.className = 'status status-error';
+                            statusInfo.innerHTML = 'No WiFi configured. Use Configure WiFi to set up connection.';
+                        }
+                    } else {
+                        // don't show connection status label for cellular (for now)
+                        statusDiv.style.display = 'none';
                     }
                 })
                 .catch(error => {

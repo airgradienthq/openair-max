@@ -1421,8 +1421,11 @@ esp_err_t WiFiManager::handleStatus(httpd_req_t *req) {
     snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
   }
 
+  WiFiManager *manager = getManagerFromRequest(req);
+
   // Create JSON response
   cJSON *status_json = cJSON_CreateObject();
+  cJSON_AddStringToObject(status_json, "net_mode", manager->_settings.networkMode.c_str());
   if (status_json) {
     cJSON_AddBoolToObject(status_json, "connected", connected);
     if (connected) {
