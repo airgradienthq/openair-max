@@ -461,11 +461,11 @@ int16_t Sunlight::read_sensor_measurements() {
   return co2Value;
 }
 
-void Sunlight::read_sensor_id() {
+bool Sunlight::read_sensor_id() {
   /* Vendor Name */
   if (read_device_id(CO2_SUNLIGHT_ADDR, 0) != 0) {
     ESP_LOGE(TAG, "Failed to read vendor name");
-    return;
+    return false;
   }
 
   ESP_LOGI(TAG, "Vendor name: %s", device);
@@ -473,7 +473,7 @@ void Sunlight::read_sensor_id() {
   /* ProductCode */
   if (read_device_id(CO2_SUNLIGHT_ADDR, 1) != 0) {
     ESP_LOGE(TAG, "Failed to read product code");
-    return;
+    return false;
   }
 
   ESP_LOGI(TAG, "Product code: %s", device);
@@ -481,10 +481,11 @@ void Sunlight::read_sensor_id() {
   /* MajorMinorRevision */
   if (read_device_id(CO2_SUNLIGHT_ADDR, 2) != 0) {
     ESP_LOGE(TAG, "Failed to read MajorMinorRevision");
-    return;
+    return false;
   }
 
   ESP_LOGI(TAG, "MajorMinorRevision: %s", device);
+  return true;
 }
 
 int Sunlight::startManualBackgroundCalibration() {
