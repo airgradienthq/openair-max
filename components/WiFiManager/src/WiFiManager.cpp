@@ -337,18 +337,15 @@ bool WiFiManager::startConfigPortal(const char *apName, const char *apPassword) 
 bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPassword) {
   WM_LOGI("StartConfigPortal called with AP: %s", apName ? apName : "null");
 
-  // Initialize if not already done
-  init();
-
-  // Fill out existing ssid if any
-  _settings.ssid = getSSID();
-
   if (apName) {
     _apName = apName;
   }
   if (apPassword) {
     _apPassword = apPassword;
   }
+
+  // Initialize if not already done
+  init();
 
   _state = WM_STATE_START_PORTAL;
   _portalAbortResult = false;
@@ -361,7 +358,10 @@ bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPa
     return false;
   }
 
-  WM_LOGI("Starting AP mode with SSID: %s", _apName.c_str());
+  // Fill out existing ssid if any
+  _settings.ssid = getSSID();
+  WM_LOGI("Previous SSID to connect: %s", _settings.ssid.c_str());
+
   // Start AP mode
   if (!startAP(_apName.c_str(), _apPassword.empty() ? nullptr : _apPassword.c_str())) {
     WM_LOGE("Failed to start AP");

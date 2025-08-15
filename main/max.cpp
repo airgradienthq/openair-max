@@ -192,7 +192,8 @@ extern "C" void app_main(void) {
     // Run portal
     std::string ssid = std::string("airgradient-") + g_serialNumber;
     g_wifiManager.setConfigPortalBlocking(true);
-    bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair"); // TODO: Change to constant password
+    bool success = g_wifiManager.startConfigPortal(ssid.c_str(),
+                                                   "cleanair"); // TODO: Change to constant password
     if (!success) {
       // TODO: Need to properly defined here, if abort then set runSystemSetting to false
       // Portal either timeout or canceled or failed to connect to wifi using provided credentials
@@ -218,6 +219,12 @@ extern "C" void app_main(void) {
     config.networkOption = NetworkOption::WiFi;
     config.isWifiConfigured = true;
     g_configuration.set(config);
+
+    // Wifi is ready from the start
+    g_networkReady = true;
+    // Starting time for every cycle should start now because time taken by system settings portal
+    wakeUpMillis = MILLIS();
+    g_statusLed.on();
   }
 
   // Run led test if requested
