@@ -10,12 +10,21 @@
 #include "AirgradientUART.h"
 #include "AlphaSenseSensor.h"
 #include "BQ25672.h"
+#include "driver/gpio.h"
 #include "esp_log_level.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/projdefs.h"
+#include "freertos/task.h"
 #include "MaxConfig.h"
+#include "esp_sleep.h"
 #include <cmath>
+
+// RTC memory variable to store CO2 measurement samples configuration status
+RTC_DATA_ATTR static uint8_t rtc_samples_configured = 0;
+
+// CO2 sensor measurement samples configuration
+#define CO2_MEASUREMENT_SAMPLES 1  // Number of samples (1-1024), lower = less power consumption
 
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "esp_log.h"
@@ -33,7 +42,74 @@ bool Sensor::init(Configuration::Model model, int co2ABCDays) {
     _co2Available = false;
   } else {
     co2_ = new Sunlight(*agsCO2_);
-    co2_->read_sensor_id();
+    if (!co2_->read_sensor_id()) {
+      ESP_LOGW(TAG, "Failed to read CO2 sensor ID during initialization");
+    }
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    
+    // Check if measurement samples have been configured before (using RTC memory)
+    ESP_LOGI(TAG, "RTC samples configuration status: %d", rtc_samples_configured);
+    
+    // Set measurement samples only if not configured before
+    if (rtc_samples_configured == 0) {
+      ESP_LOGI(TAG, "First time setup - configuring measurement samples...");
+      bool samplesChanged = co2_->set_measurement_samples(CO2_MEASUREMENT_SAMPLES); // Use defined value for samples
+
+      if (samplesChanged) {
+        // Restart CO2 sensor to apply measurement samples setting
+        ESP_LOGI(TAG, "Restarting CO2 sensor to apply measurement samples setting...");
+        
+        // Disable GPIO hold before reset
+        gpio_hold_dis(EN_CO2);
+        
+        gpio_set_level(EN_CO2, 0); // Turn off CO2 sensor
+        vTaskDelay(pdMS_TO_TICKS(2000)); // Wait 2 seconds
+        gpio_set_level(EN_CO2, 1); // Turn on CO2 sensor
+        vTaskDelay(pdMS_TO_TICKS(3000)); // Wait 3 seconds for sensor to stabilize
+        
+        // Enable GPIO hold after reset
+        gpio_hold_en(EN_CO2);
+        
+        // Re-initialize sensor after restart
+        if (!co2_->read_sensor_id()) {
+          ESP_LOGW(TAG, "Failed to read CO2 sensor ID after restart");
+        }
+        
+        // Wait for valid CO2 reading (non-zero value)
+        ESP_LOGI(TAG, "Waiting for valid CO2 reading after restart...");
+        int16_t co2_reading = 0;
+        int retry_count = 0;
+        const int max_retries = 30; // Maximum 30 attempts (about 30 seconds)
+        
+        do {
+          co2_reading = co2_->read_sensor_measurements();
+          retry_count++;
+          ESP_LOGI(TAG, "CO2 reading attempt %d: %d ppm", retry_count, co2_reading);
+          
+          if (co2_reading > 0) {
+            ESP_LOGI(TAG, "Valid CO2 reading obtained: %d ppm", co2_reading);
+            break;
+          }
+        
+        if (retry_count >= max_retries) {
+          ESP_LOGW(TAG, "Maximum retry attempts reached, proceeding with current reading");
+          break;
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Wait 1 second before next attempt
+      } while (co2_reading <= 0);
+      
+      // Mark samples as configured in RTC memory
+      rtc_samples_configured = 1;
+      ESP_LOGI(TAG, "Samples configuration status saved to RTC memory");
+    } else {
+      ESP_LOGI(TAG, "Measurement samples setting unchanged or failed - no restart needed");
+    }
+    } else {
+      ESP_LOGI(TAG, "Measurement samples already configured, skipping setup...");
+    }
+    
+    co2_->read_sensor_config(); // Check measurement samples setting
     co2_->setABC(true);
     co2_->setABCPeriod(co2ABCDays * 24); // Convert to hours
     ESP_LOGI(TAG, "CO2 ABC status: %d", co2_->isABCEnabled() ? 1 : 0);
@@ -219,6 +295,34 @@ AirgradientClient::MaxSensorPayload Sensor::getLastAverageMeasure() { return _av
 
 bool Sensor::co2AttemptManualCalibration() {
   ESP_LOGI(TAG, "Attempt to do manual calibration");
+  
+  // Read sensor ID until successful before calibration
+  ESP_LOGI(TAG, "Reading CO2 sensor ID before calibration...");
+  int id_retry_count = 0;
+  const int max_id_retries = 10; // Maximum 10 attempts to read sensor ID
+  bool id_read_success = false;
+  
+  while (id_retry_count < max_id_retries) {
+    // Try to read sensor ID
+    id_read_success = co2_->read_sensor_id();
+    id_retry_count++;
+    
+    if (id_read_success) {
+      ESP_LOGI(TAG, "Sensor ID read successfully on attempt %d", id_retry_count);
+      break;
+    } else {
+      ESP_LOGW(TAG, "Sensor ID read failed on attempt %d, retrying...", id_retry_count);
+      vTaskDelay(pdMS_TO_TICKS(1000)); // Wait 1 second between attempts
+    }
+  }
+  
+  if (!id_read_success) {
+    ESP_LOGE(TAG, "Failed to read sensor ID after %d attempts, aborting calibration", max_id_retries);
+    return false;
+  }
+  
+  ESP_LOGI(TAG, "Sensor ID read successfully, proceeding with calibration");
+  
   int error = co2_->startManualBackgroundCalibration();
   if (error != 0) {
     ESP_LOGE(TAG, "CO2 calibration Failed!");

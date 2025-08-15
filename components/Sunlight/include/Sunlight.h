@@ -109,7 +109,7 @@ public:
    *         sensor's Vendor Name, ProductCode and MajorMinorRevision.
    * @retval None
    */
-  void read_sensor_id();
+  bool read_sensor_id();
 
   /**
    * @brief  Changes the sensor's current measurement mode
