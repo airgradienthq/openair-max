@@ -431,17 +431,14 @@ bool Sunlight::set_measurement_samples(uint16_t number) {
     return false;
   }
 
-  if (values[0] != number) {
-    ESP_LOGI(TAG, "Changing measurement samples to %d", number);
-    if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg, change) != 0) {
-      ESP_LOGE(TAG, "Failed to change Measurement samples");
-      return false;
-    }
-
-    ESP_LOGI(TAG, "Sensor restart is required to apply changes");
-    return true;
+  ESP_LOGI(TAG, "Changing measurement samples to %d", number);
+  if (write_multiple_registers(CO2_SUNLIGHT_ADDR, MEASUREMENT_SAMPLES, numReg, change) != 0) {
+    ESP_LOGE(TAG, "Failed to change Measurement samples");
+    return false;
   }
-  return false;
+
+  ESP_LOGI(TAG, "Sensor restart is required to apply changes");
+  return true;
 }
 
 int16_t Sunlight::read_sensor_measurements() {
@@ -464,11 +461,11 @@ int16_t Sunlight::read_sensor_measurements() {
   return co2Value;
 }
 
-void Sunlight::read_sensor_id() {
+bool Sunlight::read_sensor_id() {
   /* Vendor Name */
   if (read_device_id(CO2_SUNLIGHT_ADDR, 0) != 0) {
     ESP_LOGE(TAG, "Failed to read vendor name");
-    return;
+    return false;
   }
 
   ESP_LOGI(TAG, "Vendor name: %s", device);
@@ -476,7 +473,7 @@ void Sunlight::read_sensor_id() {
   /* ProductCode */
   if (read_device_id(CO2_SUNLIGHT_ADDR, 1) != 0) {
     ESP_LOGE(TAG, "Failed to read product code");
-    return;
+    return false;
   }
 
   ESP_LOGI(TAG, "Product code: %s", device);
@@ -484,10 +481,11 @@ void Sunlight::read_sensor_id() {
   /* MajorMinorRevision */
   if (read_device_id(CO2_SUNLIGHT_ADDR, 2) != 0) {
     ESP_LOGE(TAG, "Failed to read MajorMinorRevision");
-    return;
+    return false;
   }
 
   ESP_LOGI(TAG, "MajorMinorRevision: %s", device);
+  return true;
 }
 
 int Sunlight::startManualBackgroundCalibration() {
