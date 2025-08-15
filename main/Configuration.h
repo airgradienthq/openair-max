@@ -34,6 +34,8 @@ public:
     Firmware firmware;
     NetworkOption networkOption;
     bool isWifiConfigured;
+    bool runSystemSettings;
+    std::string apn;
   };
 
   Configuration() {}
@@ -43,6 +45,7 @@ public:
   bool parseRemoteConfig(const std::string &config);
 
   // Getter
+  Config get();
   bool isConfigChanged();
   bool isCO2CalibrationRequested();
   bool isLedTestRequested();
@@ -52,10 +55,15 @@ public:
   Model getModel();
   NetworkOption getNetworkOption();
   bool isWifiConfigured();
+  bool runSystemSettings();
+  std::string getAPN();
 
   // Setter
-  void switchNetworkOption();
+  bool set(Config config);
+  void setNetworkOption(NetworkOption option);
   void setIsWifiConfigured(bool state);
+  void setRunSystemSettings(bool state);
+  void setAPN(const std::string &apn);
 
   void resetLedTestRequest();
   void resetCO2CalibrationRequest();
@@ -67,6 +75,7 @@ private:
 
   bool _loadConfig();
   bool _saveConfig();
+  void _printConfig();
   void _setConfigToDefault();
 };
 
