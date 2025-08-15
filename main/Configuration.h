@@ -45,6 +45,7 @@ public:
   bool parseRemoteConfig(const std::string &config);
 
   // Getter
+  Config get();
   bool isConfigChanged();
   bool isCO2CalibrationRequested();
   bool isLedTestRequested();
@@ -58,6 +59,7 @@ public:
   std::string getAPN();
 
   // Setter
+  bool set(Config config);
   void setNetworkOption(NetworkOption option);
   void setIsWifiConfigured(bool state);
   void setRunSystemSettings(bool state);

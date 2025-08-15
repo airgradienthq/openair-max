@@ -447,6 +447,8 @@ bool Configuration::_saveConfig() {
   return true;
 }
 
+Configuration::Config Configuration::get() { return _config; }
+
 bool Configuration::isConfigChanged() { return _configChanged; }
 
 bool Configuration::isCO2CalibrationRequested() { return _config.co2CalibrationRequested; }
@@ -477,6 +479,11 @@ bool Configuration::isWifiConfigured() { return _config.isWifiConfigured; }
 bool Configuration::runSystemSettings() { return _config.runSystemSettings; }
 
 std::string Configuration::getAPN() { return _config.apn; }
+
+bool Configuration::set(Config config) {
+  _config = config;
+  return _saveConfig();
+}
 
 void Configuration::setNetworkOption(NetworkOption option) {
   _config.networkOption = option;

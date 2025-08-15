@@ -170,26 +170,54 @@ extern "C" void app_main(void) {
   // Load configuration that saved on NVS
   g_configuration.load();
 
-  if (g_configuration.getNetworkOption() == NetworkOption::WiFi) {
-    std::string ssid = std::string("airgradient-") + g_serialNumber;
-    if (g_configuration.isWifiConfigured() == false && xWakeUpCounter == 0) {
-      g_statusLed.blinkAsync(0, 100);
-      ESP_LOGI(TAG, "Credentials haven't set yet, running portal");
-      g_wifiManager.setConfigPortalBlocking(true);
-      bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
-      if (!success) {
-        // Portal either timeout or canceled or failed to connect to wifi using provided credentials
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        esp_restart();
-      }
-      g_configuration.setIsWifiConfigured(true);
-      // Wifi is ready from the start
-      g_networkReady = true;
-      // Reset because wifi portal triggered and wifi successfully connected
-      wakeUpMillis = MILLIS();
-      g_statusLed.on();
+  /** Run system settings if
+   *    system setting expected to run OR
+   *    (network option is wifi AND wifi haven't configured)
+   */
+  if (g_configuration.runSystemSettings() ||
+      (g_configuration.getNetworkOption() == NetworkOption::WiFi &&
+       g_configuration.isWifiConfigured() == false)) {
+    // Run indicator that portal is currently running
+    g_statusLed.blinkAsync(0, 100);
+
+    SettingsForm settings;
+    if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+      settings.networkMode = "cellular"; // TODO: Change this value to constant of wifimanager
+    } else {
+      settings.networkMode = "wifi"; // TODO: Change this value to constant of wifimanager
     }
-    ESP_LOGI(TAG, "Application continue using wifi...");
+    settings.apn = g_configuration.getAPN();
+    g_wifiManager.setSettings(settings);
+
+    // Run portal
+    std::string ssid = std::string("airgradient-") + g_serialNumber;
+    g_wifiManager.setConfigPortalBlocking(true);
+    bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair"); // TODO: Change to constant password
+    if (!success) {
+      // TODO: Need to properly defined here, if abort then set runSystemSetting to false
+      // Portal either timeout or canceled or failed to connect to wifi using provided credentials
+      esp_restart();
+    }
+
+    // Keep the changes and save to persistant configuration
+    auto config = g_configuration.get();
+    settings = g_wifiManager.getSettings();
+    config.runSystemSettings = false;
+    if (settings.networkMode == "cellular") { // TODO: Change this value to constant of wifimanager
+      config.networkOption = NetworkOption::Cellular;
+      config.apn = settings.apn;
+      g_configuration.set(config);
+
+      // Notify that it success and restart
+      g_statusLed.on();
+      vTaskDelay(pdMS_TO_TICKS(2000));
+      esp_restart();
+    }
+
+    // No need to restart for wifi mode, just continue because its already successfuly connect
+    config.networkOption = NetworkOption::WiFi;
+    config.isWifiConfigured = true;
+    g_configuration.set(config);
   }
 
   // Run led test if requested

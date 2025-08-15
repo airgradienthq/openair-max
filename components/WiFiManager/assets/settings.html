@@ -53,6 +53,21 @@
         .wifi-signal .bar { width: 3px; background-color: currentColor; opacity: 0.3; }
         .wifi-signal .bar1 { height: 4px; } .wifi-signal .bar2 { height: 8px; } .wifi-signal .bar3 { height: 12px; } .wifi-signal .bar4 { height: 16px; }
         .wifi-signal.signal-1 .bar1 { opacity: 1; } .wifi-signal.signal-2 .bar1, .wifi-signal.signal-2 .bar2 { opacity: 1; } .wifi-signal.signal-3 .bar1, .wifi-signal.signal-3 .bar2, .wifi-signal.signal-3 .bar3 { opacity: 1; } .wifi-signal.signal-4 .bar { opacity: 1; }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-top: -5px;
+            margin-bottom: 10px;
+        }
+        .checkbox-group input {
+            width: auto;
+            margin-right: 8px;
+        }
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-weight: normal;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -91,6 +106,10 @@
                 <label for="p">Password</label>
                 <input id="p" name="p" type="password" placeholder="Enter password">
             </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="showPass" onchange="togglePassword()">
+                <label for="showPass">Show Password</label>
+            </div>
         </div>
 
         <!-- CELLULAR SETTINGS (Conditional) -->
@@ -117,8 +136,10 @@
         document.getElementById('cellular_settings').classList.toggle('hidden', useWifi);
     }
 
-    function toggleStaticIP(isStatic) {
-        document.getElementById('static_ip_fields').classList.toggle('hidden', !isStatic);
+    function togglePassword() {
+        const passwordField = document.getElementById('p');
+        const checkbox = document.getElementById('showPass');
+        passwordField.type = checkbox.checked ? 'text' : 'password';
     }
     
     // --- Functions reused from your original wifi.html ---
