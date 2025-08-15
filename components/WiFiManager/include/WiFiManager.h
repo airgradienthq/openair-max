@@ -14,6 +14,9 @@
 #include <mutex>
 #include <functional>
 
+#define NETWORK_MODE_CELLULAR_STR "cellular"
+#define NETWORK_MODE_WIFI_STR "wifi"
+
 // Forward declarations
 class WiFiManager;
 

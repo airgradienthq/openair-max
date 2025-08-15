@@ -1714,9 +1714,7 @@ esp_err_t WiFiManager::handleSettingsSave(httpd_req_t *req) {
   SettingsForm settings = parseFormParams(buf.get());
   buf.release(); // For optimization. no need anymore
 
-  std::string successMessage;
-
-  if (settings.networkMode == "cellular") {
+  if (settings.networkMode == NETWORK_MODE_CELLULAR_STR) {
     // Do cellular things
     esp_err_t err = performSettingCellular(req, settings);
     if (err != ESP_OK) {

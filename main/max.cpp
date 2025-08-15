@@ -182,9 +182,9 @@ extern "C" void app_main(void) {
 
     SettingsForm settings;
     if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
-      settings.networkMode = "cellular"; // TODO: Change this value to constant of wifimanager
+      settings.networkMode = NETWORK_MODE_CELLULAR_STR;
     } else {
-      settings.networkMode = "wifi"; // TODO: Change this value to constant of wifimanager
+      settings.networkMode = NETWORK_MODE_WIFI_STR;
     }
     settings.apn = g_configuration.getAPN();
     g_wifiManager.setSettings(settings);
@@ -192,8 +192,7 @@ extern "C" void app_main(void) {
     // Run portal
     std::string ssid = std::string("airgradient-") + g_serialNumber;
     g_wifiManager.setConfigPortalBlocking(true);
-    bool success = g_wifiManager.startConfigPortal(ssid.c_str(),
-                                                   "cleanair"); // TODO: Change to constant password
+    bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
     if (!success) {
       // TODO: Need to properly defined here, if abort then set runSystemSetting to false
       // Portal either timeout or canceled or failed to connect to wifi using provided credentials
@@ -207,7 +206,7 @@ extern "C" void app_main(void) {
     auto config = g_configuration.get();
     config.runSystemSettings = false;
     settings = g_wifiManager.getSettings();
-    if (settings.networkMode == "cellular") { // TODO: Change this value to constant of wifimanager
+    if (settings.networkMode == NETWORK_MODE_CELLULAR_STR) {
       config.networkOption = NetworkOption::Cellular;
       config.apn = settings.apn;
       g_configuration.set(config);
