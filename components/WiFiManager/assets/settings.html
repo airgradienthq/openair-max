@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>System Settings</title>
+    <!-- You can link your existing style.css if it's served, or just use the styles below -->
+    <!-- <link rel="stylesheet" href="style.css"> -->
+    <style>
+        /* Re-using and adapting styles from your project for a consistent look */
+        body { font-family: verdana, sans-serif; background: #252525; color: #eee; margin: 0; padding: 0; }
+        .wrap { max-width: 320px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; margin: 20px 0; font-size: 1.5em; }
+        .back-link { text-align: center; margin-bottom: 20px; }
+        .back-link a { color: #1fa3ec; text-decoration: none; font-size: 0.9em; }
+        .form-section { margin: 20px 0; padding: 20px; background: #333; border: 1px solid #555; border-radius: 5px; }
+        .form-section h3 { margin: 0 0 15px 0; color: #1fa3ec; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="password"], input[type="number"] { width: 100%; padding: 10px; font-size: 1em; border: 1px solid #555; background: #444; color: #eee; border-radius: 3px; box-sizing: border-box; }
+        .button-group { display: flex; gap: 10px; margin-top: 20px; }
+        .button-group button { flex: 1; padding: 12px; font-size: 1em; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #1fa3ec; color: #fff; transition: background-color 0.2s; }
+        .button-group button:hover { background: #1890d0; }
+        .hidden { display: none; }
+
+        /* --- New Styles for Toggles --- */
+        .mode-selector { display: flex; border: 1px solid #555; border-radius: 5px; overflow: hidden; }
+        .mode-selector input { display: none; }
+        .mode-selector label { flex: 1; text-align: center; padding: 12px; background: #444; cursor: pointer; font-weight: bold; transition: background-color 0.2s; }
+        .mode-selector input:checked + label { background: #1fa3ec; color: #fff; }
+
+        /* --- Styles from original wifi.html for network list --- */
+        .networks { margin: 20px 0; }
+        .networks h4 { margin: 0 0 10px 0; color: #eee; }
+        
+        /* --- MODIFIED: Added a scrollable container for the network list --- */
+        .networks-container {
+            max-height: 180px; /* Adjust this value as needed */
+            overflow-y: auto;
+            border: 1px solid #444;
+            border-radius: 3px;
+            padding: 5px;
+            background: #2c2c2c;
+        }
+        
+        .network { padding: 12px; margin: 5px 0; background: #444; border: 1px solid #555; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-radius: 3px; }
+        .network:hover { background: #555; }
+        .network.selected { background: #1fa3ec; border-color: #1fa3ec; }
+        .network-name { font-weight: bold; }
+        .loading { text-align: center; padding: 20px; color: #aaa; }
+        .refresh-link a { color: #1fa3ec; text-decoration: none; }
+        .wifi-signal { display: inline-flex; align-items: flex-end; height: 16px; gap: 1px; }
+        .wifi-signal .bar { width: 3px; background-color: currentColor; opacity: 0.3; }
+        .wifi-signal .bar1 { height: 4px; } .wifi-signal .bar2 { height: 8px; } .wifi-signal .bar3 { height: 12px; } .wifi-signal .bar4 { height: 16px; }
+        .wifi-signal.signal-1 .bar1 { opacity: 1; } .wifi-signal.signal-2 .bar1, .wifi-signal.signal-2 .bar2 { opacity: 1; } .wifi-signal.signal-3 .bar1, .wifi-signal.signal-3 .bar2, .wifi-signal.signal-3 .bar3 { opacity: 1; } .wifi-signal.signal-4 .bar { opacity: 1; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="back-link"><a href="/">&lt; Back to Home</a></div>
+    <h1>System Settings</h1>
+
+    <!-- All settings are in one form for a single save action -->
+    <form action="/settings-save" method="post">
+        <!-- NETWORK MODE SELECTION -->
+        <div class="form-section">
+            <h3>Network Mode</h3>
+            <div class="mode-selector">
+                <input type="radio" id="mode_wifi" name="net_mode" value="wifi" onchange="toggleNetworkSettings()">
+                <label for="mode_wifi">📶 WiFi</label>
+                <input type="radio" id="mode_cell" name="net_mode" value="cellular" onchange="toggleNetworkSettings()">
+                <label for="mode_cell">📱 Cellular</label>
+            </div>
+        </div>
+
+        <!-- WIFI SETTINGS (Conditional) -->
+        <div id="wifi_settings" class="form-section">
+            <h3>WiFi Settings</h3>
+            <div class="networks">
+                <h4>Available Networks (<span class="refresh-link"><a href="javascript:loadNetworks()">Refresh</a></span>)</h4>
+                <!-- MODIFIED: Wrapped the network list in the new scrollable container -->
+                <div id="networks" class="networks-container">
+                    <div class="loading">Scanning...</div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="s">SSID</label>
+                <input id="s" name="s" type="text" placeholder="Select a network or type SSID">
+            </div>
+            <div class="form-group">
+                <label for="p">Password</label>
+                <input id="p" name="p" type="password" placeholder="Enter password">
+            </div>
+        </div>
+
+        <!-- CELLULAR SETTINGS (Conditional) -->
+        <div id="cellular_settings" class="form-section hidden">
+            <h3>Cellular Settings</h3>
+            <div class="form-group">
+                <label for="apn">SIM Card APN</label>
+                <input id="apn" name="apn" type="text" placeholder="e.g., internet">
+            </div>
+        </div>
+        
+        <!-- SAVE BUTTON -->
+        <div class="button-group">
+            <button type="submit">Save Settings</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    // --- Logic for this new settings page ---
+    function toggleNetworkSettings() {
+        const useWifi = document.getElementById('mode_wifi').checked;
+        document.getElementById('wifi_settings').classList.toggle('hidden', !useWifi);
+        document.getElementById('cellular_settings').classList.toggle('hidden', useWifi);
+    }
+
+    function toggleStaticIP(isStatic) {
+        document.getElementById('static_ip_fields').classList.toggle('hidden', !isStatic);
+    }
+    
+    // --- Functions reused from your original wifi.html ---
+    let selectedNetworkEl = null;
+
+    function loadNetworks() {
+        const container = document.getElementById('networks');
+        container.innerHTML = '<div class="loading">Scanning for networks...</div>';
+        
+        fetch('/scan')
+            .then(response => response.json())
+            .then(networks => {
+                if (!networks || networks.length === 0) {
+                    container.innerHTML = '<div>No networks found.</div>';
+                    return;
+                }
+                networks.sort((a, b) => b.rssi - a.rssi);
+                container.innerHTML = '';
+                networks.forEach(network => {
+                    if (!network.ssid) return;
+                    const div = document.createElement('div');
+                    div.className = 'network';
+                    div.onclick = () => selectNetwork(network.ssid, div);
+                    const signalIcon = getSignalIcon(network.rssi);
+                    const security = network.encryption > 0 ? '🔒' : '';
+                    div.innerHTML = `<div><div class="network-name">${escapeHtml(network.ssid)} ${security}</div></div>${signalIcon}`;
+                    container.appendChild(div);
+                });
+            })
+            .catch(error => {
+                console.error('Network scan failed:', error);
+                container.innerHTML = '<div>Error loading networks.</div>';
+            });
+    }
+
+    function loadSettings() {
+        fetch('/fetch-settings')
+            .then(response => response.json())
+            .then(settings => {
+                // Populate Network Mode
+                if (settings.net_mode === 'cellular') {
+                    document.getElementById('mode_cell').checked = true;
+                } else {
+                    document.getElementById('mode_wifi').checked = true;
+                }
+
+                // Populate WiFi Settings
+                if (settings.ssid) { // 's' for SSID
+                    document.getElementById('s').value = settings.s;
+                }
+                // Populate Cellular Settings
+                if (settings.apn) {
+                    document.getElementById('apn').value = settings.apn;
+                }
+
+                // Update UI visibility based on loaded settings
+                toggleNetworkSettings();
+            })
+            .catch(error => {
+                console.error('Failed to fetch settings:', error);
+                // Handle error, e.g., show a message to the user
+            });
+    }
+
+    function selectNetwork(ssid, element) {
+        if (selectedNetworkEl) {
+            selectedNetworkEl.classList.remove('selected');
+        }
+        selectedNetworkEl = element;
+        element.classList.add('selected');
+        document.getElementById('s').value = ssid;
+        document.getElementById('p').focus();
+    }
+
+    function getSignalIcon(rssi) {
+        let bars = 0;
+        if (rssi > -55) bars = 4;
+        else if (rssi > -65) bars = 3;
+        else if (rssi > -75) bars = 2;
+        else if (rssi > -85) bars = 1;
+        return `<div class="wifi-signal signal-${bars}"><div class="bar bar1"></div><div class="bar bar2"></div><div class="bar bar3"></div><div class="bar bar4"></div></div>`;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load saved settings concurrently, as soon as the page's DOM is ready. 
+        // This makes the UI populate with saved data much faster.
+        loadSettings();
+    });
+
+    // --- Initialize page state on load ---
+    window.onload = function() {
+        // Load WiFi networks immediately since it's the default view
+        loadNetworks();
+    };
+</script>
+</body>
+</html>

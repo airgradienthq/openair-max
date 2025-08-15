@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="format-detection" content="telephone=no">
-    <title>WiFiManager</title>
+    <title>Device Portal</title>
+    <!-- Your existing styles from index.html -->
     <style>
         body {
             font-family: verdana, sans-serif;
@@ -40,11 +41,12 @@
             background: #1fa3ec;
             color: #fff;
             text-align: center;
-            border-radius: 3px;
+            border-radius: 5px; /* Slightly more rounded corners */
             display: block;
             text-decoration: none;
             font-size: 1.1em;
             font-weight: bold;
+            transition: background-color 0.2s;
         }
         .menu a:hover {
             background: #1890d0;
@@ -54,7 +56,7 @@
             padding: 15px;
             background: #333;
             border: 1px solid #555;
-            border-radius: 3px;
+            border-radius: 5px;
         }
         .status-title {
             font-weight: bold;
@@ -86,56 +88,70 @@
 </head>
 <body>
     <div class="wrap">
-        <h1>WiFiManager</h1>
+        <h1>Device Portal</h1>
         <div class="device-name" id="deviceName">{v}</div>
-        
+
         <div class="menu">
-            <a href="/wifi">Configure WiFi</a>
-            <a href="/info">Info</a>
-            <a href="/exit">Exit</a>
+            <a href="/settings">⚙️ System Settings</a>
+            <a href="/info">ℹ️ Info</a>
+            <a href="/exit">🚪 Exit</a>
         </div>
-        
+
         <div class="status" id="status">
             <div class="status-title">Connection Status</div>
             <div class="status-info" id="statusInfo">
                 Checking connection status...
             </div>
         </div>
-        
+
         <div class="footer">
-            WiFiManager ESP-IDF
+            Embedded Portal
         </div>
     </div>
-    
+
     <script>
-        // Check connection status
         function checkStatus() {
+            // Your firmware's /status endpoint should now return a 'mode' field.
+            // Example WiFi response: { "mode": "wifi", "connected": true, "ssid": "MyHomeWiFi", "ip": "192.168.1.100" }
+            // Example Cellular response: { "mode": "cellular", "connected": true, "operator": "CarrierName", "ip": "10.0.0.50" }
+            // Example No Connection: { "mode": "none" }
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
                     const statusDiv = document.getElementById('status');
                     const statusInfo = document.getElementById('statusInfo');
-                    
-                    if (data.connected) {
-                        statusDiv.className = 'status status-success';
-                        statusInfo.innerHTML = `Connected to: <strong>${data.ssid}</strong><br>IP Address: ${data.ip}`;
-                    } else if (data.saved_ssid) {
-                        statusDiv.className = 'status status-error';
-                        statusInfo.innerHTML = `Not connected to: <strong>${data.saved_ssid}</strong><br>AP not found or connection failed`;
-                    } else {
-                        statusDiv.className = 'status';
-                        statusInfo.innerHTML = 'No WiFi configured. Use Configure WiFi to set up connection.';
+
+                    switch (data.mode) {
+                        case 'cellular':
+                            if (data.connected) {
+                                statusDiv.className = 'status status-success';
+                                statusInfo.innerHTML = `Mode: <strong>Cellular</strong><br>Operator: <strong>${data.operator || 'Unknown'}</strong><br>IP Address: ${data.ip}`;
+                            } else {
+                                statusDiv.className = 'status status-error';
+                                statusInfo.innerHTML = `Mode: <strong>Cellular</strong><br>Connection failed. Check APN and signal.`;
+                            }
+                            break;
+                        case 'wifi':
+                            if (data.connected) {
+                                statusDiv.className = 'status status-success';
+                                statusInfo.innerHTML = `Mode: <strong>WiFi</strong><br>Connected to: <strong>${data.ssid}</strong><br>IP Address: ${data.ip}`;
+                            } else {
+                                statusDiv.className = 'status status-error';
+                                statusInfo.innerHTML = `Mode: <strong>WiFi</strong><br>Failed to connect to saved network.`;
+                            }
+                            break;
+                        default:
+                            statusDiv.className = 'status';
+                            statusInfo.innerHTML = 'No network configured. Open System Settings to begin.';
+                            break;
                     }
                 })
                 .catch(error => {
                     console.error('Status check failed:', error);
-                    const statusDiv = document.getElementById('status');
-                    const statusInfo = document.getElementById('statusInfo');
-                    statusDiv.className = 'status';
-                    statusInfo.innerHTML = 'Unable to check connection status.';
+                    document.getElementById('statusInfo').innerHTML = 'Unable to check connection status.';
                 });
         }
-        
+
         // Check status on load and every 10 seconds
         window.onload = function() {
             checkStatus();
@@ -143,4 +159,4 @@
         };
     </script>
 </body>
-</html> 
+</html>

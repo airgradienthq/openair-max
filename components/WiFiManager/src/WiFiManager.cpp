@@ -340,6 +340,9 @@ bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPa
   // Initialize if not already done
   init();
 
+  // Fill out existing ssid if any
+  _settings.ssid = getSSID();
+
   if (apName) {
     _apName = apName;
   }
@@ -442,6 +445,10 @@ void WiFiManager::stopWebPortal() {
   WM_LOGI("Stopping web portal");
   stopHTTPServer();
 }
+
+void WiFiManager::setSettings(SettingsForm settings) { _settings = settings; }
+
+SettingsForm WiFiManager::getSettings() { return _settings; }
 
 bool WiFiManager::process() {
   std::lock_guard<std::mutex> lock(_mutex);
@@ -682,10 +689,15 @@ bool WiFiManager::startHTTPServer() {
       .uri = "/fwlink", .method = HTTP_GET, .handler = handleCaptivePortal, .user_ctx = this};
   httpd_register_uri_handler(_httpServer, &fwlink_uri);
 
-  // Add /wifi route (configure page)
+  // Add /setting route (configure page)
   httpd_uri_t wifi_uri = {
-      .uri = "/wifi", .method = HTTP_GET, .handler = handleWifi, .user_ctx = this};
+      .uri = "/settings", .method = HTTP_GET, .handler = handleSettings, .user_ctx = this};
   httpd_register_uri_handler(_httpServer, &wifi_uri);
+
+  // Add /fetch-setting route (load existing configuration)
+  httpd_uri_t fetchsettings_uri = {
+      .uri = "/fetch-settings", .method = HTTP_GET, .handler = handleFetchSettings, .user_ctx = this};
+  httpd_register_uri_handler(_httpServer, &fetchsettings_uri);
 
   // Add /status route (connection status JSON)
   httpd_uri_t status_uri = {
@@ -1326,12 +1338,8 @@ bool WiFiManager::scanWiFiNetworks() {
 // External binary data (embedded assets)
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 extern const uint8_t index_html_end[] asm("_binary_index_html_end");
-extern const uint8_t wifi_html_start[] asm("_binary_wifi_html_start");
-extern const uint8_t wifi_html_end[] asm("_binary_wifi_html_end");
-extern const uint8_t style_css_start[] asm("_binary_style_css_start");
-extern const uint8_t style_css_end[] asm("_binary_style_css_end");
-extern const uint8_t wm_js_start[] asm("_binary_wm_js_start");
-extern const uint8_t wm_js_end[] asm("_binary_wm_js_end");
+extern const uint8_t settings_html_start[] asm("_binary_settings_html_start");
+extern const uint8_t settings_html_end[] asm("_binary_settings_html_end");
 
 WiFiManager *WiFiManager::getManagerFromRequest(httpd_req_t *req) {
   return static_cast<WiFiManager *>(req->user_ctx);
@@ -1350,16 +1358,42 @@ esp_err_t WiFiManager::handleRoot(httpd_req_t *req) {
   return ESP_OK;
 }
 
-esp_err_t WiFiManager::handleWifi(httpd_req_t *req) {
-  WM_LOGD("Serving WiFi configure page");
+esp_err_t WiFiManager::handleSettings(httpd_req_t *req) {
+  WM_LOGD("Serving settings page");
 
   httpd_resp_set_type(req, "text/html");
   httpd_resp_set_hdr(req, "Cache-Control", "no-store");
 
   // Serve embedded WiFi HTML
-  const size_t wifi_html_len = wifi_html_end - wifi_html_start;
-  httpd_resp_send(req, (const char *)wifi_html_start, wifi_html_len);
+  const size_t settings_html_len = settings_html_end - settings_html_start;
+  httpd_resp_send(req, (const char *)settings_html_start, settings_html_len);
 
+  return ESP_OK;
+}
+
+esp_err_t WiFiManager::handleFetchSettings(httpd_req_t *req) {
+  WM_LOGD("Serving existing settings");
+
+  WiFiManager *manager = getManagerFromRequest(req);
+
+  // Create JSON response
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "net_mode", manager->_settings.networkMode.c_str());
+  cJSON_AddStringToObject(root, "apn", manager->_settings.apn.c_str());
+  cJSON_AddStringToObject(root, "ssid", manager->_settings.ssid.c_str());
+
+  char *json_string = cJSON_Print(root);
+  if (json_string) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_send(req, json_string, strlen(json_string));
+    free(json_string);
+  } else {
+    WM_LOGE("Failed to create JSON response");
+    httpd_resp_send_500(req);
+  }
+
+  cJSON_Delete(root);
   return ESP_OK;
 }
 
