@@ -23,6 +23,9 @@
 // RTC memory variable to store CO2 measurement samples configuration status
 RTC_DATA_ATTR static uint8_t rtc_samples_configured = 0;
 
+// CO2 sensor measurement samples configuration
+#define CO2_MEASUREMENT_SAMPLES 1  // Number of samples (1-1024), lower = less power consumption
+
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "esp_log.h"
 
@@ -50,7 +53,7 @@ bool Sensor::init(Configuration::Model model, int co2ABCDays) {
     // Set measurement samples only if not configured before
     if (rtc_samples_configured == 0) {
       ESP_LOGI(TAG, "First time setup - configuring measurement samples...");
-      bool samplesChanged = co2_->set_measurement_samples(1); // Set to use 1 sample for balance between power and accuracy
+      bool samplesChanged = co2_->set_measurement_samples(CO2_MEASUREMENT_SAMPLES); // Use defined value for samples
 
       if (samplesChanged) {
         // Restart CO2 sensor to apply measurement samples setting
