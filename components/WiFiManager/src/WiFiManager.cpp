@@ -1573,7 +1573,25 @@ esp_err_t WiFiManager::performSettingCellular(httpd_req_t *req, const SettingsFo
                     -1);
   }
 
-  // Nothing to do here
+  // Define success message for cellular mode
+  const char *successMessage = "<html><body>"
+                               "<h1>Configuration Saved!</h1>"
+                               "<p>Please wait and check if device able to communicate "
+                               "with our server</p>"
+                               "</body></html>";
+
+  httpd_resp_set_type(req, "text/html");
+  WM_LOGI("Sending HTTP response...");
+  esp_err_t send_ret = httpd_resp_send(req, successMessage, strlen(successMessage));
+  if (send_ret != ESP_OK) {
+    WM_LOGE("Failed to send HTTP response: %s", esp_err_to_name(send_ret));
+    return send_ret;
+  }
+
+  WM_LOGI("Waiting for HTTP response transmission to complete...");
+  // Give TCP stack time to actually send the data over WiFi
+  vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second should be enough for small response
+  WM_LOGI("HTTP response transmission complete");
 
   return ESP_OK;
 }
@@ -1624,6 +1642,28 @@ esp_err_t WiFiManager::performSettingWifi(httpd_req_t *req, const SettingsForm &
     WM_LOGE("Failed to start WiFi connection: %s", esp_err_to_name(err));
     // Don't return error here, connection might still succeed
   }
+
+  // Define success message for wifi mode
+  const char *successMessage =
+      "<html><body>"
+      "<h1>Connecting...</h1>"
+      "<p>Device is attempting to connect to the network.</p>"
+      "<p>Please wait and check your device's connection status.</p>"
+      "<script>setTimeout(function(){window.location.href='/';}, 5000);</script>"
+      "</body></html>";
+
+  httpd_resp_set_type(req, "text/html");
+  WM_LOGI("Sending HTTP response...");
+  esp_err_t send_ret = httpd_resp_send(req, successMessage, strlen(successMessage));
+  if (send_ret != ESP_OK) {
+    WM_LOGE("Failed to send HTTP response: %s", esp_err_to_name(send_ret));
+    return send_ret;
+  }
+
+  WM_LOGI("Waiting for HTTP response transmission to complete...");
+  // Give TCP stack time to actually send the data over WiFi
+  vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second should be enough for small response
+  WM_LOGI("HTTP response transmission complete");
 
   return ESP_OK;
 }
@@ -1679,13 +1719,8 @@ esp_err_t WiFiManager::handleSettingsSave(httpd_req_t *req) {
     if (err != ESP_OK) {
       return err;
     }
+    // Update manager state
     manager->_state = WM_STATE_NEW_SETTINGS;
-    // Define success message for cellular mode
-    successMessage = "<html><body>"
-                     "<h1>Configuration Saved!</h1>"
-                     "<p>Please wait and check if device able to communicate "
-                     "with our server</p>"
-                     "</body></html>";
 
   } else {
     // Do wifi things
@@ -1697,31 +1732,7 @@ esp_err_t WiFiManager::handleSettingsSave(httpd_req_t *req) {
     // Update manager state
     manager->_state = WM_STATE_TRY_STA;
     manager->_connectStart = esp_timer_get_time();
-
-    // Define success message for wifi mode
-    successMessage = "<html><body>"
-                     "<h1>Connecting...</h1>"
-                     "<p>Device is attempting to connect to the network.</p>"
-                     "<p>Please wait and check your device's connection status.</p>"
-                     "<script>setTimeout(function(){window.location.href='/';}, 5000);</script>"
-                     "</body></html>";
   }
-
-  httpd_resp_set_type(req, "text/html");
-  WM_LOGI("Sending HTTP response...");
-  esp_err_t send_ret = httpd_resp_send(req, successMessage.c_str(), successMessage.length());
-  if (send_ret != ESP_OK) {
-    WM_LOGE("Failed to send HTTP response: %s", esp_err_to_name(send_ret));
-    return send_ret;
-  }
-
-  // CRITICAL: Ensure the response is actually transmitted over the network
-  WM_LOGI("Waiting for HTTP response transmission to complete...");
-
-  // Give TCP stack time to actually send the data over WiFi
-  vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second should be enough for small response
-
-  WM_LOGI("HTTP response transmission complete");
 
   // Keep the settings
   manager->_settings = settings;

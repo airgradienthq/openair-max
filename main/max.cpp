@@ -200,10 +200,13 @@ extern "C" void app_main(void) {
       esp_restart();
     }
 
+    // Notify that it success and restart
+    g_statusLed.on();
+
     // Keep the changes and save to persistant configuration
     auto config = g_configuration.get();
-    settings = g_wifiManager.getSettings();
     config.runSystemSettings = false;
+    settings = g_wifiManager.getSettings();
     if (settings.networkMode == "cellular") { // TODO: Change this value to constant of wifimanager
       config.networkOption = NetworkOption::Cellular;
       config.apn = settings.apn;
@@ -224,7 +227,6 @@ extern "C" void app_main(void) {
     g_networkReady = true;
     // Starting time for every cycle should start now because time taken by system settings portal
     wakeUpMillis = MILLIS();
-    g_statusLed.on();
   }
 
   // Run led test if requested
@@ -651,6 +653,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   resetExtWatchdog();
 
   g_agClient->setNetworkRegistrationTimeoutMs(registrationTimeout);
+  g_agClient->setAPN(g_configuration.getAPN());
   if (g_agClient->begin(g_serialNumber, getPayloadType())) {
     // Connected
     if (wakeUpCounter == 0) {

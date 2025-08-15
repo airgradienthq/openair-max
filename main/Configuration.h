@@ -75,6 +75,7 @@ private:
 
   bool _loadConfig();
   bool _saveConfig();
+  void _printConfig();
   void _setConfigToDefault();
 };
 

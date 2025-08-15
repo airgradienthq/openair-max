@@ -40,6 +40,12 @@ bool Configuration::load() {
   }
 
   // Printout configurations
+  _printConfig();
+
+  return true;
+}
+
+void Configuration::_printConfig() {
   ESP_LOGI(TAG, "**** CONFIGURATION ****");
   ESP_LOGI(TAG, "co2CalibrationRequested: %d", _config.co2CalibrationRequested);
   ESP_LOGI(TAG, "ledTestRequested: %d", _config.ledTestRequested);
@@ -55,8 +61,6 @@ bool Configuration::load() {
   ESP_LOGI(TAG, "runSystemSettings: %d", _config.runSystemSettings);
   ESP_LOGI(TAG, "apn: %s", _config.apn.c_str());
   ESP_LOGI(TAG, "**** ****");
-
-  return true;
 }
 
 void Configuration::reset() {
@@ -429,6 +433,7 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save runSystemSettings");
   }
 
+  // APN
   err = nvs_set_str(handle, NVS_KEY_APN, _config.apn.c_str());
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "Failed to save apn");
@@ -482,6 +487,7 @@ std::string Configuration::getAPN() { return _config.apn; }
 
 bool Configuration::set(Config config) {
   _config = config;
+  _printConfig();
   return _saveConfig();
 }
 
