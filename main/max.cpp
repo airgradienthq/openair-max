@@ -194,8 +194,12 @@ extern "C" void app_main(void) {
     g_wifiManager.setConfigPortalBlocking(true);
     bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
     if (!success) {
-      // TODO: Need to properly defined here, if abort then set runSystemSetting to false
-      // Portal either timeout or canceled or failed to connect to wifi using provided credentials
+      if (g_wifiManager.getState() == WM_STATE_PORTAL_ABORT) {
+        // If portal is aborted, then disable system settings portal
+        ESP_LOGI(TAG, "System settings portal is aborted, disabling it.");
+        g_configuration.setRunSystemSettings(false);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+      }
       esp_restart();
     }
 
