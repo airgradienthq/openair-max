@@ -36,6 +36,7 @@ public:
     bool isWifiConfigured;
     bool runSystemSettings;
     std::string apn;
+    std::string mqttBrokerUrl;
   };
 
   Configuration() {}

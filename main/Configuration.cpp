@@ -27,6 +27,7 @@
 #define NVS_KEY_WIFI_CONFIGURED "wifiset"
 #define NVS_KEY_SYSTEM_SETTINGS "sysset"
 #define NVS_KEY_APN "apn"
+#define NVS_KEY_MQTT_HOST "mqtt"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -60,6 +61,7 @@ void Configuration::_printConfig() {
   ESP_LOGI(TAG, "isWifiConfigured: %d", _config.isWifiConfigured);
   ESP_LOGI(TAG, "runSystemSettings: %d", _config.runSystemSettings);
   ESP_LOGI(TAG, "apn: %s", _config.apn.c_str());
+  ESP_LOGI(TAG, "mqttBrokerUrl: %s", _config.mqttBrokerUrl.c_str());
   ESP_LOGI(TAG, "**** ****");
 }
 
@@ -195,6 +197,26 @@ bool Configuration::parseRemoteConfig(const std::string &config) {
     }
   } else {
     ESP_LOGW(TAG, "firmware field not found or not an object");
+  }
+
+  // mqttBrokerUrl 
+  if (root["mqttBrokerUrl"].is<const char *>()) {
+    str_val = root["mqttBrokerUrl"].as<std::string>();
+    if (_config.mqttBrokerUrl != str_val) {
+      ESP_LOGI(TAG, "mqttBrokerUrl value changed from %s to %s", _config.mqttBrokerUrl.c_str(),
+               str_val.c_str());
+      _config.mqttBrokerUrl = str_val;
+      _configChanged = true;
+    }
+  } else {
+    ESP_LOGW(TAG, "mqttBrokerUrl field not found or not a string");
+    if (_config.mqttBrokerUrl.empty() == false) {
+      // empty value on persistent storage means its disabled
+      // field not found from server means its disabled
+      ESP_LOGI(TAG, "Previously mqtt is enabled. Disabling it because now its not found");
+      _config.mqttBrokerUrl = "";
+      _configChanged = true;
+    }
   }
 
   ESP_LOGI(TAG, "Finish parsing remote configuration");
@@ -336,6 +358,7 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get runSystemSettings");
   }
 
+  // APN
   requiredSize = 0;
   err = nvs_get_str(handle, NVS_KEY_APN, NULL, &requiredSize);
   if (err == ESP_OK) {
@@ -350,6 +373,23 @@ bool Configuration::_loadConfig() {
     delete[] data;
   } else {
     ESP_LOGW(TAG, "Failed to get apn");
+  }
+
+  // MQTT
+  requiredSize = 0;
+  err = nvs_get_str(handle, NVS_KEY_MQTT_HOST, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_MQTT_HOST, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.mqttBrokerUrl = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get mqttBrokerUrl");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get mqttBrokerUrl");
   }
 
   // Close NVS
@@ -437,6 +477,12 @@ bool Configuration::_saveConfig() {
   err = nvs_set_str(handle, NVS_KEY_APN, _config.apn.c_str());
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "Failed to save apn");
+  }
+
+  // MQTT
+  err = nvs_set_str(handle, NVS_KEY_MQTT_HOST, _config.mqttBrokerUrl.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save mqttBrokerUrl");
   }
 
   // Commit changes
@@ -534,4 +580,5 @@ void Configuration::_setConfigToDefault() {
   _config.isWifiConfigured = false;
   _config.runSystemSettings = false;
   _config.apn = DEFAULT_AIRGRADIENT_APN;
+  _config.mqttBrokerUrl = "";
 }
