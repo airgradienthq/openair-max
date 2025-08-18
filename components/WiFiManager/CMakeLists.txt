@@ -22,9 +22,7 @@ idf_component_register(
 
 # Embed HTML assets
 target_add_binary_data(${COMPONENT_TARGET} "assets/index.html" TEXT)
-target_add_binary_data(${COMPONENT_TARGET} "assets/wifi.html" TEXT)
-target_add_binary_data(${COMPONENT_TARGET} "assets/style.css" TEXT)
-target_add_binary_data(${COMPONENT_TARGET} "assets/wm.js" TEXT)
+target_add_binary_data(${COMPONENT_TARGET} "assets/settings.html" TEXT)
 
 # Compile definitions
 target_compile_definitions(${COMPONENT_TARGET} PRIVATE

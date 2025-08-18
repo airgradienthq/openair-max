@@ -337,15 +337,15 @@ bool WiFiManager::startConfigPortal(const char *apName, const char *apPassword) 
 bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPassword) {
   WM_LOGI("StartConfigPortal called with AP: %s", apName ? apName : "null");
 
-  // Initialize if not already done
-  init();
-
   if (apName) {
     _apName = apName;
   }
   if (apPassword) {
     _apPassword = apPassword;
   }
+
+  // Initialize if not already done
+  init();
 
   _state = WM_STATE_START_PORTAL;
   _portalAbortResult = false;
@@ -358,7 +358,10 @@ bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPa
     return false;
   }
 
-  WM_LOGI("Starting AP mode with SSID: %s", _apName.c_str());
+  // Fill out existing ssid if any
+  _settings.ssid = getSSID();
+  WM_LOGI("Previous SSID to connect: %s", _settings.ssid.c_str());
+
   // Start AP mode
   if (!startAP(_apName.c_str(), _apPassword.empty() ? nullptr : _apPassword.c_str())) {
     WM_LOGE("Failed to start AP");
@@ -405,7 +408,7 @@ bool WiFiManager::startConfigPortalInternal(const char *apName, const char *apPa
     }
 
     // Check final state but don't cleanup servers yet
-    if (_state == WM_STATE_RUN_STA) {
+    if (_state == WM_STATE_RUN_STA || _state == WM_STATE_NEW_SETTINGS) {
       WM_LOGI("Config portal completed successfully");
       return true;
     } else {
@@ -442,6 +445,10 @@ void WiFiManager::stopWebPortal() {
   WM_LOGI("Stopping web portal");
   stopHTTPServer();
 }
+
+void WiFiManager::setSettings(SettingsForm settings) { _settings = settings; }
+
+SettingsForm WiFiManager::getSettings() { return _settings; }
 
 bool WiFiManager::process() {
   std::lock_guard<std::mutex> lock(_mutex);
@@ -651,9 +658,11 @@ bool WiFiManager::startHTTPServer() {
       .uri = "/scan", .method = HTTP_GET, .handler = handleScan, .user_ctx = this};
   httpd_register_uri_handler(_httpServer, &scan_uri);
 
-  httpd_uri_t wifisave_uri = {
-      .uri = "/wifisave", .method = HTTP_POST, .handler = handleWifiSave, .user_ctx = this};
-  httpd_register_uri_handler(_httpServer, &wifisave_uri);
+  httpd_uri_t settingsave_uri = {.uri = "/settings-save",
+                                 .method = HTTP_POST,
+                                 .handler = handleSettingsSave,
+                                 .user_ctx = this};
+  httpd_register_uri_handler(_httpServer, &settingsave_uri);
 
   httpd_uri_t info_uri = {
       .uri = "/info", .method = HTTP_GET, .handler = handleInfo, .user_ctx = this};
@@ -682,10 +691,17 @@ bool WiFiManager::startHTTPServer() {
       .uri = "/fwlink", .method = HTTP_GET, .handler = handleCaptivePortal, .user_ctx = this};
   httpd_register_uri_handler(_httpServer, &fwlink_uri);
 
-  // Add /wifi route (configure page)
+  // Add /setting route (configure page)
   httpd_uri_t wifi_uri = {
-      .uri = "/wifi", .method = HTTP_GET, .handler = handleWifi, .user_ctx = this};
+      .uri = "/settings", .method = HTTP_GET, .handler = handleSettings, .user_ctx = this};
   httpd_register_uri_handler(_httpServer, &wifi_uri);
+
+  // Add /fetch-setting route (load existing configuration)
+  httpd_uri_t fetchsettings_uri = {.uri = "/fetch-settings",
+                                   .method = HTTP_GET,
+                                   .handler = handleFetchSettings,
+                                   .user_ctx = this};
+  httpd_register_uri_handler(_httpServer, &fetchsettings_uri);
 
   // Add /status route (connection status JSON)
   httpd_uri_t status_uri = {
@@ -1326,12 +1342,8 @@ bool WiFiManager::scanWiFiNetworks() {
 // External binary data (embedded assets)
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 extern const uint8_t index_html_end[] asm("_binary_index_html_end");
-extern const uint8_t wifi_html_start[] asm("_binary_wifi_html_start");
-extern const uint8_t wifi_html_end[] asm("_binary_wifi_html_end");
-extern const uint8_t style_css_start[] asm("_binary_style_css_start");
-extern const uint8_t style_css_end[] asm("_binary_style_css_end");
-extern const uint8_t wm_js_start[] asm("_binary_wm_js_start");
-extern const uint8_t wm_js_end[] asm("_binary_wm_js_end");
+extern const uint8_t settings_html_start[] asm("_binary_settings_html_start");
+extern const uint8_t settings_html_end[] asm("_binary_settings_html_end");
 
 WiFiManager *WiFiManager::getManagerFromRequest(httpd_req_t *req) {
   return static_cast<WiFiManager *>(req->user_ctx);
@@ -1350,16 +1362,42 @@ esp_err_t WiFiManager::handleRoot(httpd_req_t *req) {
   return ESP_OK;
 }
 
-esp_err_t WiFiManager::handleWifi(httpd_req_t *req) {
-  WM_LOGD("Serving WiFi configure page");
+esp_err_t WiFiManager::handleSettings(httpd_req_t *req) {
+  WM_LOGD("Serving settings page");
 
   httpd_resp_set_type(req, "text/html");
   httpd_resp_set_hdr(req, "Cache-Control", "no-store");
 
   // Serve embedded WiFi HTML
-  const size_t wifi_html_len = wifi_html_end - wifi_html_start;
-  httpd_resp_send(req, (const char *)wifi_html_start, wifi_html_len);
+  const size_t settings_html_len = settings_html_end - settings_html_start;
+  httpd_resp_send(req, (const char *)settings_html_start, settings_html_len);
 
+  return ESP_OK;
+}
+
+esp_err_t WiFiManager::handleFetchSettings(httpd_req_t *req) {
+  WM_LOGD("Serving existing settings");
+
+  WiFiManager *manager = getManagerFromRequest(req);
+
+  // Create JSON response
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "net_mode", manager->_settings.networkMode.c_str());
+  cJSON_AddStringToObject(root, "apn", manager->_settings.apn.c_str());
+  cJSON_AddStringToObject(root, "ssid", manager->_settings.ssid.c_str());
+
+  char *json_string = cJSON_Print(root);
+  if (json_string) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_send(req, json_string, strlen(json_string));
+    free(json_string);
+  } else {
+    WM_LOGE("Failed to create JSON response");
+    httpd_resp_send_500(req);
+  }
+
+  cJSON_Delete(root);
   return ESP_OK;
 }
 
@@ -1383,8 +1421,11 @@ esp_err_t WiFiManager::handleStatus(httpd_req_t *req) {
     snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
   }
 
+  WiFiManager *manager = getManagerFromRequest(req);
+
   // Create JSON response
   cJSON *status_json = cJSON_CreateObject();
+  cJSON_AddStringToObject(status_json, "net_mode", manager->_settings.networkMode.c_str());
   if (status_json) {
     cJSON_AddBoolToObject(status_json, "connected", connected);
     if (connected) {
@@ -1486,7 +1527,151 @@ esp_err_t WiFiManager::handleScan(httpd_req_t *req) {
   return ESP_OK;
 }
 
-esp_err_t WiFiManager::handleWifiSave(httpd_req_t *req) {
+SettingsForm WiFiManager::parseFormParams(char *buf) {
+  SettingsForm form;
+  char *key = buf;
+  char *val = nullptr;
+
+  while (*key) {
+    // Find '='
+    val = std::strchr(key, '=');
+    if (!val)
+      break;
+    *val = '\0'; // terminate key
+    ++val;       // value starts here
+
+    // Find '&'
+    char *next = std::strchr(val, '&');
+    if (next) {
+      *next = '\0'; // terminate value
+      ++next;       // next key
+    }
+
+    // Match key to struct field
+    if (std::strcmp(key, "net_mode") == 0)
+      form.networkMode = val;
+    else if (std::strcmp(key, "s") == 0)
+      form.ssid = val;
+    else if (std::strcmp(key, "p") == 0)
+      form.password = val;
+    else if (std::strcmp(key, "apn") == 0)
+      form.apn = val;
+
+    if (!next)
+      break;
+    key = next;
+  }
+
+  return form;
+}
+
+esp_err_t WiFiManager::performSettingCellular(httpd_req_t *req, const SettingsForm &settings) {
+  // Check apn if its empty
+  if (settings.apn.empty()) {
+    // Send error response
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req,
+                    "<html><body><h1>Error: APN required for cellular network</h1><a "
+                    "href='/'>Back</a></body></html>",
+                    -1);
+  }
+
+  // Define success message for cellular mode
+  const char *successMessage = "<html><body>"
+                               "<h1>Configuration Saved!</h1>"
+                               "<p>Please wait and check if device able to communicate "
+                               "with our server</p>"
+                               "</body></html>";
+
+  httpd_resp_set_type(req, "text/html");
+  WM_LOGI("Sending HTTP response...");
+  esp_err_t send_ret = httpd_resp_send(req, successMessage, strlen(successMessage));
+  if (send_ret != ESP_OK) {
+    WM_LOGE("Failed to send HTTP response: %s", esp_err_to_name(send_ret));
+    return send_ret;
+  }
+
+  WM_LOGI("Waiting for HTTP response transmission to complete...");
+  // Give TCP stack time to actually send the data over WiFi
+  vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second should be enough for small response
+  WM_LOGI("HTTP response transmission complete");
+
+  return ESP_OK;
+}
+
+esp_err_t WiFiManager::performSettingWifi(httpd_req_t *req, const SettingsForm &settings) {
+  // Check ssid if its empty
+  if (settings.ssid.empty()) {
+    // Send error response
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(
+        req, "<html><body><h1>Error: SSID required</h1><a href='/'>Back</a></body></html>", -1);
+    return ESP_OK;
+  }
+
+  // Switch to AP+STA mode to allow STA configuration
+  WM_LOGI("Switching to AP+STA mode for connection...");
+  esp_err_t err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+  if (err != ESP_OK) {
+    WM_LOGE("Failed to set AP+STA mode: %s", esp_err_to_name(err));
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  // Give it a moment to switch modes
+  vTaskDelay(pdMS_TO_TICKS(500));
+
+  // Configure WiFi with new credentials
+  wifi_config_t wifi_config = {};
+  strncpy((char *)wifi_config.sta.ssid, settings.ssid.c_str(), sizeof(wifi_config.sta.ssid) - 1);
+  if (settings.ssid.empty() == false) {
+    strncpy((char *)wifi_config.sta.password, settings.password.c_str(),
+            sizeof(wifi_config.sta.password) - 1);
+  }
+
+  WM_LOGI("Setting STA configuration...");
+  err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+  if (err != ESP_OK) {
+    WM_LOGE("Failed to set WiFi config: %s", esp_err_to_name(err));
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  // Attempt connection
+  WM_LOGI("Attempting to connect to WiFi...");
+  esp_wifi_disconnect();
+  err = esp_wifi_connect();
+  if (err != ESP_OK) {
+    WM_LOGE("Failed to start WiFi connection: %s", esp_err_to_name(err));
+    // Don't return error here, connection might still succeed
+  }
+
+  // Define success message for wifi mode
+  const char *successMessage =
+      "<html><body>"
+      "<h1>Connecting...</h1>"
+      "<p>Device is attempting to connect to the network.</p>"
+      "<p>Please wait and check your device's connection status.</p>"
+      "<script>setTimeout(function(){window.location.href='/';}, 5000);</script>"
+      "</body></html>";
+
+  httpd_resp_set_type(req, "text/html");
+  WM_LOGI("Sending HTTP response...");
+  esp_err_t send_ret = httpd_resp_send(req, successMessage, strlen(successMessage));
+  if (send_ret != ESP_OK) {
+    WM_LOGE("Failed to send HTTP response: %s", esp_err_to_name(send_ret));
+    return send_ret;
+  }
+
+  WM_LOGI("Waiting for HTTP response transmission to complete...");
+  // Give TCP stack time to actually send the data over WiFi
+  vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second should be enough for small response
+  WM_LOGI("HTTP response transmission complete");
+
+  return ESP_OK;
+}
+
+esp_err_t WiFiManager::handleSettingsSave(httpd_req_t *req) {
   WM_LOGD("WiFi save requested, content length: %d", req->content_len);
   WiFiManager *manager = getManagerFromRequest(req);
 
@@ -1523,171 +1708,36 @@ esp_err_t WiFiManager::handleWifiSave(httpd_req_t *req) {
   }
 
   buf[total_received] = '\0';
-  WM_LOGD("Received %d bytes of POST data", total_received);
+  WM_LOGI("Received %d bytes of POST data", total_received);
+  WM_LOGI("%s", buf.get());
 
-  // Parse form data
-  char ssid[33] = {0};
-  char password[65] = {0};
+  SettingsForm settings = parseFormParams(buf.get());
+  buf.release(); // For optimization. no need anymore
 
-  // Simple URL decode and parameter parsing
-  char *ssid_param = strstr(buf.get(), "s=");
-  char *pass_param = strstr(buf.get(), "p=");
-
-  // Parse custom parameters
-  for (const auto &param : manager->_params) {
-    if (!param || !param->getID())
-      continue;
-
-    // Look for parameter in form data
-    std::string param_key = std::string(param->getID()) + "=";
-    char *param_start = strstr(buf.get(), param_key.c_str());
-    if (param_start) {
-      param_start += param_key.length();
-      char *param_end = strchr(param_start, '&');
-      int len = param_end ? (param_end - param_start) : strlen(param_start);
-
-      if (len > 0 && len < 256) {
-        char param_value[256] = {0};
-        strncpy(param_value, param_start, len);
-
-        // URL decode parameter value
-        for (int i = 0, j = 0; i <= len; i++, j++) {
-          if (param_value[i] == '+') {
-            param_value[j] = ' ';
-          } else if (param_value[i] == '%' && i + 2 <= len) {
-            char hex[3] = {param_value[i + 1], param_value[i + 2], 0};
-            param_value[j] = (char)strtol(hex, NULL, 16);
-            i += 2;
-          } else {
-            param_value[j] = param_value[i];
-          }
-        }
-
-        param->setValue(param_value);
-        WM_LOGD("Updated parameter %s = %s", param->getID(), param_value);
-      }
+  if (settings.networkMode == NETWORK_MODE_CELLULAR_STR) {
+    // Do cellular things
+    esp_err_t err = performSettingCellular(req, settings);
+    if (err != ESP_OK) {
+      return err;
     }
-  }
+    // Update manager state
+    manager->_state = WM_STATE_NEW_SETTINGS;
 
-  if (ssid_param) {
-    ssid_param += 2; // Skip "s="
-    char *end = strchr(ssid_param, '&');
-    int len = end ? (end - ssid_param) : strlen(ssid_param);
-    len = (len < sizeof(ssid) - 1) ? len : sizeof(ssid) - 1;
-    strncpy(ssid, ssid_param, len);
-    ssid[len] = '\0';
-
-    // URL decode (basic)
-    for (int i = 0, j = 0; i <= len; i++, j++) {
-      if (ssid[i] == '+') {
-        ssid[j] = ' ';
-      } else if (ssid[i] == '%' && i + 2 <= len) {
-        // Hex decode
-        char hex[3] = {ssid[i + 1], ssid[i + 2], 0};
-        ssid[j] = (char)strtol(hex, NULL, 16);
-        i += 2;
-      } else {
-        ssid[j] = ssid[i];
-      }
+  } else {
+    // Do wifi things
+    esp_err_t err = performSettingWifi(req, settings);
+    if (err != ESP_OK) {
+      return err;
     }
+
+    // Update manager state
+    manager->_state = WM_STATE_TRY_STA;
+    manager->_connectStart = esp_timer_get_time();
   }
 
-  if (pass_param) {
-    pass_param += 2; // Skip "p="
-    char *end = strchr(pass_param, '&');
-    int len = end ? (end - pass_param) : strlen(pass_param);
-    len = (len < sizeof(password) - 1) ? len : sizeof(password) - 1;
-    strncpy(password, pass_param, len);
-    password[len] = '\0';
+  // Keep the settings
+  manager->_settings = settings;
 
-    // URL decode (basic)
-    for (int i = 0, j = 0; i <= len; i++, j++) {
-      if (password[i] == '+') {
-        password[j] = ' ';
-      } else if (password[i] == '%' && i + 2 <= len) {
-        char hex[3] = {password[i + 1], password[i + 2], 0};
-        password[j] = (char)strtol(hex, NULL, 16);
-        i += 2;
-      } else {
-        password[j] = password[i];
-      }
-    }
-  }
-
-  WM_LOGI("Connecting to SSID: %s", ssid);
-
-  if (strlen(ssid) == 0) {
-    // Send error response
-    httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(
-        req, "<html><body><h1>Error: SSID required</h1><a href='/'>Back</a></body></html>", -1);
-    return ESP_OK;
-  }
-
-  // Switch to AP+STA mode to allow STA configuration
-  WM_LOGI("Switching to AP+STA mode for connection...");
-  esp_err_t err = esp_wifi_set_mode(WIFI_MODE_APSTA);
-  if (err != ESP_OK) {
-    WM_LOGE("Failed to set AP+STA mode: %s", esp_err_to_name(err));
-    httpd_resp_send_500(req);
-    return ESP_FAIL;
-  }
-
-  // Give it a moment to switch modes
-  vTaskDelay(pdMS_TO_TICKS(500));
-
-  // Configure WiFi with new credentials
-  wifi_config_t wifi_config = {};
-  strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-  if (strlen(password) > 0) {
-    strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
-  }
-
-  WM_LOGI("Setting STA configuration...");
-  err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-  if (err != ESP_OK) {
-    WM_LOGE("Failed to set WiFi config: %s", esp_err_to_name(err));
-    httpd_resp_send_500(req);
-    return ESP_FAIL;
-  }
-
-  // Attempt connection
-  WM_LOGI("Attempting to connect to WiFi...");
-  esp_wifi_disconnect();
-  err = esp_wifi_connect();
-  if (err != ESP_OK) {
-    WM_LOGE("Failed to start WiFi connection: %s", esp_err_to_name(err));
-    // Don't return error here, connection might still succeed
-  }
-
-  // Update manager state
-  manager->_state = WM_STATE_TRY_STA;
-  manager->_connectStart = esp_timer_get_time();
-
-  // Send success response and ensure it's completely transmitted
-  httpd_resp_set_type(req, "text/html");
-  const char *success_msg =
-      "<html><body>"
-      "<h1>Connecting...</h1>"
-      "<p>Device is attempting to connect to the network.</p>"
-      "<p>Please wait and check your device's connection status.</p>"
-      "<script>setTimeout(function(){window.location.href='/';}, 5000);</script>"
-      "</body></html>";
-
-  WM_LOGI("Sending HTTP response...");
-  esp_err_t send_ret = httpd_resp_send(req, success_msg, strlen(success_msg));
-  if (send_ret != ESP_OK) {
-    WM_LOGE("Failed to send HTTP response: %s", esp_err_to_name(send_ret));
-    return send_ret;
-  }
-
-  // CRITICAL: Ensure the response is actually transmitted over the network
-  WM_LOGI("Waiting for HTTP response transmission to complete...");
-
-  // Give TCP stack time to actually send the data over WiFi
-  vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second should be enough for small response
-
-  WM_LOGI("HTTP response transmission complete");
   return ESP_OK;
 }
 

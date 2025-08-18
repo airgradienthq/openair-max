@@ -170,26 +170,66 @@ extern "C" void app_main(void) {
   // Load configuration that saved on NVS
   g_configuration.load();
 
-  if (g_configuration.getNetworkOption() == NetworkOption::WiFi) {
-    std::string ssid = std::string("airgradient-") + g_serialNumber;
-    if (g_configuration.isWifiConfigured() == false && xWakeUpCounter == 0) {
-      g_statusLed.blinkAsync(0, 100);
-      ESP_LOGI(TAG, "Credentials haven't set yet, running portal");
-      g_wifiManager.setConfigPortalBlocking(true);
-      bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
-      if (!success) {
-        // Portal either timeout or canceled or failed to connect to wifi using provided credentials
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        esp_restart();
-      }
-      g_configuration.setIsWifiConfigured(true);
-      // Wifi is ready from the start
-      g_networkReady = true;
-      // Reset because wifi portal triggered and wifi successfully connected
-      wakeUpMillis = MILLIS();
-      g_statusLed.on();
+  /** Run system settings if
+   *    system setting expected to run OR
+   *    (network option is wifi AND wifi haven't configured)
+   */
+  if (g_configuration.runSystemSettings() ||
+      (g_configuration.getNetworkOption() == NetworkOption::WiFi &&
+       g_configuration.isWifiConfigured() == false)) {
+    // Run indicator that portal is currently running
+    g_statusLed.blinkAsync(0, 100);
+
+    SettingsForm settings;
+    if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+      settings.networkMode = NETWORK_MODE_CELLULAR_STR;
+    } else {
+      settings.networkMode = NETWORK_MODE_WIFI_STR;
     }
-    ESP_LOGI(TAG, "Application continue using wifi...");
+    settings.apn = g_configuration.getAPN();
+    g_wifiManager.setSettings(settings);
+
+    // Run portal
+    std::string ssid = std::string("airgradient-") + g_serialNumber;
+    g_wifiManager.setConfigPortalBlocking(true);
+    bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
+    if (!success) {
+      if (g_wifiManager.getState() == WM_STATE_PORTAL_ABORT) {
+        // If portal is aborted, then disable system settings portal
+        ESP_LOGI(TAG, "System settings portal is aborted, disabling it.");
+        g_configuration.setRunSystemSettings(false);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+      }
+      esp_restart();
+    }
+
+    // Notify that it success and restart
+    g_statusLed.on();
+
+    // Keep the changes and save to persistant configuration
+    auto config = g_configuration.get();
+    config.runSystemSettings = false;
+    settings = g_wifiManager.getSettings();
+    if (settings.networkMode == NETWORK_MODE_CELLULAR_STR) {
+      config.networkOption = NetworkOption::Cellular;
+      config.apn = settings.apn;
+      g_configuration.set(config);
+
+      // Notify that it success and restart
+      g_statusLed.on();
+      vTaskDelay(pdMS_TO_TICKS(2000));
+      esp_restart();
+    }
+
+    // No need to restart for wifi mode, just continue because its already successfuly connect
+    config.networkOption = NetworkOption::WiFi;
+    config.isWifiConfigured = true;
+    g_configuration.set(config);
+
+    // Wifi is ready from the start
+    g_networkReady = true;
+    // Starting time for every cycle should start now because time taken by system settings portal
+    wakeUpMillis = MILLIS();
   }
 
   // Run led test if requested
@@ -388,18 +428,18 @@ void bootButtonTask(void *arg) {
       if (level == 0) {
         // Button pressed
         startTimeButtonPressed = MILLIS();
-      } else {
-        // Button released
-        if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
-          g_configuration.switchNetworkOption();
-          ESP_LOGI(TAG, "Restart in 2s..");
-          g_statusLed.blink(2000, 200);
-          esp_restart();
-        }
-        startTimeButtonPressed = 0;
+        continue;
       }
+      // Button released
 
-      // TODO: Factory reset wifi configuration also
+      if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
+        bool currentState = g_configuration.runSystemSettings();
+        g_configuration.setRunSystemSettings(!currentState);
+        ESP_LOGI(TAG, "Restarting in 2s...");
+        g_statusLed.blink(2000, 200);
+        esp_restart();
+      }
+      startTimeButtonPressed = 0;
     }
   }
 }
@@ -616,6 +656,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   resetExtWatchdog();
 
   g_agClient->setNetworkRegistrationTimeoutMs(registrationTimeout);
+  g_agClient->setAPN(g_configuration.getAPN());
   if (g_agClient->begin(g_serialNumber, getPayloadType())) {
     // Connected
     if (wakeUpCounter == 0) {
@@ -789,8 +830,7 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
   AirgradientOTA *agOta = nullptr;
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     agOta = new AirgradientOTACellular(g_cellularCard, g_agClient->getICCID());
-  }
-  else {
+  } else {
     agOta = new AirgradientOTAWifi;
   }
   auto result = agOta->updateIfAvailable(g_serialNumber, g_fimwareVersion);
