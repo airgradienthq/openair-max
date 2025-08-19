@@ -52,7 +52,7 @@
 // Wake up counter that saved on Low Power memory
 RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
 
-// Hold the index of measures queue on which http post should start send data
+// Hold the index of measures queue on which http post should start send measures
 // eg. xHttpCacheQueueIndex = 3, then for [q1, q2, q3, q4, q5, q6] should only send q4, q5, q6
 RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
 
@@ -299,8 +299,8 @@ extern "C" void app_main(void) {
 
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     // Attempt send post through HTTP first
-    // If success and send data through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
-    // Attempt send data through MQTT if its enabled
+    // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
+    // Attempt send measures through MQTT if its enabled
     PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
     payloadCache.push(&averageMeasures);
     bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache);
@@ -884,8 +884,8 @@ bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCac
 
   // When success, clean the cache (because already send to both HTTP and MQTT)
   //  and also reset xHttpCacheQueueIndex to make sure post through both HTTP and MQTT start fresh
-  // But if failed, since HTTP already send all the data on cache,
-  //  set xHttpCacheQueueIndex to the cache current size as the start index of which HTTP post data from queue
+  // But if failed, since HTTP already send all the measures on cache,
+  //  set xHttpCacheQueueIndex to the cache current size as the start index of which HTTP post measures from queue
   bool success = g_agClient->mqttPublishMeasures(payload);
   if (success) {
     payloadCache.clean();
