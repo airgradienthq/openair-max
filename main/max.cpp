@@ -52,6 +52,10 @@
 // Wake up counter that saved on Low Power memory
 RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
 
+// Hold the index of measures queue on which http post should start send data
+// eg. xHttpCacheQueueIndex = 3, then for [q1, q2, q3, q4, q5, q6] should only send q4, q5, q6
+RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
+
 // Global Vars
 static const char *const TAG = "APP";
 static std::string g_serialNumber;
@@ -121,6 +125,7 @@ static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
 static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
                                AirgradientClient::MaxSensorPayload sensorPayload);
+static bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 
 extern "C" void app_main(void) {
   // Re-initialize console for logging only if it just wake up after deepsleep
@@ -293,9 +298,21 @@ extern "C" void app_main(void) {
   int wakeUpCounter = xWakeUpCounter;
 
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Attempt send post through HTTP first
+    // If success and send data through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
+    // Attempt send data through MQTT if its enabled
     PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
     payloadCache.push(&averageMeasures);
-    sendMeasuresByCellular(wakeUpCounter, payloadCache);
+    bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache);
+    if (success) {
+      if (g_configuration.getMqttBrokerUrl().empty()) {
+        ESP_LOGI(TAG, "MQTT is not enabled, skip");
+        payloadCache.clean();
+        xHttpCacheQueueIndex = 0;
+      } else {
+        sendMeasuresUsingMqtt(wakeUpCounter, payloadCache);
+      }
+    }
   } else {
     sendMeasuresByWiFi(wakeUpCounter, averageMeasures);
   }
@@ -584,7 +601,7 @@ void ensureConnectionReady() {
   }
 }
 
-static int getNetworkSignalStrength() {
+int getNetworkSignalStrength() {
   int signalStrength = 99;
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     auto result = g_cellularCard->retrieveSignal();
@@ -698,7 +715,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
   // Check if pass criteria to post measures
   if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
     ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
-    return true;
+    return false;
   }
 
   if (!initializeNetwork(wakeUpCounter)) {
@@ -710,11 +727,18 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
   std::vector<AirgradientClient::MaxSensorPayload> sensorPayload;
   PayloadCacheType tmp;
   ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
-  for (int i = 0; i < payloadCache.getSize(); i++) {
+  /// Define start index of which needs to be included as HTTP post payload
+  int idx = 0;
+  if (xHttpCacheQueueIndex > 0) {
+    idx = xHttpCacheQueueIndex;
+    ESP_LOGI(TAG, "HTTP cache queue index start from %d", idx);
+  }
+  for (int i = idx; i < payloadCache.getSize(); i++) {
     payloadCache.peekAtIndex(i, &tmp);
     sensorPayload.push_back(tmp);
   }
 
+  // Structure payload
   AirgradientClient::AirgradientPayload payload;
   payload.sensor = &sensorPayload;
   payload.measureInterval = g_configuration.getConfigSchedule().pm02;
@@ -729,8 +753,6 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
     attemptCounter = attemptCounter + 1;
     postSuccess = g_agClient->httpPostMeasures(payload);
     if (postSuccess) {
-      // post success, clean cache
-      payloadCache.clean();
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
         g_statusLed.blinkAsync(800, 100);
@@ -814,6 +836,69 @@ bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
   }
 
   return true;
+}
+
+bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
+  // Sanity check if MQTT is enabled 
+  std::string uri = g_configuration.getMqttBrokerUrl();
+  if (uri.empty()) {
+    return true;
+  }
+
+  // Sanity check if its time to send measures
+  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
+    ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
+    return false;
+  }
+
+  // Make sure network is indeed connected
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+    return false;
+  }
+
+  if (g_agClient->mqttConnect(uri.c_str()) == false) {
+    ESP_LOGE(
+        TAG,
+        "Skip send measures through MQTT, failed to connect. Will retry publish on next schedule");
+    // Please see comment on mqttPublishMeasures below on why set the cache
+    xHttpCacheQueueIndex = payloadCache.getSize();
+    return false;
+  }
+
+  // Retrieve measurements from the cache
+  std::vector<AirgradientClient::MaxSensorPayload> sensorPayload;
+  PayloadCacheType tmp;
+  ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
+  for (int i = 0; i < payloadCache.getSize(); i++) {
+    payloadCache.peekAtIndex(i, &tmp);
+    sensorPayload.push_back(tmp);
+  }
+
+  // Structure payload
+  AirgradientClient::AirgradientPayload payload;
+  payload.sensor = &sensorPayload;
+  payload.measureInterval = g_configuration.getConfigSchedule().pm02;
+  payload.signal = getNetworkSignalStrength();
+  ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
+
+  // When success, clean the cache (because already send to both HTTP and MQTT)
+  //  and also reset xHttpCacheQueueIndex to make sure post through both HTTP and MQTT start fresh
+  // But if failed, since HTTP already send all the data on cache,
+  //  set xHttpCacheQueueIndex to the cache current size as the start index of which HTTP post data from queue
+  bool success = g_agClient->mqttPublishMeasures(payload);
+  if (success) {
+    payloadCache.clean();
+    xHttpCacheQueueIndex = 0;
+  } else {
+    ESP_LOGI(TAG, "Retry publish on next schedule");
+    xHttpCacheQueueIndex = payloadCache.getSize();
+  }
+
+  // Ignore disconnect result
+  g_agClient->mqttDisconnect();
+
+  return success;
 }
 
 bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {

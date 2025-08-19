@@ -199,7 +199,7 @@ bool Configuration::parseRemoteConfig(const std::string &config) {
     ESP_LOGW(TAG, "firmware field not found or not an object");
   }
 
-  // mqttBrokerUrl 
+  // mqttBrokerUrl
   if (root["mqttBrokerUrl"].is<const char *>()) {
     str_val = root["mqttBrokerUrl"].as<std::string>();
     if (_config.mqttBrokerUrl != str_val) {
@@ -530,6 +530,8 @@ bool Configuration::isWifiConfigured() { return _config.isWifiConfigured; }
 bool Configuration::runSystemSettings() { return _config.runSystemSettings; }
 
 std::string Configuration::getAPN() { return _config.apn; }
+
+std::string Configuration::getMqttBrokerUrl() { return _config.mqttBrokerUrl; }
 
 bool Configuration::set(Config config) {
   _config = config;
