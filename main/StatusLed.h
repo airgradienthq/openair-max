@@ -26,6 +26,7 @@ public:
 
   esp_err_t start();
   void stop();
+  void enable();
   void disable();
 
   void on();

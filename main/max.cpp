@@ -237,12 +237,6 @@ extern "C" void app_main(void) {
     wakeUpMillis = MILLIS();
   }
 
-  // Run led test if requested
-  if (g_configuration.isLedTestRequested()) {
-    g_statusLed.blink(5000, 100);
-    g_configuration.resetLedTestRequest();
-  }
-
   // Reset external WDT
   resetExtWatchdog();
 
@@ -345,7 +339,16 @@ extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Will sleep for %dms", toSleepMs);
   esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
   vTaskDelay(pdMS_TO_TICKS(1000));
-  g_statusLed.disable();
+
+  // Keep status led ON every sleep cycle when ledTestRequested is set from remote configuration
+  if (g_configuration.isLedTestRequested()) {
+    g_statusLed.on();
+    g_statusLed.enable();
+  } else {
+    g_statusLed.off();
+    g_statusLed.disable();
+  }
+
   esp_deep_sleep_start();
 
   // Will never go here
@@ -839,7 +842,7 @@ bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
 }
 
 bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
-  // Sanity check if MQTT is enabled 
+  // Sanity check if MQTT is enabled
   std::string uri = g_configuration.getMqttBrokerUrl();
   if (uri.empty()) {
     return true;
