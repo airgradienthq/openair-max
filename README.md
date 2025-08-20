@@ -53,7 +53,7 @@ Payload format is sent based on what is the network options
 
 > Applied when transmit through HTTP and MQTT
 
-Device operates on a regular schedule, attempting to send payload every 9 minutes. Each payload contains a set of comma-separated values. The first value is an **`interval`** number, which serves as a reference for the timestamping of the subsequent measurements. After that, the payload contains three distinct sets of sensor measurements. Each set represents a snapshot of the device's sensor readings taken at a 3-minute interval. The measurements are always in the same order:
+Device operates on a regular schedule, attempting to send payload every 9 minutes. Each payload contains a set of comma-separated values. The first value is an **`interval`** number in seconds, which serves as a reference for the timestamping of the subsequent measurements. After that, the payload contains three distinct sets of sensor measurements. Each set represents a snapshot of the device's sensor readings taken at a 3-minute interval. The measurements are always in the same order:
 
 - CO2
 - Temperature
@@ -65,13 +65,13 @@ Device operates on a regular schedule, attempting to send payload every 9 minute
 - NOx
 - PM 0.3 Particle Count 
 - Signal Strength in dbm
-- Battery Voltage
-- Solar Panel Voltage
-- O3 Working Electrode (WE) → _O-M-1PPSTON-CE_ only
-- O3 Auxiliary Electrode (AE) → _O-M-1PPSTON-CE_ only
-- NO2 Working Electrode (WE) → _O-M-1PPSTON-CE_ only
-- NO2 Auxiliary Electrode (AE) → _O-M-1PPSTON-CE_ only
-- AFE Temperature → _O-M-1PPSTON-CE_ only
+- Battery Voltage in mV
+- Solar Panel Voltage in mV
+- O3 Working Electrode (WE) in mV → _O-M-1PPSTON-CE_ only
+- O3 Auxiliary Electrode (AE) in mV → _O-M-1PPSTON-CE_ only
+- NO2 Working Electrode (WE) in mV → _O-M-1PPSTON-CE_ only
+- NO2 Auxiliary Electrode (AE) in mV → _O-M-1PPSTON-CE_ only
+- AFE Temperature in mV → _O-M-1PPSTON-CE_ only
 
 **Example Payload Breakdown**
 
@@ -83,7 +83,7 @@ A typical payload might look like this:
 
 In this example:
 
-- `180` → The `interval` value at the start
+- `180` → The `interval` value at the start in seconds
 - `452,...,5796` → The first measurements set 
 - `450,...,5795` → The second measurements set 
 - `446,...,5796` → The third measurements set 
