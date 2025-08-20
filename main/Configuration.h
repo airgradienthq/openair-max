@@ -26,12 +26,15 @@ public:
   enum Model { O_M_1PPST_CE = 0, O_M_1PPSTON_CE };
 
   struct Config {
+    // Remote
     int abcDays;
     bool co2CalibrationRequested;
     bool ledTestRequested;
     std::string model;
     Schedule schedule;
     Firmware firmware;
+    std::string mqttBrokerUrl;
+    // Local
     NetworkOption networkOption;
     bool isWifiConfigured;
     bool runSystemSettings;
@@ -57,6 +60,7 @@ public:
   bool isWifiConfigured();
   bool runSystemSettings();
   std::string getAPN();
+  std::string getMqttBrokerUrl();
 
   // Setter
   bool set(Config config);
