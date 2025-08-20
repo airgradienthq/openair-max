@@ -59,6 +59,9 @@ class Sunlight {
   static const uint16_t METER_CONTROL = 0x0012;
   static const uint16_t ABC_PERIOD = 0x000D;
 
+  /* HR34 address for starting single measurement */
+  static const uint16_t HR34_START_SINGLE_ADDR = 0x0021;
+
   /* Measurement modes */
   static const uint16_t CONTINUOUS = 0x0000;
   static const uint16_t SINGLE = 0x0001;
@@ -101,6 +104,16 @@ public:
    * @retval co2
    */
   int16_t read_sensor_measurements();
+
+  /**
+   * @brief  Triggers a single measurement when in single mode
+   *
+   * @note   This function starts a single measurement when the sensor
+   *         is configured in single measurement mode. Uses HR34 register
+   *         address 0x0021 as per specification.
+   * @retval 0 on success, negative value on error
+   */
+  int trigger_single_measurement();
 
   /**
    * @brief  Reads and prints the sensor's device identification.
@@ -148,6 +161,12 @@ public:
   bool setABCPeriod(uint16_t hours);
 
   void setNRDY(bool enable);
+
+  /**
+   * @brief  Check if sensor is in single measurement mode
+   * @retval true if sensor is in single mode, false if in continuous mode
+   */
+  bool is_single_mode();
 
 private:
   const char *const TAG = "Sunlight";
