@@ -313,6 +313,12 @@ extern "C" void app_main(void) {
   checkRemoteConfiguration(wakeUpCounter);
   checkForFirmwareUpdate(wakeUpCounter);
 
+  // If led test requested, keep led ON until its power cycled 
+  if (g_configuration.isLedTestRequested()) {
+    g_statusLed.on();
+    g_statusLed.holdState();
+  }
+
   // Turn of network network
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     // Only poweroff when all transmission attempt is done
@@ -340,14 +346,7 @@ extern "C" void app_main(void) {
   esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  // Keep status led ON until ledTestRequested is unset from remote configuration
-  if (g_configuration.isLedTestRequested()) {
-    g_statusLed.on();
-    g_statusLed.holdState();
-  } else {
-    g_statusLed.off();
-    g_statusLed.releaseState();
-  }
+  g_statusLed.off();
 
   esp_deep_sleep_start();
 
