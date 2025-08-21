@@ -22,12 +22,12 @@ PayloadCache::PayloadCache(uint16_t maxSize) {
   head = 0;
   tail = 0;
 
-  // ถ้ามีข้อมูลใน RTC ให้ดึงข้อมูลกลับมาใช้
+  // If there's data in RTC, restore it for use
   restoreFromRTC();
 }
 
 PayloadCache::~PayloadCache() {
-  // Backup ข้อมูลกลับไปที่ RTC ก่อนทำลายออบเจ็กต์
+  // Backup data to RTC before destroying the object
   backupToRTC();
 }
 
@@ -36,11 +36,11 @@ void PayloadCache::restoreFromRTC() {
   memcpy(charBuffer, rtcStorage, sizeof(charBuffer));
   head = rtcHead;
   tail = rtcTail;
-  deserialize(); // แปลงกลับมาเป็น Queue
+  deserialize(); // Convert back to Queue
 }
 
 void PayloadCache::backupToRTC() {
-  serialize(); // แปลง Queue เป็น char array
+  serialize(); // Convert Queue to char array
   // Copy data from charBuffer to RTC storage
   memcpy(rtcStorage, charBuffer, sizeof(charBuffer));
   rtcHead = head;
