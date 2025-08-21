@@ -8,6 +8,7 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
+#include "MaxConfig.h"
 #include <string>
 
 class Configuration {
@@ -22,27 +23,32 @@ public:
     std::string url;
   };
 
-  enum Model {
-    O_M_1PPST_CE = 0,
-    O_M_1PPSTON_CE
-  };
+  enum Model { O_M_1PPST_CE = 0, O_M_1PPSTON_CE };
 
   struct Config {
+    // Remote
     int abcDays;
     bool co2CalibrationRequested;
     bool ledTestRequested;
     std::string model;
     Schedule schedule;
     Firmware firmware;
+    std::string mqttBrokerUrl;
+    // Local
+    NetworkOption networkOption;
+    bool isWifiConfigured;
+    bool runSystemSettings;
+    std::string apn;
   };
 
   Configuration() {}
   ~Configuration() {}
   bool load();
-  bool reset();
+  void reset();
   bool parseRemoteConfig(const std::string &config);
 
   // Getter
+  Config get();
   bool isConfigChanged();
   bool isCO2CalibrationRequested();
   bool isLedTestRequested();
@@ -50,6 +56,18 @@ public:
   Firmware getConfigFirmware();
   Schedule getConfigSchedule();
   Model getModel();
+  NetworkOption getNetworkOption();
+  bool isWifiConfigured();
+  bool runSystemSettings();
+  std::string getAPN();
+  std::string getMqttBrokerUrl();
+
+  // Setter
+  bool set(Config config);
+  void setNetworkOption(NetworkOption option);
+  void setIsWifiConfigured(bool state);
+  void setRunSystemSettings(bool state);
+  void setAPN(const std::string &apn);
 
   void resetLedTestRequest();
   void resetCO2CalibrationRequest();
@@ -61,6 +79,7 @@ private:
 
   bool _loadConfig();
   bool _saveConfig();
+  void _printConfig();
   void _setConfigToDefault();
 };
 

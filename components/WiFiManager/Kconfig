@@ -1,0 +1,120 @@
+menu "WiFiManager Configuration"
+
+    config WM_DEFAULT_AP_SSID
+        string "Default AP SSID"
+        default "ESP-Config"
+        help
+            Default SSID for the configuration access point.
+            Will be suffixed with chip MAC address.
+
+    config WM_DEFAULT_AP_PASS
+        string "Default AP Password"
+        default ""
+        help
+            Default password for the configuration access point.
+            Leave empty for open AP.
+
+    config WM_AP_IP
+        string "AP IP Address"  
+        default "192.168.4.1"
+        help
+            IP address for the configuration access point.
+
+    config WM_AP_GW
+        string "AP Gateway"
+        default "192.168.4.1"
+        help
+            Gateway address for the configuration access point.
+
+    config WM_AP_NETMASK
+        string "AP Netmask"
+        default "255.255.255.0"
+        help
+            Netmask for the configuration access point.
+
+    config WM_MIN_SIGNAL_QUALITY
+        int "Minimum Signal Quality (%)"
+        default 8
+        range 0 100
+        help
+            Minimum signal quality percentage to show networks.
+
+    config WM_REMOVE_DUP_APS
+        bool "Remove Duplicate APs"
+        default y
+        help
+            Remove duplicate SSIDs from scan results.
+
+    config WM_HTTP_STACK_SIZE
+        int "HTTP Server Stack Size"
+        default 8192
+        help
+            Stack size for HTTP server task.
+
+    config WM_DNS_STACK_SIZE
+        int "DNS Server Stack Size"
+        default 4096
+        help
+            Stack size for DNS server task.
+
+    config WM_ENABLE_MDNS
+        bool "Enable mDNS"
+        default n
+        help
+            Enable mDNS hostname advertising.
+
+    config WM_ENABLE_GZIP_ASSETS
+        bool "Enable Gzip Assets"
+        default y
+        help
+            Enable gzip compression for web assets.
+
+    choice WM_LOG_LEVEL
+        prompt "WiFiManager Log Level"
+        default WM_LOG_LEVEL_INFO
+        help
+            Set the log level for WiFiManager component.
+
+        config WM_LOG_LEVEL_NONE
+            bool "None"
+        config WM_LOG_LEVEL_ERROR
+            bool "Error"
+        config WM_LOG_LEVEL_WARN
+            bool "Warning"
+        config WM_LOG_LEVEL_INFO
+            bool "Info"
+        config WM_LOG_LEVEL_DEBUG
+            bool "Debug"
+        config WM_LOG_LEVEL_VERBOSE
+            bool "Verbose"
+    endchoice
+
+    config WM_LOG_LEVEL
+        int
+        default 0 if WM_LOG_LEVEL_NONE
+        default 1 if WM_LOG_LEVEL_ERROR
+        default 2 if WM_LOG_LEVEL_WARN
+        default 3 if WM_LOG_LEVEL_INFO
+        default 4 if WM_LOG_LEVEL_DEBUG
+        default 5 if WM_LOG_LEVEL_VERBOSE
+
+    config WM_DEFAULT_CONNECT_TIMEOUT
+        int "Default Connect Timeout (seconds)"
+        default 10
+        help
+            Default timeout for WiFi connection attempts.
+
+    config WM_DEFAULT_PORTAL_TIMEOUT
+        int "Default Portal Timeout (seconds)"
+        default 180
+        help
+            Default timeout for captive portal (0 = no timeout).
+
+    config WM_MAX_CUSTOM_PARAMS
+        int "Maximum Custom Parameters"
+        default 10
+        range 1 50
+        help
+            Maximum number of custom parameters supported.
+
+endmenu 

@@ -12,7 +12,7 @@
 #include "airgradientClient.h"
 #include "MaxConfig.h"
 
-typedef AirgradientClient::OpenAirMaxPayload PayloadType;
+typedef AirgradientClient::MaxSensorPayload PayloadCacheType;
 
 class PayloadCache {
 public:
@@ -24,9 +24,9 @@ public:
   uint16_t getSize();
 
   void clean();
-  void push(PayloadType *payload);
-  bool pop(PayloadType *payload);
-  bool peekAtIndex(uint16_t index, PayloadType *payload);
+  void push(PayloadCacheType *payload);
+  bool pop(PayloadCacheType *payload);
+  bool peekAtIndex(uint16_t index, PayloadCacheType *payload);
 
   void serializeQueueToCharArray();
 
@@ -35,11 +35,11 @@ private:
   uint16_t maxCacheSize;
   uint16_t head;                  // Head index for the queue
   uint16_t tail;                  // Tail index for the queue
-  PayloadType payloads[MAX_PAYLOAD_CACHE];  // Buffer for Queue
+  PayloadCacheType payloads[MAX_PAYLOAD_CACHE];  // Buffer for Queue
 
   // Temporary buffer for serialization
   // TODO: Need to optimize this, why the need to have 2 buffer?
-  char charBuffer[sizeof(PayloadType) * MAX_PAYLOAD_CACHE];
+  char charBuffer[sizeof(PayloadCacheType) * MAX_PAYLOAD_CACHE];
 
   void serialize();
   void deserialize();

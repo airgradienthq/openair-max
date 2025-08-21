@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <title>Device Portal</title>
+    <!-- Your existing styles from index.html -->
+    <style>
+        body {
+            font-family: verdana, sans-serif;
+            background: #252525;
+            color: #eee;
+            margin: 0;
+            padding: 0;
+        }
+        .wrap {
+            max-width: 320px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 1.8em;
+        }
+        .device-name {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        .menu {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 30px 0;
+        }
+        .menu a {
+            padding: 15px;
+            background: #1fa3ec;
+            color: #fff;
+            text-align: center;
+            border-radius: 5px; /* Slightly more rounded corners */
+            display: block;
+            text-decoration: none;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .menu a:hover {
+            background: #1890d0;
+        }
+        .status {
+            margin: 30px 0;
+            padding: 15px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 5px;
+        }
+        .status-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #1fa3ec;
+        }
+        .status-error {
+            border-left: 4px solid #d82c2c;
+            background: rgba(216, 44, 44, 0.1);
+        }
+        .status-success {
+            border-left: 4px solid #47d82c;
+            background: rgba(71, 216, 44, 0.1);
+        }
+        .status-info {
+            color: #aaa;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        .footer {
+            text-align: center;
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #444;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Device Portal</h1>
+        <div class="device-name" id="deviceName">{v}</div>
+
+        <div class="menu">
+            <a href="/settings">⚙️ System Settings</a>
+            <a href="/info">ℹ️ Info</a>
+            <a href="/exit">🚪 Exit</a>
+        </div>
+
+        <div class="status" id="status">
+            <div class="status-title">Connection Status</div>
+            <div class="status-info" id="statusInfo">
+                Checking connection status...
+            </div>
+        </div>
+
+        <div class="footer">
+            Embedded Portal
+        </div>
+    </div>
+
+    <script>
+        function checkStatus() {
+            // Your firmware's /status endpoint should now return a 'mode' field.
+            // Example WiFi response: { "mode": "wifi", "connected": true, "ssid": "MyHomeWiFi", "ip": "192.168.1.100" }
+            // Example Cellular response: { "mode": "cellular", "connected": true, "operator": "CarrierName", "ip": "10.0.0.50" }
+            // Example No Connection: { "mode": "none" }
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusDiv = document.getElementById('status');
+                    const statusInfo = document.getElementById('statusInfo');
+                    if (data.net_mode === 'wifi') {
+                        statusDiv.style.display = 'block'; // Make the block visible
+                        if (data.connected) {
+                            statusDiv.className = 'status status-success';
+                            statusInfo.innerHTML = `Connected to: <strong>${data.ssid}</strong><br>IP Address: ${data.ip}`;
+                        } else if (data.saved_ssid) {
+                            statusDiv.className = 'status status-error';
+                            statusInfo.innerHTML = `Not connected to: <strong>${data.saved_ssid}</strong><br>AP not found or connection failed`;
+                        } else {
+                            statusDiv.className = 'status status-error';
+                            statusInfo.innerHTML = 'No WiFi configured. Use Configure WiFi to set up connection.';
+                        }
+                    } else {
+                        // don't show connection status label for cellular (for now)
+                        statusDiv.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Status check failed:', error);
+                    document.getElementById('statusInfo').innerHTML = 'Unable to check connection status.';
+                });
+        }
+
+        // Check status on load and every 10 seconds
+        window.onload = function() {
+            checkStatus();
+            setInterval(checkStatus, 10000);
+        };
+    </script>
+</body>
+</html>

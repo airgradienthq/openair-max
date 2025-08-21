@@ -6,11 +6,14 @@
  */
 
 #include <cstdint>
+#include <ratio>
 #include <stdio.h>
 #include <inttypes.h>
 #include <string>
 
 #include <fcntl.h>
+#include "airgradientOtaWifi.h"
+#include "airgradientWifiClient.h"
 #include "esp_console.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
@@ -40,6 +43,7 @@
 #include "airgradientCellularClient.h"
 #include "cellularModuleA7672xx.h"
 #include "airgradientOtaCellular.h"
+#include "WiFiManager.h"
 
 #define CONSOLE_MAX_CMDLINE_ARGS 8
 #define CONSOLE_MAX_CMDLINE_LENGTH 256
@@ -47,6 +51,10 @@
 
 // Wake up counter that saved on Low Power memory
 RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
+
+// Hold the index of measures queue on which http post should start send measures
+// eg. xHttpCacheQueueIndex = 3, then for [q1, q2, q3, q4, q5, q6] should only send q4, q5, q6
+RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
 
 // Global Vars
 static const char *const TAG = "APP";
@@ -58,13 +66,25 @@ static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
 static CellularModule *g_cellularCard = nullptr;
 static AirgradientClient *g_agClient = nullptr;
+static WiFiManager g_wifiManager;
+
+static QueueHandle_t bootButtonQueue = NULL;
+static void IRAM_ATTR bootButtonISRHandler(void *arg) {
+  (void)arg;
+  int level = gpio_get_level(IO_BOOT_BUTTON);
+  xQueueSendFromISR(bootButtonQueue, &level, NULL);
+}
 
 /**
  * Re-initialize console for logging
  */
 static void initConsole();
 
-void initGPIO();
+static void initGPIO();
+
+static void bootButtonTask(void *arg);
+
+static void initBootButton();
 
 /**
  * Reset monitor external watchdog timer
@@ -87,25 +107,25 @@ static void printWakeupReason(esp_sleep_wakeup_cause_t reason);
  */
 static std::string buildSerialNumber();
 
-static void ensureConnectionReady();
-
-/**
- * Attempt to initialize and connect to cellular network
- * If failed once, it will not re-attempt to initialize for its wake up cycle
- * Called when post measure, check remote configuration and check for firmware update
- */
-static bool initializeCellularNetwork(unsigned long wakeUpCounter);
-
 /**
  * Retrieve currently running firmware version
  */
 static std::string getFirmwareVersion();
 
-// Return false if failed init network or failed send
-// TODO: Add description
+static AirgradientClient::PayloadType getPayloadType();
+
+static void ensureConnectionReady();
+static int getNetworkSignalStrength();
+static bool initializeNetwork(unsigned long wakeUpCounter);
+static bool initializeWiFiNetwork(unsigned long wakeUpCounter);
+static bool initializeCellularNetwork(unsigned long wakeUpCounter);
+
 static bool checkRemoteConfiguration(unsigned long wakeUpCounter);
-static bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
+static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache);
+static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
+                               AirgradientClient::MaxSensorPayload sensorPayload);
+static bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 
 extern "C" void app_main(void) {
   // Re-initialize console for logging only if it just wake up after deepsleep
@@ -121,6 +141,12 @@ extern "C" void app_main(void) {
 
   // Initialize every peripheral GPIOs to OFF state
   initGPIO();
+
+  if (xWakeUpCounter == 0) {
+    // Initialize boot button event handler only on the first boot
+    // So on next boot onwards, boot button will not function
+    initBootButton();
+  }
 
   // Initialize NVS
   esp_err_t ret = nvs_flash_init();
@@ -148,6 +174,68 @@ extern "C" void app_main(void) {
 
   // Load configuration that saved on NVS
   g_configuration.load();
+
+  /** Run system settings if
+   *    system setting expected to run OR
+   *    (network option is wifi AND wifi haven't configured)
+   */
+  if (g_configuration.runSystemSettings() ||
+      (g_configuration.getNetworkOption() == NetworkOption::WiFi &&
+       g_configuration.isWifiConfigured() == false)) {
+    // Run indicator that portal is currently running
+    g_statusLed.blinkAsync(0, 100);
+
+    SettingsForm settings;
+    if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+      settings.networkMode = NETWORK_MODE_CELLULAR_STR;
+    } else {
+      settings.networkMode = NETWORK_MODE_WIFI_STR;
+    }
+    settings.apn = g_configuration.getAPN();
+    g_wifiManager.setSettings(settings);
+
+    // Run portal
+    std::string ssid = std::string("airgradient-") + g_serialNumber;
+    g_wifiManager.setConfigPortalBlocking(true);
+    bool success = g_wifiManager.startConfigPortal(ssid.c_str(), "cleanair");
+    if (!success) {
+      if (g_wifiManager.getState() == WM_STATE_PORTAL_ABORT) {
+        // If portal is aborted, then disable system settings portal
+        ESP_LOGI(TAG, "System settings portal is aborted, disabling it.");
+        g_configuration.setRunSystemSettings(false);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+      }
+      esp_restart();
+    }
+
+    // Notify that it success and restart
+    g_statusLed.on();
+
+    // Keep the changes and save to persistant configuration
+    auto config = g_configuration.get();
+    config.runSystemSettings = false;
+    settings = g_wifiManager.getSettings();
+    if (settings.networkMode == NETWORK_MODE_CELLULAR_STR) {
+      config.networkOption = NetworkOption::Cellular;
+      config.apn = settings.apn;
+      g_configuration.set(config);
+
+      // Notify that it success and restart
+      g_statusLed.on();
+      vTaskDelay(pdMS_TO_TICKS(2000));
+      esp_restart();
+    }
+
+    // No need to restart for wifi mode, just continue because its already successfuly connect
+    config.networkOption = NetworkOption::WiFi;
+    config.isWifiConfigured = true;
+    g_configuration.set(config);
+
+    // Wifi is ready from the start
+    g_networkReady = true;
+    // Starting time for every cycle should start now because time taken by system settings portal
+    wakeUpMillis = MILLIS();
+  }
 
   // Run led test if requested
   if (g_configuration.isLedTestRequested()) {
@@ -195,15 +283,10 @@ extern "C" void app_main(void) {
     g_configuration.resetCO2CalibrationRequest();
   }
 
-  // Start measure sensor sequence that if success,
-  //   push new measure cycle to payload cache to send later
-  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
-  if (sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT,
-                           DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION)) {
-    sensor.printMeasures();
-    auto averageMeasures = sensor.getLastAverageMeasure();
-    payloadCache.push(&averageMeasures);
-  }
+  // Start measure sensor sequence
+  sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
+  sensor.printMeasures();
+  auto averageMeasures = sensor.getLastAverageMeasure();
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
@@ -214,22 +297,43 @@ extern "C" void app_main(void) {
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
-  sendMeasuresWhenReady(wakeUpCounter, payloadCache);
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Attempt send post through HTTP first
+    // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
+    // Attempt send measures through MQTT if its enabled
+    PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
+    payloadCache.push(&averageMeasures);
+    bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache);
+    if (success) {
+      if (g_configuration.getMqttBrokerUrl().empty()) {
+        ESP_LOGI(TAG, "MQTT is not enabled, skip");
+        payloadCache.clean();
+        xHttpCacheQueueIndex = 0;
+      } else {
+        sendMeasuresUsingMqtt(wakeUpCounter, payloadCache);
+      }
+    }
+  } else {
+    sendMeasuresByWiFi(wakeUpCounter, averageMeasures);
+  }
   checkRemoteConfiguration(wakeUpCounter);
   checkForFirmwareUpdate(wakeUpCounter);
 
-  // Only poweroff when all transmission attempt is done
-  if (g_ceAgSerial != nullptr || g_networkReady) {
-    g_cellularCard->powerOff();
+  // Turn of network network
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Only poweroff when all transmission attempt is done
+    if (g_ceAgSerial != nullptr || g_networkReady) {
+      g_cellularCard->powerOff();
+    }
+    // Turn OFF Cellular Card load switch
+    gpio_set_level(EN_CE_CARD, 0);
+  } else {
+    g_wifiManager.disconnect(true);
   }
-  // Turn OFF Cellular Card load switch
-  gpio_set_level(EN_CE_CARD, 0);
 
   // Reset external watchdog before sleep to make sure its not trigger while in sleep
   //   before system wakeup
   resetExtWatchdog();
-
-  // TODO: Print cache size before sleep
 
   // Calculate how long to sleep to keep measurement cycle the same
   uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
@@ -333,6 +437,49 @@ void initGPIO() {
   }
 }
 
+void bootButtonTask(void *arg) {
+  uint32_t startTimeButtonPressed = 0;
+  int level;
+  while (1) {
+    if (xQueueReceive(bootButtonQueue, &level, portMAX_DELAY)) {
+      if (level == 0) {
+        // Button pressed
+        startTimeButtonPressed = MILLIS();
+        continue;
+      }
+      // Button released
+
+      if ((MILLIS() - startTimeButtonPressed) > 3000 && startTimeButtonPressed != 0) {
+        bool currentState = g_configuration.runSystemSettings();
+        g_configuration.setRunSystemSettings(!currentState);
+        ESP_LOGI(TAG, "Restarting in 2s...");
+        g_statusLed.blink(2000, 200);
+        esp_restart();
+      }
+      startTimeButtonPressed = 0;
+    }
+  }
+}
+
+void initBootButton() {
+  gpio_config_t io_conf = {};
+  io_conf.intr_type = GPIO_INTR_ANYEDGE;
+  io_conf.pin_bit_mask = (1ULL << IO_BOOT_BUTTON);
+  io_conf.mode = GPIO_MODE_INPUT;
+  io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+  gpio_config(&io_conf);
+
+  //create a queue to handle gpio event from isr
+  bootButtonQueue = xQueueCreate(3, sizeof(uint32_t));
+  //start gpio task
+  xTaskCreate(bootButtonTask, "boot_button", 2048, NULL, 10, NULL);
+
+  //install gpio isr service
+  gpio_install_isr_service(0);
+  //hook isr handler for specific gpio pin
+  gpio_isr_handler_add(IO_BOOT_BUTTON, bootButtonISRHandler, nullptr);
+}
+
 void printResetReason() {
   esp_reset_reason_t reason = esp_reset_reason();
   switch (reason) {
@@ -416,6 +563,14 @@ std::string getFirmwareVersion() {
   return app_desc->version;
 }
 
+AirgradientClient::PayloadType getPayloadType() {
+  if (g_configuration.getModel() == Configuration::O_M_1PPSTON_CE) {
+    return AirgradientClient::MAX_WITH_O3_NO2;
+  } else {
+    return AirgradientClient::MAX_WITHOUT_O3_NO2;
+  }
+}
+
 void ensureConnectionReady() {
   bool reset = false;
   uint32_t lastResetTime = MILLIS();
@@ -446,12 +601,42 @@ void ensureConnectionReady() {
   }
 }
 
-bool initializeCellularNetwork(unsigned long wakeUpCounter) {
+int getNetworkSignalStrength() {
+  int signalStrength = 99;
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    auto result = g_cellularCard->retrieveSignal();
+    if (result.status == CellReturnStatus::Ok && result.data != 99) {
+      int dbm = g_cellularCard->csqToDbm(result.data);
+      if (dbm != 0) {
+        signalStrength = dbm;
+      }
+    }
+  } else {
+    signalStrength = g_wifiManager.getSignal();
+  }
+
+  return signalStrength;
+}
+
+bool initializeNetwork(unsigned long wakeUpCounter) {
   if (g_networkReady) {
     ESP_LOGI(TAG, "Network is already ready to use");
     return true;
   }
 
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    g_networkReady = initializeCellularNetwork(wakeUpCounter);
+  } else {
+    g_networkReady = initializeWiFiNetwork(wakeUpCounter);
+  }
+
+  // Make sure watchdog not triggered for the rest of the code before sleep
+  resetExtWatchdog();
+
+  return g_networkReady;
+}
+
+bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   if (g_ceAgSerial != nullptr || g_cellularCard != nullptr || g_agClient != nullptr) {
     ESP_LOGW(
         TAG,
@@ -488,7 +673,8 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   resetExtWatchdog();
 
   g_agClient->setNetworkRegistrationTimeoutMs(registrationTimeout);
-  if (g_agClient->begin(g_serialNumber)) {
+  g_agClient->setAPN(g_configuration.getAPN());
+  if (g_agClient->begin(g_serialNumber, getPayloadType())) {
     // Connected
     if (wakeUpCounter == 0) {
       g_statusLed.blink(600, 100);
@@ -502,12 +688,8 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     }
   }
 
-  // Make sure watchdog not triggered for the rest of the code before sleep
-  resetExtWatchdog();
-
   // Disable again
   g_ceAgSerial->setDebug(false);
-  g_networkReady = true;
 
   // Wait for a moment for CE card is ready for transmission
   vTaskDelay(pdMS_TO_TICKS(2000));
@@ -515,45 +697,62 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   return true;
 }
 
-bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
-  // Check if pass criteria to post measures
-  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to post measures, skip");
-    return true;
+bool initializeWiFiNetwork(unsigned long wakeUpCounter) {
+  if (wakeUpCounter == 0) {
+    // When currently initializing network, indicate using blink animation
+    g_statusLed.blinkAsync(400, 100);
   }
 
-  if (!initializeCellularNetwork(wakeUpCounter)) {
+  if (g_wifiManager.autoConnect(true) == false) {
+    ESP_LOGE(TAG, "Failed connect to WiFi");
+    return false;
+  }
+
+  return true;
+}
+
+bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
+  // Check if pass criteria to post measures
+  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
+    ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
+    return false;
+  }
+
+  if (!initializeNetwork(wakeUpCounter)) {
     ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
     return false;
   }
 
-  // Push back signal same value to each payload
-  auto result = g_cellularCard->retrieveSignal();
-  int signalStrength = -1;
-  if (result.status == CellReturnStatus::Ok && result.data != 99) {
-    signalStrength = result.data;
-  }
-  ESP_LOGI(TAG, "Signal strength: %d", signalStrength);
-
   // Retrieve measurements from the cache
-  std::vector<AirgradientClient::OpenAirMaxPayload> payloads;
-  PayloadType tmp;
+  std::vector<AirgradientClient::MaxSensorPayload> sensorPayload;
+  PayloadCacheType tmp;
   ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
-  for (int i = 0; i < payloadCache.getSize(); i++) {
-    payloadCache.peekAtIndex(i, &tmp);
-    tmp.signal = signalStrength;
-    payloads.push_back(tmp);
+  /// Define start index of which needs to be included as HTTP post payload
+  int idx = 0;
+  if (xHttpCacheQueueIndex > 0) {
+    idx = xHttpCacheQueueIndex;
+    ESP_LOGI(TAG, "HTTP cache queue index start from %d", idx);
   }
+  for (int i = idx; i < payloadCache.getSize(); i++) {
+    payloadCache.peekAtIndex(i, &tmp);
+    sensorPayload.push_back(tmp);
+  }
+
+  // Structure payload
+  AirgradientClient::AirgradientPayload payload;
+  payload.sensor = &sensorPayload;
+  payload.measureInterval = g_configuration.getConfigSchedule().pm02;
+  payload.signal = getNetworkSignalStrength();
+  ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
   // Attempt to send
   bool postSuccess = false;
   int attemptCounter = 0;
+
   do {
     attemptCounter = attemptCounter + 1;
-    postSuccess = g_agClient->httpPostMeasures(g_configuration.getConfigSchedule().pm02, payloads);
+    postSuccess = g_agClient->httpPostMeasures(payload);
     if (postSuccess) {
-      // post success, clean cache
-      payloadCache.clean();
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
         g_statusLed.blinkAsync(800, 100);
@@ -608,19 +807,118 @@ bool sendMeasuresWhenReady(unsigned long wakeUpCounter, PayloadCache &payloadCac
   return postSuccess;
 }
 
+bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
+                        AirgradientClient::MaxSensorPayload sensorPayload) {
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+    return false;
+  }
+
+  g_agClient = new AirgradientWifiClient;
+  g_agClient->begin(g_serialNumber, getPayloadType());
+
+  AirgradientClient::AirgradientPayload payload;
+  payload.sensor = &sensorPayload;
+  payload.signal = getNetworkSignalStrength();
+  ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
+
+  bool postSuccess = g_agClient->httpPostMeasures(payload);
+  if (!postSuccess) {
+    ESP_LOGE(TAG, "Send measures failed, retry in next schedule");
+    // Run failed post led indicator
+    g_statusLed.blink(3000, 500);
+    return false;
+  }
+
+  if (wakeUpCounter == 0) {
+    // Notify post success only on first boot
+    g_statusLed.blinkAsync(800, 100);
+  }
+
+  return true;
+}
+
+bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
+  // Sanity check if MQTT is enabled 
+  std::string uri = g_configuration.getMqttBrokerUrl();
+  if (uri.empty()) {
+    return true;
+  }
+
+  // Sanity check if its time to send measures
+  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
+    ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
+    return false;
+  }
+
+  // Make sure network is indeed connected
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+    return false;
+  }
+
+  if (g_agClient->mqttConnect(uri.c_str()) == false) {
+    ESP_LOGE(
+        TAG,
+        "Skip send measures through MQTT, failed to connect. Will retry publish on next schedule");
+    // Please see comment on mqttPublishMeasures below on why set the cache
+    xHttpCacheQueueIndex = payloadCache.getSize();
+    return false;
+  }
+
+  // Retrieve measurements from the cache
+  std::vector<AirgradientClient::MaxSensorPayload> sensorPayload;
+  PayloadCacheType tmp;
+  ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
+  for (int i = 0; i < payloadCache.getSize(); i++) {
+    payloadCache.peekAtIndex(i, &tmp);
+    sensorPayload.push_back(tmp);
+  }
+
+  // Structure payload
+  AirgradientClient::AirgradientPayload payload;
+  payload.sensor = &sensorPayload;
+  payload.measureInterval = g_configuration.getConfigSchedule().pm02;
+  payload.signal = getNetworkSignalStrength();
+  ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
+
+  // When success, clean the cache (because already send to both HTTP and MQTT)
+  //  and also reset xHttpCacheQueueIndex to make sure post through both HTTP and MQTT start fresh
+  // But if failed, since HTTP already send all the measures on cache,
+  //  set xHttpCacheQueueIndex to the cache current size as the start index of which HTTP post measures from queue
+  bool success = g_agClient->mqttPublishMeasures(payload);
+  if (success) {
+    payloadCache.clean();
+    xHttpCacheQueueIndex = 0;
+  } else {
+    ESP_LOGI(TAG, "Retry publish on next schedule");
+    xHttpCacheQueueIndex = payloadCache.getSize();
+  }
+
+  // Ignore disconnect result
+  g_agClient->mqttDisconnect();
+
+  return success;
+}
+
 bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
   if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
     ESP_LOGI(TAG, "Not the time to check firmware update, skip");
     return true;
   }
 
-  if (!initializeCellularNetwork(wakeUpCounter)) {
+  if (!initializeNetwork(wakeUpCounter)) {
     ESP_LOGI(TAG, "Cannot connect to cellular network, skip check firmware update");
     return false;
   }
 
-  AirgradientOTACellular agOta(g_cellularCard, g_agClient->getICCID());
-  auto result = agOta.updateIfAvailable(g_serialNumber, g_fimwareVersion);
+  AirgradientOTA *agOta = nullptr;
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    agOta = new AirgradientOTACellular(g_cellularCard, g_agClient->getICCID());
+  } else {
+    agOta = new AirgradientOTAWifi;
+  }
+  auto result = agOta->updateIfAvailable(g_serialNumber, g_fimwareVersion);
 
   switch (result) {
   case AirgradientOTA::Failed:
@@ -650,8 +948,8 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
     return true;
   }
 
-  if (!initializeCellularNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check remote configuration");
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to network, skip check remote configuration");
     return false;
   }
 

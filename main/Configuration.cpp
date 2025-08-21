@@ -7,9 +7,11 @@
 
 #include "Configuration.h"
 #include "MaxConfig.h"
+#include "airgradientCellularClient.h"
 #include "esp_log.h"
-#include "json_parser.h"
+#include "ArduinoJson.h"
 #include "nvs.h"
+#include <cstdint>
 #include <cstring>
 
 #define REMOTE_CONFIG_NVS_STORAGE_NAME "remote-config" //!NOTE: Don't change this value!
@@ -21,6 +23,11 @@
 #define NVS_KEY_SCHEDULE_CONTINUOUS "cont"
 #define NVS_KEY_FIRMWARE_URL "furl"
 #define NVS_KEY_FIRMWARE_TARGET "ftarget"
+#define NVS_KEY_NETWORK_OPTION "netOpt"
+#define NVS_KEY_WIFI_CONFIGURED "wifiset"
+#define NVS_KEY_SYSTEM_SETTINGS "sysset"
+#define NVS_KEY_APN "apn"
+#define NVS_KEY_MQTT_HOST "mqtt"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -34,6 +41,12 @@ bool Configuration::load() {
   }
 
   // Printout configurations
+  _printConfig();
+
+  return true;
+}
+
+void Configuration::_printConfig() {
   ESP_LOGI(TAG, "**** CONFIGURATION ****");
   ESP_LOGI(TAG, "co2CalibrationRequested: %d", _config.co2CalibrationRequested);
   ESP_LOGI(TAG, "ledTestRequested: %d", _config.ledTestRequested);
@@ -43,119 +56,170 @@ bool Configuration::load() {
   ESP_LOGI(TAG, "firmware.url: %s", _config.firmware.url.c_str());
   ESP_LOGI(TAG, "schedule.pm02: %d", _config.schedule.pm02);
   ESP_LOGI(TAG, "schedule.continuous: %d", _config.schedule.continuous);
+  ESP_LOGI(TAG, "networkOption: %s",
+           _config.networkOption == NetworkOption::Cellular ? "Cellular" : "WiFi");
+  ESP_LOGI(TAG, "isWifiConfigured: %d", _config.isWifiConfigured);
+  ESP_LOGI(TAG, "runSystemSettings: %d", _config.runSystemSettings);
+  ESP_LOGI(TAG, "apn: %s", _config.apn.c_str());
+  ESP_LOGI(TAG, "mqttBrokerUrl: %s", _config.mqttBrokerUrl.c_str());
   ESP_LOGI(TAG, "**** ****");
+}
 
-  return true;
+void Configuration::reset() {
+  ESP_LOGI(TAG, "Resetting configuration..");
+  _setConfigToDefault();
+  _saveConfig();
 }
 
 bool Configuration::parseRemoteConfig(const std::string &config) {
-  jparse_ctx_t jctx;
-  int ret = json_parse_start(&jctx, config.c_str(), config.length());
-  if (ret != OS_SUCCESS) {
-    ESP_LOGE(TAG, "Failed parse remote configuration");
+  JsonDocument doc;
+
+  DeserializationError error = deserializeJson(doc, config.c_str(), config.length());
+  if (error) {
+    ESP_LOGE(TAG, "Failed to parse remote configuration: %s", error.c_str());
     return false;
   }
 
-  char str_val[64];
-  int int_val;
-  bool bool_val;
+  // Get the root object.
+  JsonObject root = doc.as<JsonObject>();
 
-  if (json_obj_get_bool(&jctx, "co2CalibrationRequested", &bool_val) == OS_SUCCESS) {
+  bool bool_val;
+  int int_val;
+  std::string str_val; // Using std::string for direct assignment
+
+  // co2CalibrationRequested
+  if (root["co2CalibrationRequested"].is<bool>()) {
+    bool_val = root["co2CalibrationRequested"].as<bool>();
     if (_config.co2CalibrationRequested != bool_val) {
       ESP_LOGI(TAG, "co2CalibrationRequested value changed to %d", bool_val);
       _config.co2CalibrationRequested = bool_val;
       _configChanged = true;
     }
   } else {
-    ESP_LOGW(TAG, "co2CalibrationRequested field not found");
+    ESP_LOGW(TAG, "co2CalibrationRequested field not found or not a boolean");
   }
 
-  if (json_obj_get_int(&jctx, "abcDays", &int_val) == OS_SUCCESS) {
+  // abcDays
+  if (root["abcDays"].is<int>()) {
+    int_val = root["abcDays"].as<int>();
     if (_config.abcDays != int_val) {
       ESP_LOGI(TAG, "abcDays value changed from %d to %d", _config.abcDays, int_val);
       _config.abcDays = int_val;
       _configChanged = true;
     }
   } else {
-    ESP_LOGW(TAG, "abcDays field not found");
+    ESP_LOGW(TAG, "abcDays field not found or not an integer");
   }
 
-  if (json_obj_get_bool(&jctx, "ledTestRequested", &bool_val) == OS_SUCCESS) {
+  // ledTestRequested
+  if (root["ledTestRequested"].is<bool>()) {
+    bool_val = root["ledTestRequested"].as<bool>();
     if (_config.ledTestRequested != bool_val) {
       ESP_LOGI(TAG, "ledTestRequested value changed to %d", bool_val);
       _config.ledTestRequested = bool_val;
       _configChanged = true;
     }
   } else {
-    ESP_LOGW(TAG, "ledTestRequested field not found");
+    ESP_LOGW(TAG, "ledTestRequested field not found or not a boolean");
   }
 
-  if (json_obj_get_string(&jctx, "model", str_val, sizeof(str_val)) == OS_SUCCESS) {
+  // model
+  if (root["model"].is<const char *>()) {
+    str_val = root["model"].as<std::string>(); // Directly cast to std::string
     if (_config.model != str_val) {
-      ESP_LOGI(TAG, "model value changed from %s to %s", _config.model.c_str(), str_val);
+      ESP_LOGI(TAG, "model value changed from %s to %s", _config.model.c_str(), str_val.c_str());
       _config.model = str_val;
       _configChanged = true;
     }
   } else {
-    ESP_LOGW(TAG, "model field not found");
+    ESP_LOGW(TAG, "model field not found or not a string");
   }
 
-  if (json_obj_get_object(&jctx, "schedule") == OS_SUCCESS) {
-    if (json_obj_get_bool(&jctx, "continuous", &bool_val) == OS_SUCCESS) {
+  // schedule object
+  if (root["schedule"].is<JsonObject>()) {
+    JsonObject schedule = root["schedule"].as<JsonObject>();
+
+    // schedule.continuous
+    if (schedule["continuous"].is<bool>()) {
+      bool_val = schedule["continuous"].as<bool>();
       if (_config.schedule.continuous != bool_val) {
         ESP_LOGI(TAG, "schedule.continuous value changed to %d", bool_val);
         _config.schedule.continuous = bool_val;
         _configChanged = true;
       }
     } else {
-      ESP_LOGW(TAG, "schedule.continuous field not found");
+      ESP_LOGW(TAG, "schedule.continuous field not found or not a boolean");
     }
 
-    if (json_obj_get_int(&jctx, "pm02", &int_val) == OS_SUCCESS) {
+    // schedule.pm02
+    if (schedule["pm02"].is<int>()) {
+      int_val = schedule["pm02"].as<int>();
       if (_config.schedule.pm02 != int_val) {
         ESP_LOGI(TAG, "schedule.pm02 value changed from %d to %d", _config.schedule.pm02, int_val);
         _config.schedule.pm02 = int_val;
         _configChanged = true;
       }
     } else {
-      ESP_LOGW(TAG, "schedule.pm02 field not found");
+      ESP_LOGW(TAG, "schedule.pm02 field not found or not an integer");
     }
-    // Go back to root object
-    json_obj_leave_object(&jctx);
   } else {
-    ESP_LOGW(TAG, "schedule field not found");
+    ESP_LOGW(TAG, "schedule field not found or not an object");
   }
 
-  if (json_obj_get_object(&jctx, "firmware") == OS_SUCCESS) {
-    if (json_obj_get_string(&jctx, "target", str_val, sizeof(str_val)) == OS_SUCCESS) {
+  // firmware object
+  if (root["firmware"].is<JsonObject>()) {
+    JsonObject firmware = root["firmware"].as<JsonObject>();
+
+    // firmware.target
+    if (firmware["target"].is<const char *>()) {
+      str_val = firmware["target"].as<std::string>();
       if (_config.firmware.target != str_val) {
         ESP_LOGI(TAG, "firmware.target value changed from %s to %s",
-                 _config.firmware.target.c_str(), str_val);
+                 _config.firmware.target.c_str(), str_val.c_str());
         _config.firmware.target = str_val;
         _configChanged = true;
       }
     } else {
-      ESP_LOGW(TAG, "firmware.target field not found");
+      ESP_LOGW(TAG, "firmware.target field not found or not a string");
     }
 
-    if (json_obj_get_string(&jctx, "url", str_val, sizeof(str_val)) == OS_SUCCESS) {
+    // firmware.url
+    if (firmware["url"].is<const char *>()) {
+      str_val = firmware["url"].as<std::string>();
       if (_config.firmware.url != str_val) {
         ESP_LOGI(TAG, "firmware.url value changed from %s to %s", _config.firmware.url.c_str(),
-                 str_val);
+                 str_val.c_str());
         _config.firmware.url = str_val;
         _configChanged = true;
       }
     } else {
-      ESP_LOGW(TAG, "firmware.url field not found");
+      ESP_LOGW(TAG, "firmware.url field not found or not a string");
     }
-    // Go back to root object
-    json_obj_leave_object(&jctx);
   } else {
-    ESP_LOGW(TAG, "firmware field not found");
+    ESP_LOGW(TAG, "firmware field not found or not an object");
+  }
+
+  // mqttBrokerUrl
+  if (root["mqttBrokerUrl"].is<const char *>()) {
+    str_val = root["mqttBrokerUrl"].as<std::string>();
+    if (_config.mqttBrokerUrl != str_val) {
+      ESP_LOGI(TAG, "mqttBrokerUrl value changed from %s to %s", _config.mqttBrokerUrl.c_str(),
+               str_val.c_str());
+      _config.mqttBrokerUrl = str_val;
+      _configChanged = true;
+    }
+  } else {
+    ESP_LOGW(TAG, "mqttBrokerUrl field not found or not a string");
+    if (_config.mqttBrokerUrl.empty() == false) {
+      // empty value on persistent storage means its disabled
+      // field not found from server means its disabled
+      ESP_LOGI(TAG, "Previously mqtt is enabled. Disabling it because now its not found");
+      _config.mqttBrokerUrl = "";
+      _configChanged = true;
+    }
   }
 
   ESP_LOGI(TAG, "Finish parsing remote configuration");
-  json_parse_end(&jctx);
 
   if (_configChanged) {
     _saveConfig();
@@ -267,6 +331,67 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get schedule.pm02");
   }
 
+  // Is wifi configured
+  uint8_t wifiConfigured;
+  err = nvs_get_u8(handle, NVS_KEY_WIFI_CONFIGURED, &wifiConfigured);
+  if (err == ESP_OK) {
+    _config.isWifiConfigured = wifiConfigured;
+  } else {
+    ESP_LOGW(TAG, "Failed to get isWifiConfigured");
+  }
+
+  // NETWORK OPTION
+  uint8_t netopt;
+  err = nvs_get_u8(handle, NVS_KEY_NETWORK_OPTION, &netopt);
+  if (err == ESP_OK) {
+    _config.networkOption = static_cast<NetworkOption>(netopt);
+  } else {
+    ESP_LOGW(TAG, "Failed to get networkOption");
+  }
+
+  // Run system setting
+  uint8_t runSystemSettings;
+  err = nvs_get_u8(handle, NVS_KEY_SYSTEM_SETTINGS, &runSystemSettings);
+  if (err == ESP_OK) {
+    _config.runSystemSettings = runSystemSettings;
+  } else {
+    ESP_LOGW(TAG, "Failed to get runSystemSettings");
+  }
+
+  // APN
+  requiredSize = 0;
+  err = nvs_get_str(handle, NVS_KEY_APN, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_APN, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.apn = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get apn");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get apn");
+  }
+
+  // MQTT
+  requiredSize = 0;
+  err = nvs_get_str(handle, NVS_KEY_MQTT_HOST, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_MQTT_HOST, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.mqttBrokerUrl = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get mqttBrokerUrl");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get mqttBrokerUrl");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -330,7 +455,38 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save schedule.pm02");
   }
 
+  // NETWORK OPTION
+  err = nvs_set_u8(handle, NVS_KEY_NETWORK_OPTION, static_cast<uint8_t>(_config.networkOption));
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save networkOption");
+  }
+
+  // WiFi configured
+  err = nvs_set_u8(handle, NVS_KEY_WIFI_CONFIGURED, _config.isWifiConfigured);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save isWifiConfigured");
+  }
+
+  // Run System Settings
+  err = nvs_set_u8(handle, NVS_KEY_SYSTEM_SETTINGS, _config.runSystemSettings);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save runSystemSettings");
+  }
+
+  // APN
+  err = nvs_set_str(handle, NVS_KEY_APN, _config.apn.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save apn");
+  }
+
+  // MQTT
+  err = nvs_set_str(handle, NVS_KEY_MQTT_HOST, _config.mqttBrokerUrl.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save mqttBrokerUrl");
+  }
+
   // Commit changes
+  ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Failed to commit configuration to NVS");
@@ -341,6 +497,8 @@ bool Configuration::_saveConfig() {
   nvs_close(handle);
   return true;
 }
+
+Configuration::Config Configuration::get() { return _config; }
 
 bool Configuration::isConfigChanged() { return _configChanged; }
 
@@ -365,6 +523,42 @@ Configuration::Model Configuration::getModel() {
   return O_M_1PPST_CE;
 }
 
+NetworkOption Configuration::getNetworkOption() { return _config.networkOption; }
+
+bool Configuration::isWifiConfigured() { return _config.isWifiConfigured; }
+
+bool Configuration::runSystemSettings() { return _config.runSystemSettings; }
+
+std::string Configuration::getAPN() { return _config.apn; }
+
+std::string Configuration::getMqttBrokerUrl() { return _config.mqttBrokerUrl; }
+
+bool Configuration::set(Config config) {
+  _config = config;
+  _printConfig();
+  return _saveConfig();
+}
+
+void Configuration::setNetworkOption(NetworkOption option) {
+  _config.networkOption = option;
+  _saveConfig();
+}
+
+void Configuration::setIsWifiConfigured(bool state) {
+  _config.isWifiConfigured = state;
+  _saveConfig();
+}
+
+void Configuration::setRunSystemSettings(bool state) {
+  _config.runSystemSettings = state;
+  _saveConfig();
+}
+
+void Configuration::setAPN(const std::string &apn) {
+  _config.apn = apn;
+  _saveConfig();
+}
+
 void Configuration::resetLedTestRequest() {
   _config.ledTestRequested = false;
   _saveConfig();
@@ -384,4 +578,9 @@ void Configuration::_setConfigToDefault() {
   _config.firmware.url = "";
   _config.schedule.pm02 = MEASURE_CYCLE_INTERVAL_SECONDS;
   _config.schedule.continuous = false;
+  _config.networkOption = NetworkOption::Cellular;
+  _config.isWifiConfigured = false;
+  _config.runSystemSettings = false;
+  _config.apn = DEFAULT_AIRGRADIENT_APN;
+  _config.mqttBrokerUrl = "";
 }
