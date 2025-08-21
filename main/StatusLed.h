@@ -26,7 +26,8 @@ public:
 
   esp_err_t start();
   void stop();
-  void disable();
+  void holdState();
+  void releaseState();
 
   void on();
   void off();
