@@ -29,7 +29,7 @@ public:
     // Remote
     int abcDays;
     bool co2CalibrationRequested;
-    bool ledTestRequested;
+    bool ledTestRequested; // Not saved to NVS
     std::string model;
     Schedule schedule;
     Firmware firmware;
@@ -69,7 +69,6 @@ public:
   void setRunSystemSettings(bool state);
   void setAPN(const std::string &apn);
 
-  void resetLedTestRequest();
   void resetCO2CalibrationRequest();
 
 private:

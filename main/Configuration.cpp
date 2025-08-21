@@ -112,12 +112,11 @@ bool Configuration::parseRemoteConfig(const std::string &config) {
   }
 
   // ledTestRequested
-  if (root["ledTestRequested"].is<bool>()) {
-    bool_val = root["ledTestRequested"].as<bool>();
-    if (_config.ledTestRequested != bool_val) {
-      ESP_LOGI(TAG, "ledTestRequested value changed to %d", bool_val);
+  if (root["ledBarTestRequested"].is<bool>()) {
+    bool_val = root["ledBarTestRequested"].as<bool>();
+    if (bool_val) {
+      ESP_LOGI(TAG, "Led test is requested");
       _config.ledTestRequested = bool_val;
-      _configChanged = true;
     }
   } else {
     ESP_LOGW(TAG, "ledTestRequested field not found or not a boolean");
@@ -244,15 +243,6 @@ bool Configuration::_loadConfig() {
     _config.co2CalibrationRequested = co2CalibrationRequested;
   } else {
     ESP_LOGW(TAG, "Failed to get co2CalibrationRequested");
-  }
-
-  // LED TEST
-  uint8_t ledTestRequested;
-  err = nvs_get_u8(handle, NVS_KEY_LED_TEST_REQUESTED, &ledTestRequested);
-  if (err == ESP_OK) {
-    _config.ledTestRequested = ledTestRequested;
-  } else {
-    ESP_LOGW(TAG, "Failed to get ledTestRequested");
   }
 
   // ABC DAYS
@@ -413,12 +403,6 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save co2CalibrationRequested");
   }
 
-  // LED TEST
-  err = nvs_set_u8(handle, NVS_KEY_LED_TEST_REQUESTED, _config.ledTestRequested);
-  if (err != ESP_OK) {
-    ESP_LOGW(TAG, "Failed to save ledTestRequested");
-  }
-
   // ABC DAYS
   err = nvs_set_u16(handle, NVS_KEY_ABC_DAYS, _config.abcDays);
   if (err != ESP_OK) {
@@ -556,11 +540,6 @@ void Configuration::setRunSystemSettings(bool state) {
 
 void Configuration::setAPN(const std::string &apn) {
   _config.apn = apn;
-  _saveConfig();
-}
-
-void Configuration::resetLedTestRequest() {
-  _config.ledTestRequested = false;
   _saveConfig();
 }
 
