@@ -248,8 +248,6 @@ extern "C" void app_main(void) {
   vTaskDelay(pdMS_TO_TICKS(100));
   gpio_set_level(EN_PMS2, 1);
   vTaskDelay(pdMS_TO_TICKS(2000));
-  gpio_set_level(EN_ALPHASENSE, 1);
-  vTaskDelay(pdMS_TO_TICKS(200));
 
   // Configure I2C master bus
   i2c_master_bus_config_t bus_cfg = {
@@ -285,7 +283,6 @@ extern "C" void app_main(void) {
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
   gpio_set_level(EN_PMS2, 0);
-  gpio_set_level(EN_ALPHASENSE, 0);
   vTaskDelay(pdMS_TO_TICKS(1000));
 
   // Optimization: copy from LP memory so will not always call from LP memory
@@ -313,7 +310,7 @@ extern "C" void app_main(void) {
   checkRemoteConfiguration(wakeUpCounter);
   checkForFirmwareUpdate(wakeUpCounter);
 
-  // If led test requested, keep led ON until its power cycled 
+  // If led test requested, keep led ON until its power cycled
   if (g_configuration.isLedTestRequested()) {
     g_statusLed.on();
     g_statusLed.holdState();
@@ -410,9 +407,9 @@ void initGPIO() {
     io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) |
                            (1ULL << EN_CO2) | (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
   } else {
-    // Ignore CO2 load switch IO since the state already retained
-    io_conf.pin_bit_mask = (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) |
-                           (1ULL << EN_CE_CARD) | (1ULL << EN_ALPHASENSE);
+    // Ignore CO2 and Alphasense load switch IO since the state already retained
+    io_conf.pin_bit_mask =
+        (1ULL << IO_WDT) | (1ULL << EN_PMS1) | (1ULL << EN_PMS2) | (1ULL << EN_CE_CARD);
   }
   gpio_config(&io_conf);
 
@@ -428,14 +425,15 @@ void initGPIO() {
   gpio_set_level(IO_WDT, 0);
   gpio_set_level(EN_PMS1, 0);
   gpio_set_level(EN_PMS2, 0);
-  gpio_set_level(EN_ALPHASENSE, 0);
   gpio_set_level(EN_CE_CARD, 0);
 
   if (xWakeUpCounter == 0) {
-    // Directly enable CO2 load switch and hold the state only when first boot
+    // Directly enable CO2 and AlphaSense load switch and hold the state only when first boot
     // gpio_hold_en will retain the GPIO state on every sleep cycle even when system reset
     gpio_set_level(EN_CO2, 1);
+    gpio_set_level(EN_ALPHASENSE, 1);
     gpio_hold_en(EN_CO2);
+    gpio_hold_en(EN_ALPHASENSE);
   }
 }
 
