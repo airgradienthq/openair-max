@@ -65,15 +65,21 @@ Device operates on a regular schedule, attempting to send payload every 9 minute
 - NOx
 - PM 0.3 Particle Count 
 - Signal Strength in dbm
-- Battery Voltage in mV
-- Solar Panel Voltage in mV
+- Battery Voltage in V
+- Solar Panel Voltage in V
 - O3 Working Electrode (WE) in mV → _O-M-1PPSTON-CE_ only
 - O3 Auxiliary Electrode (AE) in mV → _O-M-1PPSTON-CE_ only
 - NO2 Working Electrode (WE) in mV → _O-M-1PPSTON-CE_ only
 - NO2 Auxiliary Electrode (AE) in mV → _O-M-1PPSTON-CE_ only
 - AFE Temperature in mV → _O-M-1PPSTON-CE_ only
 
-**Example Payload Breakdown**
+To reduce the payload size and still maintain precision for decimal values, certain measurements are scaled up before transmission. To get the actual reading, these value must be divided by a specific factor:
+
+- **Divide by 10**: `Temperature`, `Humidity`, `PM1.0`, `PM2.5`, `PM10`, and `AFE Temperature`.
+- **Divide by 100**: `Battery Voltage` and `Solar Panel Voltage`.
+- **Divide by 1000**: `O3 WE`, `O3 AE`, `NO2 WE`, and `NO2 AE`.
+
+For example, a transmitted `Temperature` value of `285` should be divided by 10 to get the actual reading of `28.5`.
 
 A typical payload might look like this:
 
@@ -87,16 +93,6 @@ In this example:
 - `452,...,5796` → The first measurements set 
 - `450,...,5795` → The second measurements set 
 - `446,...,5796` → The third measurements set 
-
-**Data Scaling for Efficiency**
-
-To reduce the payload size and still maintain precision for decimal values, certain measurements are scaled up before transmission. Developers must divide these values by a specific factor to get the actual reading:
-
-- **Divide by 10**: `Temperature`, `Humidity`, `PM1.0`, `PM2.5`, `PM10`, and `AFE Temperature`.
-- **Divide by 100**: `Battery Voltage` and `Solar Panel Voltage`.
-- **Divide by 1000**: `O3 WE`, `O3 AE`, `NO2 WE`, and `NO2 AE`.
-
-For example, a transmitted `Temperature` value of `285` should be divided by 10 to get the actual reading of `28.5`.
 
 
 **Handling Data Loss**
