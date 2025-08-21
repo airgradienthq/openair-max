@@ -55,23 +55,25 @@ Payload format is sent based on what is the network options
 
 Device operates on a regular schedule, attempting to send payload every 9 minutes. Each payload contains a set of comma-separated values. The first value is an **`interval`** number in seconds, which serves as a reference for the timestamping of the subsequent measurements. After that, the payload contains three distinct sets of sensor measurements. Each set represents a snapshot of the device's sensor readings taken at a 3-minute interval. The measurements are always in the same order:
 
-- CO2
-- Temperature
-- Humidity
-- PM1.0
-- PM2.5
-- PM10
-- TVOC
-- NOx
+- CO2 (ppm)
+- Temperature (°C) multiply by 10 
+- Humidity (%) multiply by 10
+- PM1.0 (μg/m³) multiply by 10
+- PM2.5 (μg/m³) multiply by 10
+- PM10 (μg/m³) multiply by 10
+- TVOC (Raw)
+- NOx (Raw)
 - PM 0.3 Particle Count 
-- Signal Strength in dbm
-- Battery Voltage in V
-- Solar Panel Voltage in V
-- O3 Working Electrode (WE) in mV → _O-M-1PPSTON-CE_ only
-- O3 Auxiliary Electrode (AE) in mV → _O-M-1PPSTON-CE_ only
-- NO2 Working Electrode (WE) in mV → _O-M-1PPSTON-CE_ only
-- NO2 Auxiliary Electrode (AE) in mV → _O-M-1PPSTON-CE_ only
-- AFE Temperature in mV → _O-M-1PPSTON-CE_ only
+- Signal Strength (dbm)
+- Battery Voltage (V) multiply by 100
+- Solar Panel Voltage (V) multiply by 100
+- O3 Working Electrode (mV) multiply by 1000 → _O-M-1PPSTON-CE_ only
+- O3 Auxiliary Electrode (mV) multiply by 1000 → _O-M-1PPSTON-CE_ only
+- NO2 Working Electrode (mV) multiply by 1000 → _O-M-1PPSTON-CE_ only
+- NO2 Auxiliary Electrode (mV) multiply by 1000 → _O-M-1PPSTON-CE_ only
+- AFE Temperature (mV) multiply by 10 → _O-M-1PPSTON-CE_ only
+
+**Data Scaling for Efficiency**
 
 To reduce the payload size and still maintain precision for decimal values, certain measurements are scaled up before transmission. To get the actual reading, these value must be divided by a specific factor:
 
@@ -80,6 +82,8 @@ To reduce the payload size and still maintain precision for decimal values, cert
 - **Divide by 1000**: `O3 WE`, `O3 AE`, `NO2 WE`, and `NO2 AE`.
 
 For example, a transmitted `Temperature` value of `285` should be divided by 10 to get the actual reading of `28.5`.
+
+**Example Payload Breakdown**
 
 A typical payload might look like this:
 
