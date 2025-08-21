@@ -52,9 +52,9 @@ void StatusLed::stop() {
   }
 }
 
-void StatusLed::enable() { gpio_hold_en(_ioLed); }
+void StatusLed::holdState() { gpio_hold_en(_ioLed); }
 
-void StatusLed::disable() { gpio_hold_dis(_ioLed); }
+void StatusLed::releaseState() { gpio_hold_dis(_ioLed); }
 
 void StatusLed::on() { set(On); }
 

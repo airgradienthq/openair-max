@@ -340,13 +340,13 @@ extern "C" void app_main(void) {
   esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  // Keep status led ON every sleep cycle when ledTestRequested is set from remote configuration
+  // Keep status led ON until ledTestRequested is unset from remote configuration
   if (g_configuration.isLedTestRequested()) {
     g_statusLed.on();
-    g_statusLed.enable();
+    g_statusLed.holdState();
   } else {
     g_statusLed.off();
-    g_statusLed.disable();
+    g_statusLed.releaseState();
   }
 
   esp_deep_sleep_start();
