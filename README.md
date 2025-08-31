@@ -1,4 +1,6 @@
-# Firmware for the Open Air Max, uses airgradient-client and airgradient-ota
+# Firmware for the AirGradient Open Air Max
+
+Uses airgradient-client and airgradient-ota
 
 ## Led indicator
 
@@ -27,15 +29,15 @@
 
 If, on the first boot, the **boot button** is held for 5 seconds or longer, the MAX will launch the _System Settings Portal_. From there, you can configure settings such as:
 
-- Switching the transmission mode between cellular and Wi-Fi  
-- Setting the cellular APN  
-- Entering Wi-Fi credentials  
+- Switching the transmission mode between cellular and Wi-Fi
+- Setting the cellular APN
+- Entering Wi-Fi credentials
 
-To exit, either **save the new settings**, press the **Exit** button on the home page, or hold the **boot button** again for 5 seconds or longer.  
+To exit, either **save the new settings**, press the **Exit** button on the home page, or hold the **boot button** again for 5 seconds or longer.
 
 ## Transmission
 
-Has 2 network options, Cellular and WiFi that can be choose from _System Settings Portal_. Default set to *Cellular*.
+Has 2 network options, Cellular and WiFi that can be choose from _System Settings Portal_. Default set to _Cellular_.
 
 ### 1. Fetch Configuration
 
@@ -53,17 +55,17 @@ Payload format is sent based on what is the network options
 
 > Applied when transmit through HTTP and MQTT
 
-Device operates on a regular schedule, attempting to send payload every 9 minutes. Each payload contains a set of comma-separated values. The first value is an **`interval`** number in seconds, which serves as a reference for the timestamping of the subsequent measurements. After that, the payload contains three distinct sets of sensor measurements. Each set represents a snapshot of the device's sensor readings taken at a 3-minute interval. The measurements are always in the same order:
+Device operates on a regular schedule, attempting to send payload every 9 minutes. Each payload contains a set of comma-separated values. The first value is an **`interval`** number in seconds, which serves as a reference for the timestamp of the subsequent measurements. After that, the payload contains three distinct sets of sensor measurements. Each set represents a snapshot of the device's sensor readings taken at a 3-minute interval. The measurements are always in the same order:
 
 - CO2 (ppm)
-- Temperature (°C) multiply by 10 
+- Temperature (°C) multiply by 10
 - Humidity (%) multiply by 10
 - PM1.0 (μg/m³) multiply by 10
 - PM2.5 (μg/m³) multiply by 10
 - PM10 (μg/m³) multiply by 10
 - TVOC (Raw)
 - NOx (Raw)
-- PM 0.3 Particle Count 
+- PM 0.3 Particle Count
 - Signal Strength (dbm)
 - Battery Voltage (V) multiply by 100
 - Solar Panel Voltage (V) multiply by 100
@@ -73,7 +75,7 @@ Device operates on a regular schedule, attempting to send payload every 9 minute
 - NO2 Auxiliary Electrode (mV) multiply by 1000 → _O-M-1PPSTON-CE_ only
 - AFE Temperature (mV) multiply by 10 → _O-M-1PPSTON-CE_ only
 
-**Data Scaling for Efficiency**
+##### Data Scaling for Efficiency
 
 To reduce the payload size and still maintain precision for decimal values, certain measurements are scaled up before transmission. To get the actual reading, these value must be divided by a specific factor:
 
@@ -83,7 +85,7 @@ To reduce the payload size and still maintain precision for decimal values, cert
 
 For example, a transmitted `Temperature` value of `285` should be divided by 10 to get the actual reading of `28.5`.
 
-**Example Payload Breakdown**
+##### Example Payload Breakdown
 
 A typical payload might look like this:
 
@@ -94,12 +96,11 @@ A typical payload might look like this:
 In this example:
 
 - `180` → The `interval` value at the start in seconds
-- `452,...,5796` → The first measurements set 
-- `450,...,5795` → The second measurements set 
-- `446,...,5796` → The third measurements set 
+- `452,...,5796` → The first measurements set
+- `450,...,5795` → The second measurements set
+- `446,...,5796` → The third measurements set
 
-
-**Handling Data Loss**
+##### Handling Data Loss**
 
 The device has a built-in caching mechanism to handle network outages. If a scheduled transmission fails, the measurements are stored locally. On the next successful transmission, the device will send the new measurements along with the previously cached ones. This means you may receive payloads with more than three sets of measurements. For example, a payload could contain six measurements if one transmission cycle was missed. This ensures data integrity and prevents permanent data loss during temporary network disruptions.
 
@@ -111,13 +112,13 @@ The device has a built-in caching mechanism to handle network outages. If a sche
 
 Data from the device is packaged into a JSON payload. The device operates on a regular schedule, sending a new payload every 3 minutes. Each payload contains a single set of sensor measurements. Device transmits measurements as they are taken. There is no data caching or retransmission mechanism built into the device. If a transmission fails, the data for that 3-minute interval is not resent.
 
-**Example Payload Breakdown**
+##### Example Payload Breakdown
 
 ```json
 {
   "rco2": 452, // CO2
   "atmp": 28.5, // Temperature
-  "rhum": 75.1, // Humidity 
+  "rhum": 75.1, // Humidity
   "pm01": 16.3, // PM1.0
   "pm25": 27.7, // PM2.5
   "pm10": 29.5, // PM10
