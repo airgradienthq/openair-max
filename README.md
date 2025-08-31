@@ -17,7 +17,7 @@
 11. Quick blink 5x when trigger to start/stop system settings portal
 12. Quick blink (forever) when system settings portal is currently active
 
-### Every wakeup cycle
+### Every wake-up cycle
 
 1. Led indicator is off unless there's error
 2. Slow blink 2x if there's one or more sensor failed to initialize
@@ -39,7 +39,7 @@ Has 2 network options, Cellular and WiFi that can be choose from _System Setting
 
 ### 1. Fetch Configuration
 
-Fetch remote configuration from airgradient server every 1 hour, and configuration will be applied on the next wakeup cycle
+Fetch remote configuration from AirGradient server every 1 hour, and configuration will be applied on the next wake-up cycle
 
 ### 2. FOTA Update
 
@@ -126,7 +126,7 @@ Data from the device is packaged into a JSON payload. The device operates on a r
   "pm003Count": 3225, // PM 0.3 Particle Count
   "wifi": -69, // Wifi Signal
   "volt": 11.24, // Battery Volt
-  "light": 1.4, // Solar Panel Vold
+  "light": 1.4, // Solar Panel Volt
   "measure0": 580.981, // O3 WE
   "measure1": 581.369, // O3 AE
   "measure2": 581.319, // NO2 WE
