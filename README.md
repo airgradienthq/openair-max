@@ -1,22 +1,21 @@
-# Firmware for the AirGradient Open Air Max
+> Firmware for the AirGradient Open Air Max
 
 ## Table of Contents
 
-- [Firmware for the AirGradient Open Air Max](#firmware-for-the-airgradient-open-air-max)
-  - [Led indicator](#led-indicator)
-    - [Powered On (1st boot)](#powered-on-1st-boot)
-    - [Every wake-up cycle](#every-wake-up-cycle)
-  - [System Settings Portal](#system-settings-portal)
-  - [Transmission](#transmission)
-    - [Fetch Configuration](#1.-fetch-configuration)
-    - [FOTA Update](#2.-fota-update)
-    - [Send Measurements](#3.-send-measurements)
-      - [Cellular](#cellular)
-        - [Data Scaling for Efficiency](#data-scaling-for-efficiency)
-        - [Example Payload Breakdown](#example-payload-breakdown)
-        - [Handling Data Loss](#handling-data-loss)
-      - [WiFi](#wifi)
-        - [Example Payload Breakdown](#example-payload-breakdown-1)
+- [Led indicator](#led-indicator)
+  - [Powered On (1st boot)](#powered-on-1st-boot)
+  - [Every wake-up cycle](#every-wake-up-cycle)
+- [System Settings Portal](#system-settings-portal)
+- [Transmission](#transmission)
+  - [Fetch Configuration](#1.-fetch-configuration)
+  - [FOTA Update](#2.-fota-update)
+  - [Send Measurements](#3.-send-measurements)
+    - [Cellular](#cellular)
+      - [Data Scaling for Efficiency](#data-scaling-for-efficiency)
+      - [Example Payload Breakdown](#example-payload-breakdown)
+      - [Handling Data Loss](#handling-data-loss)
+    - [WiFi](#wifi)
+      - [Example Payload Breakdown](#example-payload-breakdown-1)
 
 ## Led indicator
 
