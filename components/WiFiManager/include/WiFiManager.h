@@ -42,6 +42,7 @@ struct SettingsForm {
   std::string ssid;
   std::string password;
   std::string apn;
+  std::string httpDomain;
   // Add more here
 };
 

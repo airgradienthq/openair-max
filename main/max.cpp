@@ -192,6 +192,7 @@ extern "C" void app_main(void) {
       settings.networkMode = NETWORK_MODE_WIFI_STR;
     }
     settings.apn = g_configuration.getAPN();
+    settings.httpDomain = g_configuration.getHttpDomain();
     g_wifiManager.setSettings(settings);
 
     // Run portal
@@ -215,6 +216,7 @@ extern "C" void app_main(void) {
     auto config = g_configuration.get();
     config.runSystemSettings = false;
     settings = g_wifiManager.getSettings();
+    config.httpDomain = settings.httpDomain;
     if (settings.networkMode == NETWORK_MODE_CELLULAR_STR) {
       config.networkOption = NetworkOption::Cellular;
       config.apn = settings.apn;
@@ -669,6 +671,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   // Initialize cellular card and client
   g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
+  g_agClient->setHttpDomain(g_configuration.getHttpDomain());
 
   resetExtWatchdog();
 
@@ -814,8 +817,10 @@ bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
     return false;
   }
 
+  // Initialize airgrdaient client
   g_agClient = new AirgradientWifiClient;
   g_agClient->begin(g_serialNumber, getPayloadType());
+  g_agClient->setHttpDomain(g_configuration.getHttpDomain());
 
   AirgradientClient::AirgradientPayload payload;
   payload.sensor = &sensorPayload;
