@@ -1,6 +1,22 @@
 # Firmware for the AirGradient Open Air Max
 
-Uses airgradient-client and airgradient-ota
+## Table of Contents
+
+- [Firmware for the AirGradient Open Air Max](#firmware-for-the-airgradient-open-air-max)
+  - [Led indicator](#led-indicator)
+    - [Powered On (1st boot)](#powered-on-1st-boot)
+    - [Every wake-up cycle](#every-wake-up-cycle)
+  - [System Settings Portal](#system-settings-portal)
+  - [Transmission](#transmission)
+    - [Fetch Configuration](#1.-fetch-configuration)
+    - [FOTA Update](#2.-fota-update)
+    - [Send Measurements](#3.-send-measurements)
+      - [Cellular](#cellular)
+        - [Data Scaling for Efficiency](#data-scaling-for-efficiency)
+        - [Example Payload Breakdown](#example-payload-breakdown)
+        - [Handling Data Loss](#handling-data-loss)
+      - [WiFi](#wifi)
+        - [Example Payload Breakdown](#example-payload-breakdown-1)
 
 ## Led indicator
 
@@ -32,6 +48,7 @@ If, on the first boot, the **boot button** is held for 5 seconds or longer, the 
 - Switching the transmission mode between cellular and Wi-Fi
 - Setting the cellular APN
 - Entering Wi-Fi credentials
+- Changing the URL for domain for HTTP requests
 
 To exit, either **save the new settings**, press the **Exit** button on the home page, or hold the **boot button** again for 5 seconds or longer.
 
@@ -100,7 +117,7 @@ In this example:
 - `450,...,5795` → The second measurements set
 - `446,...,5796` → The third measurements set
 
-##### Handling Data Loss**
+##### Handling Data Loss
 
 The device has a built-in caching mechanism to handle network outages. If a scheduled transmission fails, the measurements are stored locally. On the next successful transmission, the device will send the new measurements along with the previously cached ones. This means you may receive payloads with more than three sets of measurements. For example, a payload could contain six measurements if one transmission cycle was missed. This ensures data integrity and prevents permanent data loss during temporary network disruptions.
 
