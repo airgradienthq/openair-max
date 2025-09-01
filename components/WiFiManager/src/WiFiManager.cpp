@@ -69,7 +69,6 @@ void WiFiManager::init() {
   }
 
   _initialized = true;
-  WM_LOGI("WiFiManager initialized with AP name: %s", _apName.c_str());
 }
 
 void WiFiManager::cleanup() {
@@ -282,6 +281,7 @@ bool WiFiManager::autoConnect(const char *apName, const char *apPassword, bool s
       }
 
       if (_state == WM_STATE_RUN_STA) {
+        WM_LOGI("Connected to: %s", getSSID().c_str());
         WM_LOGI("AutoConnect successful");
         return true;
       }
@@ -1527,39 +1527,64 @@ esp_err_t WiFiManager::handleScan(httpd_req_t *req) {
   return ESP_OK;
 }
 
+std::string WiFiManager::urlDecode(const std::string &src) {
+  std::string result;
+  result.reserve(src.size());
+
+  for (size_t i = 0; i < src.size(); i++) {
+    if (src[i] == '+') {
+      result += ' ';
+    } else if (src[i] == '%' && i + 2 < src.size()) {
+      // Convert hex digits to char
+      char hex[3] = {src[i + 1], src[i + 2], 0};
+      char decoded = static_cast<char>(std::strtol(hex, nullptr, 16));
+      result += decoded;
+      i += 2;
+    } else {
+      result += src[i];
+    }
+  }
+
+  return result;
+}
+
 SettingsForm WiFiManager::parseFormParams(char *buf) {
   SettingsForm form;
-  char *key = buf;
-  char *val = nullptr;
+  char *p = buf;
 
-  while (*key) {
-    // Find '='
-    val = std::strchr(key, '=');
-    if (!val)
-      break;
-    *val = '\0'; // terminate key
-    ++val;       // value starts here
+  // walk through the pointer
+  while (*p) {
+    // Find key
+    char *keyStart = p;
+    while (*p && *p != '=' && *p != '&')
+      p++;
+    std::string key(keyStart, p - keyStart);
 
-    // Find '&'
-    char *next = std::strchr(val, '&');
-    if (next) {
-      *next = '\0'; // terminate value
-      ++next;       // next key
+    if (*p == '=') {
+      p++; // skip '='
+      char *valStart = p;
+      while (*p && *p != '&')
+        p++;
+      std::string value(valStart, p - valStart);
+
+      // Decode before storing
+      key = urlDecode(key);
+      value = urlDecode(value);
+
+      // Assign based on form key
+      if (key == "net_mode") {
+        form.networkMode = value;
+      } else if (key == "s") { // ssid
+        form.ssid = value;
+      } else if (key == "p") { // password
+        form.password = value;
+      } else if (key == "apn") {
+        form.apn = value;
+      }
     }
 
-    // Match key to struct field
-    if (std::strcmp(key, "net_mode") == 0)
-      form.networkMode = val;
-    else if (std::strcmp(key, "s") == 0)
-      form.ssid = val;
-    else if (std::strcmp(key, "p") == 0)
-      form.password = val;
-    else if (std::strcmp(key, "apn") == 0)
-      form.apn = val;
-
-    if (!next)
-      break;
-    key = next;
+    if (*p == '&')
+      p++; // skip '&'
   }
 
   return form;
