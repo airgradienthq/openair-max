@@ -1385,6 +1385,7 @@ esp_err_t WiFiManager::handleFetchSettings(httpd_req_t *req) {
   cJSON_AddStringToObject(root, "net_mode", manager->_settings.networkMode.c_str());
   cJSON_AddStringToObject(root, "apn", manager->_settings.apn.c_str());
   cJSON_AddStringToObject(root, "ssid", manager->_settings.ssid.c_str());
+  cJSON_AddStringToObject(root, "http_dom", manager->_settings.httpDomain.c_str());
 
   char *json_string = cJSON_Print(root);
   if (json_string) {
@@ -1580,6 +1581,8 @@ SettingsForm WiFiManager::parseFormParams(char *buf) {
         form.password = value;
       } else if (key == "apn") {
         form.apn = value;
+      } else if (key == "http_dom") {
+        form.httpDomain = value;
       }
     }
 

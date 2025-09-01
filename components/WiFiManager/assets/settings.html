@@ -77,6 +77,15 @@
 
     <!-- All settings are in one form for a single save action -->
     <form action="/settings-save" method="post">
+        <!-- GENERAL SETTINGS (Always Visible) -->
+        <div class="form-section">
+            <h3>General Settings</h3>
+            <div class="form-group">
+                <label for="http_dom">HTTP URL Domain</label>
+                <input id="http_dom" name="http_dom" type="text" placeholder="hw.airgradient.com">
+            </div>
+        </div>
+
         <!-- NETWORK MODE SELECTION -->
         <div class="form-section">
             <h3>Network Mode</h3>
@@ -184,6 +193,10 @@
                     document.getElementById('mode_cell').checked = true;
                 } else {
                     document.getElementById('mode_wifi').checked = true;
+                }
+
+                if (settings.http_dom) {
+                    document.getElementById('http_dom').value = settings.http_dom;
                 }
 
                 // Populate WiFi Settings
