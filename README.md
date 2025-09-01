@@ -16,6 +16,7 @@
       - [Handling Data Loss](#handling-data-loss)
     - [WiFi](#wifi)
       - [Example Payload Breakdown](#example-payload-breakdown-1)
+- [Building the Firmware](#building-the-firmware)
 
 ## Led indicator
 
@@ -151,3 +152,38 @@ Data from the device is packaged into a JSON payload. The device operates on a r
   "measure4": 579.6 // AFE Temperature
 }
 ```
+
+## Building the Firmware
+
+This project is based on **ESP-IDF v5.4** and includes [AirgradientClient](https://github.com/airgradienthq/airgradient-client) and [AirgradientOTA](https://github.com/airgradienthq/airgradient-ota) as submodules located in the `components/` directory, so make sure they are properly initialized before building.
+
+**1. Install ESP-IDF**
+
+Follow the official ESP-IDF Getting Started Guide to install the required tools and set up your environment:
+- **Getting Started with ESP-IDF**: [ESP-IDF Official Guide](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32c6/get-started/index.html)
+
+**2. Clone the repository and initialize submodules**
+
+```bash
+$ git clone --recursive https://github.com/airgradienthq/openair-max
+$ cd openair-max
+```
+
+If you've already cloned without `--recursive`:
+
+```bash
+$ git submodule update --init --recursive
+```
+
+**3. Build, flash, and monitor**
+
+```bash
+$ idf.py build
+$ idf.py -p <PORT> flash monitor
+```
+
+### Notes
+
+- Make sure the components/ submodules are up-to-date to avoid build errors.
+- The ESP-IDF v5.4 should pull in the compatible toolchain and CMake versions—refer to the ESP-IDF Getting Started Guide for details.
+- If installing ESP-IDF through IDE (not manual), make sure to follow the respective guide to build, flash and monitor.
