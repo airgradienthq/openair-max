@@ -133,9 +133,9 @@ extern "C" void app_main(void) {
   if (wakeUpReason != ESP_SLEEP_WAKEUP_UNDEFINED) {
     initConsole();
     ++xWakeUpCounter;
-    ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
   }
   vTaskDelay(pdMS_TO_TICKS(1000));
+  ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
   printResetReason();
   printWakeupReason(wakeUpReason);
 

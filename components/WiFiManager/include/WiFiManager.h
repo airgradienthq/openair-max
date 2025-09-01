@@ -241,6 +241,7 @@ private:
   static WiFiManager *getManagerFromRequest(httpd_req_t *req);
 
   SettingsForm _settings;
+  static std::string urlDecode(const std::string &src); // decode a URL-encoded string
   static SettingsForm parseFormParams(char *buf);
   static esp_err_t performSettingCellular(httpd_req_t *req, const SettingsForm &settings);
   static esp_err_t performSettingWifi(httpd_req_t *req, const SettingsForm &settings);
