@@ -39,6 +39,7 @@ public:
     bool isWifiConfigured;
     bool runSystemSettings;
     std::string apn;
+    std::string httpDomain;
   };
 
   Configuration() {}
@@ -61,6 +62,7 @@ public:
   bool runSystemSettings();
   std::string getAPN();
   std::string getMqttBrokerUrl();
+  std::string getHttpDomain();
 
   // Setter
   bool set(Config config);
