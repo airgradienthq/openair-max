@@ -29,7 +29,8 @@
 #define REG3C_BAT_PCT 0x3F
 #define REG3F_TEMP_ADC 0x41
 #define REG33_IBAT_ADC 0x33 // Register Address for IBAT ADC
-#define REG39_VBUS_ADC 0x39 // VBUS ADC Register
+#define REG37_VBUS_ADC1 0x37 // Register Address for VBUS ADC1
+#define REG39_VBUS_ADC2 0x39 // Register Address for VBUS ADC2
 #define REG15_MPPT 0x15
 #define REG_SYSTEM_STATUS 0x0A
 #define REG_FAULT_STATUS 0x0B
@@ -235,12 +236,23 @@ esp_err_t BQ25672::getTemperatureRaw(uint16_t *output) {
 }
 
 esp_err_t BQ25672::getVBUSRaw(uint16_t *output) {
-  ESP_RETURN_ON_ERROR(writeReadRegister(REG39_VBUS_ADC, 2, output), TAG, "Failed get VBUS raw");
+  // First try reading from ADC1
+  uint16_t adc1_value;
+  ESP_RETURN_ON_ERROR(writeReadRegister(REG37_VBUS_ADC1, 2, &adc1_value), TAG, "Failed get VBUS ADC1");
+  
+  // If ADC1 value is >= 1, use it
+  if (adc1_value >= 1000) {
+    *output = adc1_value;
+    return ESP_OK;
+  }
+  
+  // Otherwise, fall back to ADC2
+  ESP_RETURN_ON_ERROR(writeReadRegister(REG39_VBUS_ADC2, 2, output), TAG, "Failed get VBUS ADC2");
   return ESP_OK;
 }
 
 esp_err_t BQ25672::getIBATRaw(uint16_t *output) {
-  ESP_RETURN_ON_ERROR(writeReadRegister(REG39_VBUS_ADC, 2, output), TAG, "Failed get raw IBAT");
+  ESP_RETURN_ON_ERROR(writeReadRegister(REG39_VBUS_ADC2, 2, output), TAG, "Failed get raw IBAT");
   return ESP_OK;
 }
 
