@@ -36,6 +36,7 @@ private:
   void _applyIteration(AirgradientClient::MaxSensorPayload &data);
   void _calculateMeasuresAverage();
   void _warmUpSensor();
+  bool _applySunlightMeasurementSample();
 
   int _rco2IterationOkCount = 0;
   int _atmpIterationOkCount = 0;
