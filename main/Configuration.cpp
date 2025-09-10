@@ -248,8 +248,8 @@ bool Configuration::_loadConfig() {
   }
 
   // ABC DAYS
-  uint16_t abcDays;
-  err = nvs_get_u16(handle, NVS_KEY_ABC_DAYS, &abcDays);
+  int16_t abcDays;
+  err = nvs_get_i16(handle, NVS_KEY_ABC_DAYS, &abcDays);
   if (err == ESP_OK) {
     _config.abcDays = abcDays;
   } else {
@@ -423,7 +423,7 @@ bool Configuration::_saveConfig() {
   }
 
   // ABC DAYS
-  err = nvs_set_u16(handle, NVS_KEY_ABC_DAYS, _config.abcDays);
+  err = nvs_set_i16(handle, NVS_KEY_ABC_DAYS, _config.abcDays);
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "Failed to save abcDays");
   }
