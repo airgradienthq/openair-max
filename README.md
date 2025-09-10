@@ -1,6 +1,22 @@
-# Firmware for the AirGradient Open Air Max
+> Firmware for the AirGradient Open Air Max
 
-Uses airgradient-client and airgradient-ota
+## Table of Contents
+
+- [Led indicator](#led-indicator)
+  - [Powered On (1st boot)](#powered-on-1st-boot)
+  - [Every wake-up cycle](#every-wake-up-cycle)
+- [System Settings Portal](#system-settings-portal)
+- [Transmission](#transmission)
+  - [Fetch Configuration](#1.-fetch-configuration)
+  - [FOTA Update](#2.-fota-update)
+  - [Send Measurements](#3.-send-measurements)
+    - [Cellular](#cellular)
+      - [Data Scaling for Efficiency](#data-scaling-for-efficiency)
+      - [Example Payload Breakdown](#example-payload-breakdown)
+      - [Handling Data Loss](#handling-data-loss)
+    - [WiFi](#wifi)
+      - [Example Payload Breakdown](#example-payload-breakdown-1)
+- [Building the Firmware](#building-the-firmware)
 
 ## Led indicator
 
@@ -32,6 +48,7 @@ If, on the first boot, the **boot button** is held for 5 seconds or longer, the 
 - Switching the transmission mode between cellular and Wi-Fi
 - Setting the cellular APN
 - Entering Wi-Fi credentials
+- Changing the URL for domain for HTTP requests
 
 To exit, either **save the new settings**, press the **Exit** button on the home page, or hold the **boot button** again for 5 seconds or longer.
 
@@ -100,7 +117,7 @@ In this example:
 - `450,...,5795` → The second measurements set
 - `446,...,5796` → The third measurements set
 
-##### Handling Data Loss**
+##### Handling Data Loss
 
 The device has a built-in caching mechanism to handle network outages. If a scheduled transmission fails, the measurements are stored locally. On the next successful transmission, the device will send the new measurements along with the previously cached ones. This means you may receive payloads with more than three sets of measurements. For example, a payload could contain six measurements if one transmission cycle was missed. This ensures data integrity and prevents permanent data loss during temporary network disruptions.
 
@@ -135,3 +152,38 @@ Data from the device is packaged into a JSON payload. The device operates on a r
   "measure4": 579.6 // AFE Temperature
 }
 ```
+
+## Building the Firmware
+
+This project is based on **ESP-IDF v5.4** and includes [AirgradientClient](https://github.com/airgradienthq/airgradient-client) and [AirgradientOTA](https://github.com/airgradienthq/airgradient-ota) as submodules located in the `components/` directory, so make sure they are properly initialized before building.
+
+**1. Install ESP-IDF**
+
+Follow the official ESP-IDF Getting Started Guide to install the required tools and set up your environment:
+- **Getting Started with ESP-IDF**: [ESP-IDF Official Guide](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32c6/get-started/index.html)
+
+**2. Clone the repository and initialize submodules**
+
+```bash
+$ git clone --recursive https://github.com/airgradienthq/openair-max
+$ cd openair-max
+```
+
+If you've already cloned without `--recursive`:
+
+```bash
+$ git submodule update --init --recursive
+```
+
+**3. Build, flash, and monitor**
+
+```bash
+$ idf.py build
+$ idf.py -p <PORT> flash monitor
+```
+
+### Notes
+
+- Make sure the components/ submodules are up-to-date to avoid build errors.
+- The ESP-IDF v5.4 should pull in the compatible toolchain and CMake versions—refer to the ESP-IDF Getting Started Guide for details.
+- If installing ESP-IDF through IDE (not manual), make sure to follow the respective guide to build, flash and monitor.
