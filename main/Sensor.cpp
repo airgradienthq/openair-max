@@ -63,8 +63,13 @@ bool Sensor::init(Configuration::Model model, int co2ABCDays) {
 
     co2_->read_sensor_config(); // Check measurement samples setting and mode
 
-    co2_->setABC(true);
-    co2_->setABCPeriod(co2ABCDays * 24); // Convert to hours
+    // Apply Automatic Background Calibration when value is valid
+    if (co2ABCDays > 0) {
+      co2_->setABC(true);
+      co2_->setABCPeriod(co2ABCDays * 24); // Convert to hours
+    } else {
+      co2_->setABC(false);
+    }
     ESP_LOGI(TAG, "CO2 ABC status: %d", co2_->isABCEnabled() ? 1 : 0);
     // NOTE: Since UART, need to check if its actually able to communicate?
   }
