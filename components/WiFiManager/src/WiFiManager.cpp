@@ -1737,7 +1737,7 @@ esp_err_t WiFiManager::handleSettingsSave(httpd_req_t *req) {
 
   buf[total_received] = '\0';
   WM_LOGI("Received %d bytes of POST data", total_received);
-  WM_LOGI("%s", buf.get());
+  WM_LOGD("%s", buf.get());
 
   SettingsForm settings = parseFormParams(buf.get());
   buf.release(); // For optimization. no need anymore
