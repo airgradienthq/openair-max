@@ -33,7 +33,7 @@
         .networks { margin: 20px 0; }
         .networks h4 { margin: 0 0 10px 0; color: #eee; }
         
-        /* --- MODIFIED: Added a scrollable container for the network list --- */
+        /* Added a scrollable container for the network list --- */
         .networks-container {
             max-height: 180px; /* Adjust this value as needed */
             overflow-y: auto;
@@ -68,6 +68,58 @@
             font-weight: normal;
             cursor: pointer;
         }
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+            margin-left: 8px;
+        }
+        .tooltip-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            line-height: 16px;
+            border-radius: 50%;
+            background-color: #555;
+            color: #eee;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: help;
+        }
+        .tooltip-text {
+            visibility: hidden;
+            width: 220px;
+            background-color: #1c1c1c;
+            color: #fff;
+            text-align: center;
+            border-radius: 5px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 140%; /* Position above the icon */
+            left: 50%;
+            margin-left: -110px; /* Use half of the width to center */
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.8em;
+            line-height: 1.4;
+            font-weight: normal;
+            border: 1px solid #555;
+        }
+        .tooltip-text::after { /* The little arrow */
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #1c1c1c transparent transparent transparent;
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -81,7 +133,12 @@
         <div class="form-section">
             <h3>General Settings</h3>
             <div class="form-group">
-                <label for="http_dom">HTTP URL Domain</label>
+                <label for="http_dom">HTTP URL Domain
+                    <span class="tooltip-container">
+                        <span class="tooltip-icon">?</span>
+                        <span class="tooltip-text">Target domain name where monitor do HTTP requests. Default: <b>hw.airgradient.com</b> </span>
+                    </span>
+                </label>
                 <input id="http_dom" name="http_dom" type="text" placeholder="hw.airgradient.com">
             </div>
         </div>
@@ -102,7 +159,7 @@
             <h3>WiFi Settings</h3>
             <div class="networks">
                 <h4>Available Networks (<span class="refresh-link"><a href="javascript:loadNetworks()">Refresh</a></span>)</h4>
-                <!-- MODIFIED: Wrapped the network list in the new scrollable container -->
+                <!-- Wrapped the network list in the new scrollable container -->
                 <div id="networks" class="networks-container">
                     <div class="loading">Scanning...</div>
                 </div>
@@ -125,7 +182,12 @@
         <div id="cellular_settings" class="form-section hidden">
             <h3>Cellular Settings</h3>
             <div class="form-group">
-                <label for="apn">SIM Card APN</label>
+                <label for="apn">SIM Card APN
+                    <span class="tooltip-container">
+                        <span class="tooltip-icon">?</span>
+                        <span class="tooltip-text">Access Point Name to connect to cellular network. Default: <b>iot.1nce.net</b> </span>
+                    </span>
+                </label>
                 <input id="apn" name="apn" type="text" placeholder="e.g., internet">
             </div>
         </div>
