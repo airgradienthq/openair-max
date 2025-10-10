@@ -779,3 +779,13 @@ void Sensor::_calculateMeasuresAverage() {
     _averageMeasure.afeTemp = _averageMeasure.afeTemp / _afeTempIterationOkCount;
   }
 }
+
+float Sensor::batteryPercentage() {
+  if (!_chargerAvailable) {
+    return -1.0;
+  }
+
+  float result = -1.0;
+  charger_->getBatteryPercentage(&result);
+  return result;
+}

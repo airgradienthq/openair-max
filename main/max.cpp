@@ -87,6 +87,11 @@ static void bootButtonTask(void *arg);
 static void initBootButton();
 
 /**
+ * Calculate how long the monitor needs to sleep in seconds
+ */
+static int calculateSleepIntervalSeconds(uint32_t startTimeMs, float batteryPercentage);
+
+/**
  * Reset monitor external watchdog timer
  *   with assumption GPIO already initialized before calling this function
  */
@@ -138,6 +143,10 @@ extern "C" void app_main(void) {
   ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
   printResetReason();
   printWakeupReason(wakeUpReason);
+  ESP_LOGI(TAG, "MAX!");
+
+  // Set flag bla bla
+  uint32_t wakeUpTimeMs = 0;
 
   // Initialize every peripheral GPIOs to OFF state
   initGPIO();
@@ -156,9 +165,6 @@ extern "C" void app_main(void) {
   }
   ESP_ERROR_CHECK(ret);
   vTaskDelay(pdMS_TO_TICKS(100));
-
-  uint32_t wakeUpMillis = MILLIS() - 1000; // minus with previous delay
-  ESP_LOGI(TAG, "MAX!");
 
   g_statusLed.start();
   if (xWakeUpCounter == 0) {
@@ -236,7 +242,7 @@ extern "C" void app_main(void) {
     // Wifi is ready from the start
     g_networkReady = true;
     // Starting time for every cycle should start now because time taken by system settings portal
-    wakeUpMillis = MILLIS();
+    wakeUpTimeMs = MILLIS();
   }
 
   // Reset external WDT
@@ -334,17 +340,14 @@ extern "C" void app_main(void) {
   //   before system wakeup
   resetExtWatchdog();
 
-  // Calculate how long to sleep to keep measurement cycle the same
-  uint32_t aliveTimeSpendMillis = MILLIS() - wakeUpMillis;
-  int toSleepMs = (g_configuration.getConfigSchedule().pm02 * 1000) - aliveTimeSpendMillis;
-  if (toSleepMs < 0) {
-    // TODO: if its 0 means, no need to sleep, right? if so need to move to loop
-    toSleepMs = 0;
-  }
-  ESP_LOGI(TAG, "Will sleep for %dms", toSleepMs);
-  esp_sleep_enable_timer_wakeup(toSleepMs * 1000);
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  // Set timer to wakeup from sleep
+  float batteryPercentage = sensor.batteryPercentage();
+  int toSleepSeconds = calculateSleepIntervalSeconds(wakeUpTimeMs, batteryPercentage);
+  ESP_LOGI(TAG, "Will sleep for %d seconds", toSleepSeconds);
+  esp_sleep_enable_timer_wakeup(toSleepSeconds * 1000000); // Convert to uS
 
+  // 
+  vTaskDelay(pdMS_TO_TICKS(1000));
   g_statusLed.off();
 
   esp_deep_sleep_start();
@@ -563,6 +566,33 @@ std::string buildSerialNumber() {
 std::string getFirmwareVersion() {
   const esp_app_desc_t *app_desc = esp_app_get_description();
   return app_desc->version;
+}
+
+int calculateSleepIntervalSeconds(uint32_t startTimeMs, float batteryPercentage) {
+  uint32_t aliveTimeSpendMs = MILLIS() - startTimeMs;
+  int measurementScheduleSec = g_configuration.getConfigSchedule().pm02;
+
+  // Define measurement schedule based on battery level to keep the monitor running longer
+  if (batteryPercentage >= 0) {
+    if (batteryPercentage > 30 && batteryPercentage <= 40) {
+      measurementScheduleSec = 300; // 5 mins
+    } else if (batteryPercentage > 20 && batteryPercentage <= 30) {
+      measurementScheduleSec = 600; // 10 mins
+    } else if (batteryPercentage > 10 && batteryPercentage <= 20) {
+      measurementScheduleSec = 900; // 15 mins
+    } else if (batteryPercentage >= 0 && batteryPercentage <= 10) {
+      measurementScheduleSec = 1200; // 20 mins
+    }
+  }
+  ESP_LOGI(TAG, "Measurement schedule is set to %d seconds", measurementScheduleSec);
+
+  // Calculate sleep time based on how long its awake to keep measurement schedule intact
+  int toSleepSec = ((measurementScheduleSec * 1000) - aliveTimeSpendMs) / 1000;
+  if (toSleepSec < 0) {
+    toSleepSec = 0;
+  }
+
+  return toSleepSec;
 }
 
 AirgradientClient::PayloadType getPayloadType() {
