@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include "airgradientOtaWifi.h"
 #include "airgradientWifiClient.h"
+#include "esp_attr.h"
 #include "esp_console.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
@@ -52,6 +53,8 @@
 // Wake up counter that saved on Low Power memory
 RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
 
+RTC_DATA_ATTR int xMeasurementLeadTimeSeconds = 0;
+
 // Hold the index of measures queue on which http post should start send measures
 // eg. xHttpCacheQueueIndex = 3, then for [q1, q2, q3, q4, q5, q6] should only send q4, q5, q6
 RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
@@ -87,9 +90,15 @@ static void bootButtonTask(void *arg);
 static void initBootButton();
 
 /**
- * Calculate how long the monitor needs to sleep in seconds
+ * Calculate the next measurement schedule
  */
-static int calculateSleepIntervalSeconds(uint32_t startTimeMs, float batteryPercentage);
+static int calculateMeasurementSchedule(uint32_t startTimeMs, float batteryVoltage);
+
+/**
+ * Calculate how long the monitor should sleep
+ * Because there's a hardware watchdog if measurement more than 15, it needs wakeup for a moment to reset watchdog
+ */
+static int setWakeUpTimer(int nextMeasurementScheduleSec);
 
 /**
  * Reset monitor external watchdog timer
@@ -137,15 +146,38 @@ extern "C" void app_main(void) {
   esp_sleep_wakeup_cause_t wakeUpReason = esp_sleep_get_wakeup_cause();
   if (wakeUpReason != ESP_SLEEP_WAKEUP_UNDEFINED) {
     initConsole();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    // Check if its not the time to do measurements
+    if (xMeasurementLeadTimeSeconds > 0) {
+      int nextMeasurementScheduleSeconds = xMeasurementLeadTimeSeconds;
+      ESP_LOGI(TAG, "Next measurements is in %d seconds", nextMeasurementScheduleSeconds);
+
+      // Set the wakeup timer
+      int sleepDurationSeconds = setWakeUpTimer(nextMeasurementScheduleSeconds);
+      xMeasurementLeadTimeSeconds = nextMeasurementScheduleSeconds - sleepDurationSeconds;
+      ESP_LOGI(TAG, "Sleeping for %d seconds", sleepDurationSeconds);
+
+      // Reset external watchdog timer before sleep to make sure its not trigger while in sleep
+      //   before system wakeup
+      initGPIO();
+      resetExtWatchdog();
+
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      esp_deep_sleep_start();
+      // Will not continue here
+    }
+
+    // TODO: Might need to rename?
     ++xWakeUpCounter;
   }
-  vTaskDelay(pdMS_TO_TICKS(1000));
   ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
   printResetReason();
   printWakeupReason(wakeUpReason);
+
   ESP_LOGI(TAG, "MAX!");
 
-  // Set flag bla bla
+  // Indicate wake up time
   uint32_t wakeUpTimeMs = 0;
 
   // Initialize every peripheral GPIOs to OFF state
@@ -336,20 +368,24 @@ extern "C" void app_main(void) {
     g_wifiManager.disconnect(true);
   }
 
-  // Reset external watchdog before sleep to make sure its not trigger while in sleep
+  // Get next measurement schedule
+  float batteryVoltage = sensor.batteryVoltage();
+  int nextMeasurementScheduleSeconds = calculateMeasurementSchedule(wakeUpTimeMs, batteryVoltage);
+  ESP_LOGI(TAG, "Next measurements is in %d seconds", nextMeasurementScheduleSeconds);
+
+  // Set timer to wakeup from sleep
+  int sleepDurationSeconds = setWakeUpTimer(nextMeasurementScheduleSeconds);
+  ESP_LOGI(TAG, "Sleeping for for %d seconds", sleepDurationSeconds);
+
+  // Get the difference measurement lead time for next wake up schedule
+  xMeasurementLeadTimeSeconds = nextMeasurementScheduleSeconds - sleepDurationSeconds;
+
+  // Reset external watchdog timer before sleep to make sure its not trigger while in sleep
   //   before system wakeup
   resetExtWatchdog();
 
-  // Set timer to wakeup from sleep
-  float batteryPercentage = sensor.batteryPercentage();
-  int toSleepSeconds = calculateSleepIntervalSeconds(wakeUpTimeMs, batteryPercentage);
-  ESP_LOGI(TAG, "Will sleep for %d seconds", toSleepSeconds);
-  esp_sleep_enable_timer_wakeup(toSleepSeconds * 1000000); // Convert to uS
-
-  // 
   vTaskDelay(pdMS_TO_TICKS(1000));
   g_statusLed.off();
-
   esp_deep_sleep_start();
 
   // Will never go here
@@ -568,7 +604,7 @@ std::string getFirmwareVersion() {
   return app_desc->version;
 }
 
-int calculateSleepIntervalSeconds(uint32_t startTimeMs, float batteryPercentage) {
+int calculateMeasurementSchedule(uint32_t startTimeMs, float batteryVoltage) {
   uint32_t aliveTimeSpendMs = MILLIS() - startTimeMs;
   int measurementScheduleSec = g_configuration.getConfigSchedule().pm02;
 
@@ -582,15 +618,28 @@ int calculateSleepIntervalSeconds(uint32_t startTimeMs, float batteryPercentage)
       measurementScheduleSec = 3600; // 60 minutes
     }
   }
-  ESP_LOGI(TAG, "Measurement schedule is set to %d seconds", measurementScheduleSec);
 
-  // Calculate sleep time based on how long its awake to keep measurement schedule intact
-  int toSleepSec = ((measurementScheduleSec * 1000) - aliveTimeSpendMs) / 1000;
-  if (toSleepSec < 0) {
-    toSleepSec = 0;
+  // Calculate time left for the next schedule to make consistent schedule
+  int nextScheduleSec = ((measurementScheduleSec * 1000) - aliveTimeSpendMs) / 1000;
+  if (nextScheduleSec < 0) {
+    nextScheduleSec = 0;
   }
 
-  return toSleepSec;
+  return nextScheduleSec;
+}
+
+int setWakeUpTimer(int nextMeasurementScheduleSec) {
+  int toSleepSeconds = nextMeasurementScheduleSec;
+  if (nextMeasurementScheduleSec > MAX_SLEEP_TIME) {
+    // If next measurement schedule is more than 10 minutes, then
+    /// sleep for 10 minutes only and wake up to only reset the external watchdog timer. Then sleep again
+    ESP_LOGI(TAG, "Next measurement is scheduled in more than 5 minutes. Will do fragmented sleep "
+                  "to reset the external watchdog timer before returning to sleep again");
+    toSleepSeconds = MAX_SLEEP_TIME;
+  }
+
+  esp_sleep_enable_timer_wakeup(toSleepSeconds * 1000000); // Convert to uS
+  return toSleepSeconds;
 }
 
 AirgradientClient::PayloadType getPayloadType() {
