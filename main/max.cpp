@@ -151,6 +151,9 @@ extern "C" void app_main(void) {
   // Initialize every peripheral GPIOs to OFF state
   initGPIO();
 
+  // Reset external WDT
+  resetExtWatchdog();
+
   if (xWakeUpCounter == 0) {
     // Initialize boot button event handler only on the first boot
     // So on next boot onwards, boot button will not function
@@ -244,9 +247,6 @@ extern "C" void app_main(void) {
     // Starting time for every cycle should start now because time taken by system settings portal
     wakeUpTimeMs = MILLIS();
   }
-
-  // Reset external WDT
-  resetExtWatchdog();
 
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
   vTaskDelay(pdMS_TO_TICKS(2000));
