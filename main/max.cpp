@@ -572,16 +572,14 @@ int calculateSleepIntervalSeconds(uint32_t startTimeMs, float batteryPercentage)
   uint32_t aliveTimeSpendMs = MILLIS() - startTimeMs;
   int measurementScheduleSec = g_configuration.getConfigSchedule().pm02;
 
-  // Define measurement schedule based on battery level to keep the monitor running longer
-  if (batteryPercentage >= 0) {
-    if (batteryPercentage > 30 && batteryPercentage <= 40) {
-      measurementScheduleSec = 300; // 5 mins
-    } else if (batteryPercentage > 20 && batteryPercentage <= 30) {
-      measurementScheduleSec = 600; // 10 mins
-    } else if (batteryPercentage > 10 && batteryPercentage <= 20) {
-      measurementScheduleSec = 900; // 15 mins
-    } else if (batteryPercentage >= 0 && batteryPercentage <= 10) {
-      measurementScheduleSec = 1200; // 20 mins
+  // Define measurement schedule based on battery voltage to keep the monitor running longer
+  if (batteryVoltage >= 0) {
+    if (batteryVoltage >= 10.0) {
+      // Do nothing, use default from configuration
+    } else if (batteryVoltage >= 9.5) {
+      measurementScheduleSec = 1800; // 30 minutes
+    } else {
+      measurementScheduleSec = 3600; // 60 minutes
     }
   }
   ESP_LOGI(TAG, "Measurement schedule is set to %d seconds", measurementScheduleSec);

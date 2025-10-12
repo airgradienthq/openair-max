@@ -780,12 +780,10 @@ void Sensor::_calculateMeasuresAverage() {
   }
 }
 
-float Sensor::batteryPercentage() {
+float Sensor::batteryVoltage() {
   if (!_chargerAvailable) {
     return -1.0;
   }
 
-  float result = -1.0;
-  charger_->getBatteryPercentage(&result);
-  return result;
+  return _averageMeasure.vBat;
 }
