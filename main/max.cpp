@@ -89,10 +89,12 @@ static void bootButtonTask(void *arg);
 
 static void initBootButton();
 
+static int getMeasureInterval(float batteryVoltage);
+
 /**
  * Calculate the next measurement schedule
  */
-static int calculateMeasurementSchedule(uint32_t startTimeMs, float batteryVoltage);
+static int calculateMeasurementSchedule(uint32_t startTimeMs, int measureInterval);
 
 /**
  * Calculate how long the monitor should sleep
@@ -136,7 +138,8 @@ static bool initializeCellularNetwork(unsigned long wakeUpCounter);
 
 static bool checkRemoteConfiguration(unsigned long wakeUpCounter);
 static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
-static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache);
+static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache,
+                                   int measureInterval);
 static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
                                AirgradientClient::MaxSensorPayload sensorPayload);
 static bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache);
@@ -328,13 +331,16 @@ extern "C" void app_main(void) {
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
+  float batteryVoltage = sensor.batteryVoltage();
+  int measureInterval = getMeasureInterval(batteryVoltage);
+
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     // Attempt send post through HTTP first
     // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
     // Attempt send measures through MQTT if its enabled
     PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
     payloadCache.push(&averageMeasures);
-    bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache);
+    bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache, measureInterval);
     if (success) {
       if (g_configuration.getMqttBrokerUrl().empty()) {
         ESP_LOGI(TAG, "MQTT is not enabled, skip");
@@ -369,8 +375,7 @@ extern "C" void app_main(void) {
   }
 
   // Get next measurement schedule
-  float batteryVoltage = sensor.batteryVoltage();
-  int nextMeasurementScheduleSeconds = calculateMeasurementSchedule(wakeUpTimeMs, batteryVoltage);
+  int nextMeasurementScheduleSeconds = calculateMeasurementSchedule(wakeUpTimeMs, measureInterval);
   ESP_LOGI(TAG, "Next measurements is in %d seconds", nextMeasurementScheduleSeconds);
 
   // Set timer to wakeup from sleep
@@ -604,23 +609,27 @@ std::string getFirmwareVersion() {
   return app_desc->version;
 }
 
-int calculateMeasurementSchedule(uint32_t startTimeMs, float batteryVoltage) {
-  uint32_t aliveTimeSpendMs = MILLIS() - startTimeMs;
-  int measurementScheduleSec = g_configuration.getConfigSchedule().pm02;
-
+int getMeasureInterval(float batteryVoltage) {
   // Define measurement schedule based on battery voltage to keep the monitor running longer
+  int measureInterval = g_configuration.getConfigSchedule().pm02;
   if (batteryVoltage >= 0) {
     if (batteryVoltage >= 10.0) {
       // Do nothing, use default from configuration
     } else if (batteryVoltage >= 9.5) {
-      measurementScheduleSec = 1800; // 30 minutes
+      measureInterval = 1800; // 30 minutes
     } else {
-      measurementScheduleSec = 3600; // 60 minutes
+      measureInterval = 3600; // 60 minutes
     }
   }
 
+  return measureInterval;
+}
+
+int calculateMeasurementSchedule(uint32_t startTimeMs, int measureInterval) {
+  uint32_t aliveTimeSpendMs = MILLIS() - startTimeMs;
+
   // Calculate time left for the next schedule to make consistent schedule
-  int nextScheduleSec = ((measurementScheduleSec * 1000) - aliveTimeSpendMs) / 1000;
+  int nextScheduleSec = ((measureInterval * 1000) - aliveTimeSpendMs) / 1000;
   if (nextScheduleSec < 0) {
     nextScheduleSec = 0;
   }
@@ -791,7 +800,8 @@ bool initializeWiFiNetwork(unsigned long wakeUpCounter) {
   return true;
 }
 
-bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache) {
+bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache,
+                            int measureInterval) {
   // Check if pass criteria to post measures
   if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
     ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
@@ -821,7 +831,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
   // Structure payload
   AirgradientClient::AirgradientPayload payload;
   payload.sensor = &sensorPayload;
-  payload.measureInterval = g_configuration.getConfigSchedule().pm02;
+  payload.measureInterval = measureInterval;
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
