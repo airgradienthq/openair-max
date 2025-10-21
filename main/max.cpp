@@ -59,6 +59,8 @@ RTC_DATA_ATTR int xMeasurementLeadTimeSeconds = 0;
 // eg. xHttpCacheQueueIndex = 3, then for [q1, q2, q3, q4, q5, q6] should only send q4, q5, q6
 RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
 
+RTC_DATA_ATTR int xMeasureInterval = 180;
+
 // Global Vars
 static const char *const TAG = "APP";
 static std::string g_serialNumber;
@@ -333,12 +335,33 @@ extern "C" void app_main(void) {
 
   float batteryVoltage = sensor.batteryVoltage();
   int measureInterval = getMeasureInterval(batteryVoltage);
+  if (wakeUpCounter == 0) {
+    // If this is the first boot, basically there's no previous measures interval
+    /// So need to have the same value for future reference
+    xMeasureInterval = measureInterval;
+    ESP_LOGI(TAG, "Measure interval is set to %d as base line", measureInterval);
+  }
+
+  // Load cache
+  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
+
+  // If previous measureInterval is different from current measure interval
+  /// Then drop previous payloadCache and start over
+  if (measureInterval != xMeasureInterval && payloadCache.getSize() > 0) {
+    ESP_LOGW(
+        TAG,
+        "Previous measureInterval (%d) is different from current measureInterval (%d). Dropping "
+        "previous payload cache",
+        xMeasureInterval, measureInterval);
+    payloadCache.clean();
+    xHttpCacheQueueIndex = 0;
+  }
+  xMeasureInterval = measureInterval;
 
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     // Attempt send post through HTTP first
     // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
     // Attempt send measures through MQTT if its enabled
-    PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
     payloadCache.push(&averageMeasures);
     bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache, measureInterval);
     if (success) {
@@ -626,7 +649,7 @@ int getMeasureInterval(float batteryVoltage) {
 }
 
 int calculateMeasurementSchedule(uint32_t startTimeMs, int measureInterval) {
-  uint32_t aliveTimeSpendMs = MILLIS() - startTimeMs;
+  int aliveTimeSpendMs = MILLIS() - startTimeMs;
 
   // Calculate time left for the next schedule to make consistent schedule
   int nextScheduleSec = ((measureInterval * 1000) - aliveTimeSpendMs) / 1000;
