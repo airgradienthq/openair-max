@@ -53,12 +53,16 @@
 // Wake up counter that saved on Low Power memory
 RTC_DATA_ATTR unsigned long xWakeUpCounter = 0;
 
+// Hold lead time of the next measurement schedule
+// Help in the process of fragmented sleep
 RTC_DATA_ATTR int xMeasurementLeadTimeSeconds = 0;
 
 // Hold the index of measures queue on which http post should start send measures
 // eg. xHttpCacheQueueIndex = 3, then for [q1, q2, q3, q4, q5, q6] should only send q4, q5, q6
 RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
 
+// Hold the previous wake up cycle measure interval
+// Help to check if there's a measure interval change that make previous payload cache invalid
 RTC_DATA_ATTR int xMeasureInterval = 180;
 
 // Global Vars
@@ -91,6 +95,9 @@ static void bootButtonTask(void *arg);
 
 static void initBootButton();
 
+/**
+ * Define measure interval based on battery level
+ */
 static int getMeasureInterval(float batteryVoltage);
 
 /**
@@ -170,10 +177,10 @@ extern "C" void app_main(void) {
 
       vTaskDelay(pdMS_TO_TICKS(1000));
       esp_deep_sleep_start();
-      // Will not continue here
+      // Will not continue here 
+      // This process is not considered wake up, hence xWakeUpCounter not incremented
     }
 
-    // TODO: Might need to rename?
     ++xWakeUpCounter;
   }
   ESP_LOGI(TAG, "Wakeup count: %lu", xWakeUpCounter);
@@ -333,6 +340,7 @@ extern "C" void app_main(void) {
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
+  // Define measure interval for current
   float batteryVoltage = sensor.batteryVoltage();
   int measureInterval = getMeasureInterval(batteryVoltage);
   if (wakeUpCounter == 0) {
