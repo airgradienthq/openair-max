@@ -779,3 +779,11 @@ void Sensor::_calculateMeasuresAverage() {
     _averageMeasure.afeTemp = _averageMeasure.afeTemp / _afeTempIterationOkCount;
   }
 }
+
+float Sensor::batteryVoltage() {
+  if (!_chargerAvailable) {
+    return -1.0;
+  }
+
+  return _averageMeasure.vBat;
+}
