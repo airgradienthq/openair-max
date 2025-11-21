@@ -149,12 +149,12 @@ bool PMS::_loop(Data &data) {
           data.pm_raw_5_0 = _makeWord(_payload[20], _payload[21]);
           data.pm_raw_10_0 = _makeWord(_payload[22], _payload[23]);
 
-          // Formaldehyde concentration (PMSxxxxST units only)
-          data.amb_hcho = _makeWord(_payload[24], _payload[25]) / 1000;
-
           // Temperature & humidity (PMSxxxxST units only)
           data.amb_temp = _makeWord(_payload[20], _payload[21]);
           data.amb_hum = _makeWord(_payload[22], _payload[23]);
+
+          // Formaldehyde concentration (PMSxxxxST units only)
+          data.amb_hcho = _makeWord(_payload[24], _payload[25]) / 1000;
         }
 
         _index = 0;

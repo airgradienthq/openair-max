@@ -185,7 +185,13 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
   _averageMeasure.pm01 = DEFAULT_INVALID_PM;
   _averageMeasure.pm25 = DEFAULT_INVALID_PM;
   _averageMeasure.pm10 = DEFAULT_INVALID_PM;
+  _averageMeasure.pm25Sp = DEFAULT_INVALID_PM;
   _averageMeasure.particleCount003 = DEFAULT_INVALID_PM;
+  _averageMeasure.particleCount005 = DEFAULT_INVALID_PM;
+  _averageMeasure.particleCount01 = DEFAULT_INVALID_PM;
+  _averageMeasure.particleCount02 = DEFAULT_INVALID_PM;
+  _averageMeasure.particleCount50 = DEFAULT_INVALID_PM;
+  _averageMeasure.particleCount10 = DEFAULT_INVALID_PM;
   _averageMeasure.tvocRaw = DEFAULT_INVALID_TVOC;
   _averageMeasure.noxRaw = DEFAULT_INVALID_NOX;
   _averageMeasure.vBat = DEFAULT_INVALID_VOLT;
@@ -237,10 +243,16 @@ void Sensor::printMeasures() {
   ESP_LOGI(TAG, "CO2 : %d", _averageMeasure.rco2);
   ESP_LOGI(TAG, "Temperature : %.1f", _averageMeasure.atmp);
   ESP_LOGI(TAG, "Humidity : %.1f", _averageMeasure.rhum);
-  ESP_LOGI(TAG, "PM1.0 : %.1f", _averageMeasure.pm01);
-  ESP_LOGI(TAG, "PM2.5 : %.1f", _averageMeasure.pm25);
-  ESP_LOGI(TAG, "PM10.0 : %.1f", _averageMeasure.pm10);
+  ESP_LOGI(TAG, "PM1.0#AE : %.1f", _averageMeasure.pm01);
+  ESP_LOGI(TAG, "PM2.5#AE : %.1f", _averageMeasure.pm25);
+  ESP_LOGI(TAG, "PM10.0#AE : %.1f", _averageMeasure.pm10);
+  ESP_LOGI(TAG, "PM2.5#SP : %.1f", _averageMeasure.pm25);
   ESP_LOGI(TAG, "PM 0.3 count : %d", _averageMeasure.particleCount003);
+  ESP_LOGI(TAG, "PM 0.5 count : %d", _averageMeasure.particleCount005);
+  ESP_LOGI(TAG, "PM 1.0 count : %d", _averageMeasure.particleCount01);
+  ESP_LOGI(TAG, "PM 2.5 count : %d", _averageMeasure.particleCount02);
+  ESP_LOGI(TAG, "PM 5.0 count : %d", _averageMeasure.particleCount50);
+  ESP_LOGI(TAG, "PM 10.0 count : %d", _averageMeasure.particleCount10);
   ESP_LOGI(TAG, "TVOC Raw : %d", _averageMeasure.tvocRaw);
   ESP_LOGI(TAG, "NOx Raw : %d", _averageMeasure.noxRaw);
   ESP_LOGI(TAG, "VBAT : %.2f", _averageMeasure.vBat);
@@ -303,7 +315,13 @@ void Sensor::_measure(AirgradientClient::MaxSensorPayload &data) {
   data.pm01 = DEFAULT_INVALID_PM;
   data.pm25 = DEFAULT_INVALID_PM;
   data.pm10 = DEFAULT_INVALID_PM;
+  data.pm25Sp = DEFAULT_INVALID_PM;
   data.particleCount003 = DEFAULT_INVALID_PM;
+  data.particleCount005 = DEFAULT_INVALID_PM;
+  data.particleCount01 = DEFAULT_INVALID_PM;
+  data.particleCount02 = DEFAULT_INVALID_PM;
+  data.particleCount50 = DEFAULT_INVALID_PM;
+  data.particleCount10 = DEFAULT_INVALID_PM;
   data.tvocRaw = DEFAULT_INVALID_TVOC;
   data.noxRaw = DEFAULT_INVALID_NOX;
   data.vBat = DEFAULT_INVALID_VOLT;
@@ -368,10 +386,7 @@ void Sensor::_measure(AirgradientClient::MaxSensorPayload &data) {
       pms1_->clearBuffer();
       pms1_->requestRead();
       if (pms1_->readUntil(pmData1, 1000)) {
-        ESP_LOGD(TAG, "{1} PM1.0 : %d", pmData1.pm_ae_1_0);
-        ESP_LOGD(TAG, "{1} PM2.5 : %d", pmData1.pm_ae_2_5);
-        ESP_LOGD(TAG, "{1} PM10.0 : %d", pmData1.pm_ae_10_0);
-        ESP_LOGD(TAG, "{1} PM 0.3 count : %d", pmData1.pm_raw_0_3);
+        _printPMData(1, pmData1);
         pms1ReadSuccess = true;
       } else {
         ESP_LOGE(TAG, "{1} PMS no data");
@@ -384,10 +399,7 @@ void Sensor::_measure(AirgradientClient::MaxSensorPayload &data) {
       pms2_->clearBuffer();
       pms2_->requestRead();
       if (pms2_->readUntil(pmData2, 1000)) {
-        ESP_LOGD(TAG, "{2} PM1.0 : %d", pmData2.pm_ae_1_0);
-        ESP_LOGD(TAG, "{2} PM2.5 : %d", pmData2.pm_ae_2_5);
-        ESP_LOGD(TAG, "{2} PM10.0 : %d", pmData2.pm_ae_10_0);
-        ESP_LOGD(TAG, "{2} PM 0.3 count : %d", pmData2.pm_raw_0_3);
+        _printPMData(2, pmData2);
         pms2ReadSuccess = true;
       } else {
         ESP_LOGE(TAG, "{2} PMS no data");
@@ -400,17 +412,35 @@ void Sensor::_measure(AirgradientClient::MaxSensorPayload &data) {
       data.pm01 = (pmData1.pm_ae_1_0 + pmData2.pm_ae_1_0) / 2.0f;
       data.pm25 = (pmData1.pm_ae_2_5 + pmData2.pm_ae_2_5) / 2.0f;
       data.pm10 = (pmData1.pm_ae_10_0 + pmData2.pm_ae_10_0) / 2.0f;
+      data.pm25Sp = (pmData1.pm_sp_2_5 + pmData2.pm_sp_2_5) / 2.0f;
       data.particleCount003 = (pmData1.pm_raw_0_3 + pmData2.pm_raw_0_3) / 2.0f;
+      data.particleCount005 = (pmData1.pm_raw_0_5 + pmData2.pm_raw_0_5) / 2.0f;
+      data.particleCount01 = (pmData1.pm_raw_1_0 + pmData2.pm_raw_1_0) / 2.0f;
+      data.particleCount02 = (pmData1.pm_raw_2_5 + pmData2.pm_raw_2_5) / 2.0f;
+      data.particleCount50 = (pmData1.pm_raw_5_0 + pmData2.pm_raw_5_0) / 2.0f;
+      data.particleCount10 = (pmData1.pm_raw_10_0 + pmData2.pm_raw_10_0) / 2.0f;
     } else if (pms1ReadSuccess) {
       data.pm01 = pmData1.pm_ae_1_0;
       data.pm25 = pmData1.pm_ae_2_5;
       data.pm10 = pmData1.pm_ae_10_0;
+      data.pm25Sp = pmData1.pm_sp_2_5;
       data.particleCount003 = pmData1.pm_raw_0_3;
+      data.particleCount005 = pmData1.pm_raw_0_5;
+      data.particleCount01 = pmData1.pm_raw_1_0;
+      data.particleCount02 = pmData1.pm_raw_2_5;
+      data.particleCount50 = pmData1.pm_raw_5_0;
+      data.particleCount10 = pmData1.pm_raw_10_0;
     } else if (pms2ReadSuccess) {
       data.pm01 = pmData2.pm_ae_1_0;
       data.pm25 = pmData2.pm_ae_2_5;
       data.pm10 = pmData2.pm_ae_10_0;
+      data.pm25Sp = pmData2.pm_sp_2_5;
       data.particleCount003 = pmData2.pm_raw_0_3;
+      data.particleCount005 = pmData2.pm_raw_0_5;
+      data.particleCount01 = pmData2.pm_raw_1_0;
+      data.particleCount02 = pmData2.pm_raw_2_5;
+      data.particleCount50 = pmData2.pm_raw_5_0;
+      data.particleCount10 = pmData2.pm_raw_10_0;
     }
   }
 
@@ -505,6 +535,15 @@ void Sensor::_applyIteration(AirgradientClient::MaxSensorPayload &data) {
     _pm10IterationOkCount = _pm10IterationOkCount + 1;
   }
 
+  if (IS_PM_VALID(data.pm25Sp)) {
+    if (_averageMeasure.pm25Sp == DEFAULT_INVALID_PM) {
+      _averageMeasure.pm25Sp = data.pm25Sp;
+    } else {
+      _averageMeasure.pm25Sp = _averageMeasure.pm25Sp + data.pm25Sp;
+    }
+    _pm25SpIterationOkCount = _pm10IterationOkCount + 1;
+  }
+
   if (IS_PM_VALID(data.particleCount003)) {
     if (_averageMeasure.particleCount003 == DEFAULT_INVALID_PM) {
       _averageMeasure.particleCount003 = data.particleCount003;
@@ -512,6 +551,51 @@ void Sensor::_applyIteration(AirgradientClient::MaxSensorPayload &data) {
       _averageMeasure.particleCount003 = _averageMeasure.particleCount003 + data.particleCount003;
     }
     _pm003CountIterationOkCount = _pm003CountIterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.particleCount005)) {
+    if (_averageMeasure.particleCount005 == DEFAULT_INVALID_PM) {
+      _averageMeasure.particleCount005 = data.particleCount005;
+    } else {
+      _averageMeasure.particleCount005 = _averageMeasure.particleCount005 + data.particleCount005;
+    }
+    _pm005CountIterationOkCount = _pm005CountIterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.particleCount01)) {
+    if (_averageMeasure.particleCount01 == DEFAULT_INVALID_PM) {
+      _averageMeasure.particleCount01 = data.particleCount01;
+    } else {
+      _averageMeasure.particleCount01 = _averageMeasure.particleCount01 + data.particleCount01;
+    }
+    _pm01CountIterationOkCount = _pm01CountIterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.particleCount02)) {
+    if (_averageMeasure.particleCount02 == DEFAULT_INVALID_PM) {
+      _averageMeasure.particleCount02 = data.particleCount02;
+    } else {
+      _averageMeasure.particleCount02 = _averageMeasure.particleCount02 + data.particleCount02;
+    }
+    _pm02CountIterationOkCount = _pm02CountIterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.particleCount50)) {
+    if (_averageMeasure.particleCount50 == DEFAULT_INVALID_PM) {
+      _averageMeasure.particleCount50 = data.particleCount50;
+    } else {
+      _averageMeasure.particleCount50 = _averageMeasure.particleCount50 + data.particleCount50;
+    }
+    _pm50CountIterationOkCount = _pm50CountIterationOkCount + 1;
+  }
+
+  if (IS_PM_VALID(data.particleCount10)) {
+    if (_averageMeasure.particleCount10 == DEFAULT_INVALID_PM) {
+      _averageMeasure.particleCount10 = data.particleCount10;
+    } else {
+      _averageMeasure.particleCount10 = _averageMeasure.particleCount10 + data.particleCount10;
+    }
+    _pm10CountIterationOkCount = _pm10CountIterationOkCount + 1;
   }
 
   if (IS_TVOC_VALID(data.tvocRaw)) {
@@ -710,6 +794,26 @@ bool Sensor::_applySunlightMeasurementSample() {
   return true;
 }
 
+void Sensor::_printPMData(int ch, PMS::Data &data) {
+  // Atmospheric environment
+  ESP_LOGD(TAG, "{%d} PM1.0#AE: %d", ch, data.pm_ae_1_0);
+  ESP_LOGD(TAG, "{%d} PM2.5#AE: %d", ch, data.pm_ae_2_5);
+  ESP_LOGD(TAG, "{%d} PM10.0#AE: %d", ch, data.pm_ae_10_0);
+
+  // Standard Particles, CF=1
+  // ESP_LOGD(TAG, "{%d} PM1.0 - SP: %d", ch, data.pm_sp_1_0);
+  ESP_LOGD(TAG, "{%d} PM2.5#SP: %d", ch, data.pm_sp_2_5);
+  // ESP_LOGD(TAG, "{%d} PM10.0 - SP: %d", ch, data.pm_sp_10_0);
+
+  // Particle Count
+  ESP_LOGD(TAG, "{%d} PM 0.3 count : %d", ch, data.pm_raw_0_3);
+  ESP_LOGD(TAG, "{%d} PM 0.5 count : %d", ch, data.pm_raw_0_5);
+  ESP_LOGD(TAG, "{%d} PM 1.0 count : %d", ch, data.pm_raw_1_0);
+  ESP_LOGD(TAG, "{%d} PM 2.5 count : %d", ch, data.pm_raw_2_5);
+  ESP_LOGD(TAG, "{%d} PM 5.0 count : %d", ch, data.pm_raw_5_0);
+  ESP_LOGD(TAG, "{%d} PM 10 count : %d", ch, data.pm_raw_10_0);
+}
+
 void Sensor::_calculateMeasuresAverage() {
   if (_rco2IterationOkCount > 0) {
     _averageMeasure.rco2 = _averageMeasure.rco2 / _rco2IterationOkCount;
@@ -735,9 +839,34 @@ void Sensor::_calculateMeasuresAverage() {
     _averageMeasure.pm10 = _averageMeasure.pm10 / _pm10IterationOkCount;
   }
 
+  if (_pm25SpIterationOkCount > 0) {
+    _averageMeasure.pm25Sp = _averageMeasure.pm25Sp / _pm25SpIterationOkCount;
+  }
+
   if (_pm003CountIterationOkCount > 0) {
     _averageMeasure.particleCount003 =
         _averageMeasure.particleCount003 / _pm003CountIterationOkCount;
+  }
+
+  if (_pm005CountIterationOkCount > 0) {
+    _averageMeasure.particleCount005 =
+        _averageMeasure.particleCount005 / _pm005CountIterationOkCount;
+  }
+
+  if (_pm01CountIterationOkCount > 0) {
+    _averageMeasure.particleCount01 = _averageMeasure.particleCount01 / _pm01CountIterationOkCount;
+  }
+
+  if (_pm02CountIterationOkCount > 0) {
+    _averageMeasure.particleCount02 = _averageMeasure.particleCount02 / _pm02CountIterationOkCount;
+  }
+
+  if (_pm50CountIterationOkCount > 0) {
+    _averageMeasure.particleCount50 = _averageMeasure.particleCount50 / _pm50CountIterationOkCount;
+  }
+
+  if (_pm10CountIterationOkCount > 0) {
+    _averageMeasure.particleCount10 = _averageMeasure.particleCount10 / _pm10CountIterationOkCount;
   }
 
   if (_tvocIterationOkCount > 0) {
