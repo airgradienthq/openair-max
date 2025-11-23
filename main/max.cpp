@@ -177,7 +177,7 @@ extern "C" void app_main(void) {
 
       vTaskDelay(pdMS_TO_TICKS(1000));
       esp_deep_sleep_start();
-      // Will not continue here 
+      // Will not continue here
       // This process is not considered wake up, hence xWakeUpCounter not incremented
     }
 
@@ -872,7 +872,8 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
 
   do {
     attemptCounter = attemptCounter + 1;
-    postSuccess = g_agClient->httpPostMeasures(payload);
+    postSuccess =
+        g_agClient->httpPostMeasures(payload, g_configuration.isExtendedPmMeasuresEnabled());
     if (postSuccess) {
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
@@ -945,7 +946,7 @@ bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
-  bool postSuccess = g_agClient->httpPostMeasures(payload);
+  bool postSuccess = g_agClient->httpPostMeasures(payload, false);
   if (!postSuccess) {
     ESP_LOGE(TAG, "Send measures failed, retry in next schedule");
     // Run failed post led indicator
