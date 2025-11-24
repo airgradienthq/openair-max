@@ -29,6 +29,7 @@
 #define NVS_KEY_APN "apn"
 #define NVS_KEY_MQTT_HOST "mqtt"
 #define NVS_KEY_HTTP_DOMAIN "dom"
+#define NVS_KEY_EXT_PM_MEASURES "extPmMeasures"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -64,6 +65,7 @@ void Configuration::_printConfig() {
   ESP_LOGI(TAG, "apn: %s", _config.apn.c_str());
   ESP_LOGI(TAG, "mqttBrokerUrl: %s", _config.mqttBrokerUrl.c_str());
   ESP_LOGI(TAG, "httpDomain: %s", _config.httpDomain.c_str());
+  ESP_LOGI(TAG, "extendedPmMeasures: %d", _config.extendedPmMeasures);
   ESP_LOGI(TAG, "**** ****");
 }
 
@@ -218,6 +220,18 @@ bool Configuration::parseRemoteConfig(const std::string &config) {
       _config.mqttBrokerUrl = "";
       _configChanged = true;
     }
+  }
+
+  // extendedPmMeasures
+  if (root["extendedPmMeasures"].is<bool>()) {
+    bool_val = root["extendedPmMeasures"].as<bool>();
+    if (_config.extendedPmMeasures != bool_val) {
+      ESP_LOGI(TAG, "extendedPmMeasures value changed to %d", bool_val);
+      _config.extendedPmMeasures = bool_val;
+      _configChanged = true;
+    }
+  } else {
+    ESP_LOGW(TAG, "extendedPmMeasures field not found or not a boolean");
   }
 
   ESP_LOGI(TAG, "Finish parsing remote configuration");
@@ -401,6 +415,14 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get httpDomain");
   }
 
+  uint8_t extendedPmMeasures;
+  err = nvs_get_u8(handle, NVS_KEY_EXT_PM_MEASURES, &extendedPmMeasures);
+  if (err == ESP_OK) {
+    _config.extendedPmMeasures = extendedPmMeasures;
+  } else {
+    ESP_LOGW(TAG, "Failed to get extendedPmMeasures");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -494,6 +516,12 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save httpDomain");
   }
 
+  // Extended PM measures
+  err = nvs_set_u8(handle, NVS_KEY_EXT_PM_MEASURES, _config.extendedPmMeasures);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save extendedPmMeasures");
+  }
+
   // Commit changes
   ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
@@ -544,6 +572,8 @@ std::string Configuration::getMqttBrokerUrl() { return _config.mqttBrokerUrl; }
 
 std::string Configuration::getHttpDomain() { return _config.httpDomain; }
 
+bool Configuration::isExtendedPmMeasuresEnabled() { return _config.extendedPmMeasures; }
+
 bool Configuration::set(Config config) {
   _config = config;
   _printConfig();
@@ -590,4 +620,5 @@ void Configuration::_setConfigToDefault() {
   _config.apn = DEFAULT_AIRGRADIENT_APN;
   _config.mqttBrokerUrl = "";
   _config.httpDomain = AIRGRADIENT_HTTP_DOMAIN;
+  _config.extendedPmMeasures = false;
 }
