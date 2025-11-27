@@ -789,6 +789,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
   g_agClient->setHttpDomain(g_configuration.getHttpDomain());
+  g_agClient->setExtendedPmMeasures(g_configuration.isExtendedPmMeasuresEnabled());
 
   resetExtWatchdog();
 
@@ -873,7 +874,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
   do {
     attemptCounter = attemptCounter + 1;
     postSuccess =
-        g_agClient->httpPostMeasures(payload, g_configuration.isExtendedPmMeasuresEnabled());
+        g_agClient->httpPostMeasures(payload);
     if (postSuccess) {
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
@@ -946,7 +947,7 @@ bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
-  bool postSuccess = g_agClient->httpPostMeasures(payload, false);
+  bool postSuccess = g_agClient->httpPostMeasures(payload);
   if (!postSuccess) {
     ESP_LOGE(TAG, "Send measures failed, retry in next schedule");
     // Run failed post led indicator
