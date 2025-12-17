@@ -873,8 +873,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
 
   do {
     attemptCounter = attemptCounter + 1;
-    postSuccess =
-        g_agClient->httpPostMeasures(payload);
+    postSuccess = g_agClient->coapPostMeasures(payload);
     if (postSuccess) {
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
@@ -1079,7 +1078,7 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
   }
 
   // Attempt retrieve configuration
-  std::string result = g_agClient->httpFetchConfig();
+  std::string result = g_agClient->coapFetchConfig();
   if (g_agClient->isRegisteredOnAgServer() == false) {
     ESP_LOGW(TAG, "Monitor hasn't registered on AirGradient dashboard yet");
     return false;
