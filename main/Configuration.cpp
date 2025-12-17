@@ -232,6 +232,12 @@ bool Configuration::parseRemoteConfig(const std::string &config) {
     }
   } else {
     ESP_LOGW(TAG, "extendedPmMeasures field not found or not a boolean");
+    if (_config.extendedPmMeasures == true) {
+      // field not found from server means its disabled
+      ESP_LOGI(TAG, "Previously extendedPmMeasures is enabled. Disabling it because now its not found");
+      _config.extendedPmMeasures = false;
+      _configChanged = true;
+    }
   }
 
   ESP_LOGI(TAG, "Finish parsing remote configuration");
