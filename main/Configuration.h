@@ -9,6 +9,7 @@
 #define CONFIGURATION_H
 
 #include "MaxConfig.h"
+#include <cstdint>
 #include <string>
 
 class Configuration {
@@ -41,6 +42,7 @@ public:
     std::string apn;
     std::string httpDomain;
     bool extendedPmMeasures;
+    uint32_t cellularWarmUpMs;
   };
 
   Configuration() {}
@@ -65,6 +67,7 @@ public:
   std::string getMqttBrokerUrl();
   std::string getHttpDomain();
   bool isExtendedPmMeasuresEnabled();
+  uint32_t getCellularWarmUpMs();
 
   // Setter
   bool set(Config config);
