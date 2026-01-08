@@ -246,7 +246,7 @@ bool Configuration::parseRemoteConfig(const std::string &config) {
   // cellularWarmUpMs
   if (root["cellularWarmUpMs"].is<int>()) {
     int_val = root["cellularWarmUpMs"].as<int>();
-    if (_config.cellularWarmUpMs != int_val) {
+    if (_config.cellularWarmUpMs != int_val && int_val >= 0) {
       ESP_LOGI(TAG, "cellularWarmUpMs value changed from %" PRIu32 " to %" PRIu32 "",
                _config.cellularWarmUpMs, (uint32_t)int_val);
       _config.cellularWarmUpMs = int_val;
