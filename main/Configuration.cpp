@@ -30,6 +30,7 @@
 #define NVS_KEY_MQTT_HOST "mqtt"
 #define NVS_KEY_HTTP_DOMAIN "dom"
 #define NVS_KEY_EXT_PM_MEASURES "extPmMeasures"
+#define NVS_KEY_CELLULAR_WARMUP "warmUpCE"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -66,6 +67,7 @@ void Configuration::_printConfig() {
   ESP_LOGI(TAG, "mqttBrokerUrl: %s", _config.mqttBrokerUrl.c_str());
   ESP_LOGI(TAG, "httpDomain: %s", _config.httpDomain.c_str());
   ESP_LOGI(TAG, "extendedPmMeasures: %d", _config.extendedPmMeasures);
+  ESP_LOGI(TAG, "cellularWarmUpMs: %" PRIu32 "", _config.cellularWarmUpMs);
   ESP_LOGI(TAG, "**** ****");
 }
 
@@ -234,10 +236,24 @@ bool Configuration::parseRemoteConfig(const std::string &config) {
     ESP_LOGW(TAG, "extendedPmMeasures field not found or not a boolean");
     if (_config.extendedPmMeasures == true) {
       // field not found from server means its disabled
-      ESP_LOGI(TAG, "Previously extendedPmMeasures is enabled. Disabling it because now its not found");
+      ESP_LOGI(TAG,
+               "Previously extendedPmMeasures is enabled. Disabling it because now its not found");
       _config.extendedPmMeasures = false;
       _configChanged = true;
     }
+  }
+
+  // cellularWarmUpMs
+  if (root["cellularWarmUpMs"].is<int>()) {
+    int_val = root["cellularWarmUpMs"].as<int>();
+    if (_config.cellularWarmUpMs != int_val && int_val >= 0) {
+      ESP_LOGI(TAG, "cellularWarmUpMs value changed from %" PRIu32 " to %" PRIu32 "",
+               _config.cellularWarmUpMs, (uint32_t)int_val);
+      _config.cellularWarmUpMs = int_val;
+      _configChanged = true;
+    }
+  } else {
+    ESP_LOGW(TAG, "cellularWarmUpMs field not found or not an integer");
   }
 
   ESP_LOGI(TAG, "Finish parsing remote configuration");
@@ -429,6 +445,15 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get extendedPmMeasures");
   }
 
+  // cellularWarmUpMs
+  uint32_t cellularWarmUpMs;
+  err = nvs_get_u32(handle, NVS_KEY_CELLULAR_WARMUP, &cellularWarmUpMs);
+  if (err == ESP_OK) {
+    _config.cellularWarmUpMs = cellularWarmUpMs;
+  } else {
+    ESP_LOGW(TAG, "Failed to get cellularWarmUpMs");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -528,6 +553,12 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save extendedPmMeasures");
   }
 
+  // Cellular WarmUp Ms
+  err = nvs_set_u32(handle, NVS_KEY_CELLULAR_WARMUP, _config.cellularWarmUpMs);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save cellularWarmUpMs");
+  }
+
   // Commit changes
   ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
@@ -580,6 +611,8 @@ std::string Configuration::getHttpDomain() { return _config.httpDomain; }
 
 bool Configuration::isExtendedPmMeasuresEnabled() { return _config.extendedPmMeasures; }
 
+uint32_t Configuration::getCellularWarmUpMs() { return _config.cellularWarmUpMs; }
+
 bool Configuration::set(Config config) {
   _config = config;
   _printConfig();
@@ -627,4 +660,5 @@ void Configuration::_setConfigToDefault() {
   _config.mqttBrokerUrl = "";
   _config.httpDomain = AIRGRADIENT_HTTP_DOMAIN;
   _config.extendedPmMeasures = false;
+  _config.cellularWarmUpMs = 6000;
 }

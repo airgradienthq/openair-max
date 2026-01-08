@@ -786,7 +786,8 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   // Enable debugging when CE card initializing
   g_ceAgSerial->setDebug(true);
   // Initialize cellular card and client
-  g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
+  uint32_t warmUpCE = g_configuration.getCellularWarmUpMs();
+  g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER, warmUpCE);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
   g_agClient->setHttpDomain(g_configuration.getHttpDomain());
   g_agClient->setExtendedPmMeasures(g_configuration.isExtendedPmMeasuresEnabled());
