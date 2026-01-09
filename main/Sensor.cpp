@@ -916,3 +916,45 @@ float Sensor::batteryVoltage() {
 
   return _averageMeasure.vBat;
 }
+
+bool Sensor::isBatteryConnected() {
+  // Check if charger is available
+  if (!_chargerAvailable) {
+    ESP_LOGE(TAG, "Charger not available, cannot detect battery");
+    return false;
+  }
+
+  // Disable charging to get true battery voltage
+  esp_err_t err = charger_->setChargingEnabled(false);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to disable charging for battery detection");
+  }
+
+  // Wait for voltage to stabilize
+  vTaskDelay(pdMS_TO_TICKS(500));
+
+  // Read battery voltage
+  uint16_t vbat = 0;
+  err = charger_->getVBAT(&vbat);
+
+  // Re-enable charging
+  esp_err_t enableErr = charger_->setChargingEnabled(true);
+  if (enableErr != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to re-enable charging after battery detection");
+  }
+
+  // Check if read was successful
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to read VBAT for battery detection");
+    return false;
+  }
+
+  // Battery is considered connected if VBAT >= 1000mV (1V)
+  const uint16_t BATTERY_THRESHOLD_MV = 1000;
+  bool batteryConnected = (vbat >= BATTERY_THRESHOLD_MV);
+
+  ESP_LOGI(TAG, "Battery detection: VBAT = %d mV, Battery %s", vbat,
+           batteryConnected ? "connected" : "not connected");
+
+  return batteryConnected;
+}

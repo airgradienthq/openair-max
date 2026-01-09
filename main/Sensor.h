@@ -29,6 +29,7 @@ public:
   AirgradientClient::MaxSensorPayload getLastAverageMeasure();
   bool co2AttemptManualCalibration();
   float batteryVoltage();
+  bool isBatteryConnected();
 
 private:
   const char *const TAG = "Sensor";

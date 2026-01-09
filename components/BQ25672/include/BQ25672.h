@@ -39,6 +39,9 @@ public:
 
   ChargingStatus getChargingStatus();
 
+  // Control charging enable/disable
+  esp_err_t setChargingEnabled(bool enable);
+
   // Read Raw ADC values
   esp_err_t getVBATRaw(uint16_t *output);
   esp_err_t getVSYSRaw(uint16_t *output);

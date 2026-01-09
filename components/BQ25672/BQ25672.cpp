@@ -22,6 +22,7 @@
 #define REG03_CHARGE_CURRENT_LIMIT 0x03
 #define REG05_INPUT_VOLTAGE_LIMIT 0x05
 #define REG06_INPUT_CURRENT_LIMIT 0x06
+#define REG0F_CHARGER_CONTROL_0 0x0F
 #define REG1B_CHG_STAT 0x1C // Register Address for Charger Status 0
 #define REG2E_ADC_CTRL 0x2E
 #define REG3B_VBAT_ADC 0x3B
@@ -105,6 +106,28 @@ esp_err_t BQ25672::update() {
   }
 
   return err;
+}
+
+esp_err_t BQ25672::setChargingEnabled(bool enable) {
+  // Read current register value
+  uint16_t currentValue;
+  ESP_RETURN_ON_ERROR(writeReadRegister(REG0F_CHARGER_CONTROL_0, 1, &currentValue), TAG,
+                      "Failed to read REG0F_CHARGER_CONTROL_0");
+
+  // Modify bit 5 (EN_CHG)
+  uint8_t newValue = (uint8_t)currentValue;
+  if (enable) {
+    newValue |= (1 << 5); // Set bit 5 to enable charging
+  } else {
+    newValue &= ~(1 << 5); // Clear bit 5 to disable charging
+  }
+
+  // Write back modified value
+  ESP_RETURN_ON_ERROR(writeRegister(REG0F_CHARGER_CONTROL_0, newValue), TAG,
+                      "Failed to write REG0F_CHARGER_CONTROL_0");
+
+  ESP_LOGI(TAG, "Charging %s (REG0F: 0x%.2x)", enable ? "enabled" : "disabled", newValue);
+  return ESP_OK;
 }
 
 esp_err_t BQ25672::getVBAT(uint16_t *output) {
