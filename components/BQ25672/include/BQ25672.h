@@ -53,6 +53,8 @@ public:
 
   void printSystemStatus();
   void printControlAndConfiguration();
+  void printFaultStatus0();
+  void printFaultStatus1();
 
 private:
   const char *const TAG = "BQ25672";

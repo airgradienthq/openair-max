@@ -37,6 +37,8 @@
 #define REG_FAULT_STATUS 0x0B
 #define REG_CHARGE_STATUS 0x0C
 #define REG_INPUT_STATUS 0x0D
+#define REG20_FAULT_STATUS_0 0x20
+#define REG21_FAULT_STATUS_1 0x21
 
 BQ25672::BQ25672() {}
 BQ25672::~BQ25672() {}
@@ -333,6 +335,38 @@ void BQ25672::printControlAndConfiguration() {
   }
   if (writeReadRegister(REG2E_ADC_CTRL, 1, &value) == ESP_OK) {
     ESP_LOGI(TAG, "ADC Control (0x%.2X): 0x%02X", REG2E_ADC_CTRL, value);
+  }
+  ESP_LOGI(TAG, "*********");
+}
+
+void BQ25672::printFaultStatus0() {
+  ESP_LOGI(TAG, "==== FAULT STATUS 0 (REG20) ====");
+  uint16_t value;
+  if (writeReadRegister(REG20_FAULT_STATUS_0, 1, &value) == ESP_OK) {
+    uint8_t reg = (uint8_t)value;
+    ESP_LOGI(TAG, "IBAT_REG_STAT: %d (0h=Normal, 1h=Device in battery discharging current regulation)",
+             (reg >> 7) & 0x01);
+    ESP_LOGI(TAG, "VBUS_OVP_STAT: %d (0h=Normal, 1h=VBUS over-voltage)", (reg >> 6) & 0x01);
+    ESP_LOGI(TAG, "VBAT_OVP_STAT: %d (0h=Normal, 1h=VBAT over-voltage)", (reg >> 5) & 0x01);
+    ESP_LOGI(TAG, "IBUS_OCP_STAT: %d (0h=Normal, 1h=IBUS over-current)", (reg >> 4) & 0x01);
+    ESP_LOGI(TAG, "IBAT_OCP_STAT: %d (0h=Normal, 1h=IBAT over-current)", (reg >> 3) & 0x01);
+    ESP_LOGI(TAG, "CONV_OCP_STAT: %d (0h=Normal, 1h=Converter over-current)", (reg >> 2) & 0x01);
+    ESP_LOGI(TAG, "VAC2_OVP_STAT: %d (0h=Normal, 1h=VAC2 over-voltage)", (reg >> 1) & 0x01);
+    ESP_LOGI(TAG, "VAC1_OVP_STAT: %d (0h=Normal, 1h=VAC1 over-voltage)", (reg >> 0) & 0x01);
+  }
+  ESP_LOGI(TAG, "*********");
+}
+
+void BQ25672::printFaultStatus1() {
+  ESP_LOGI(TAG, "==== FAULT STATUS 1 (REG21) ====");
+  uint16_t value;
+  if (writeReadRegister(REG21_FAULT_STATUS_1, 1, &value) == ESP_OK) {
+    uint8_t reg = (uint8_t)value;
+    ESP_LOGI(TAG, "VSYS_SHORT_STAT: %d (0h=Normal, 1h=VSYS short circuit)", (reg >> 7) & 0x01);
+    ESP_LOGI(TAG, "VSYS_OVP_STAT: %d (0h=Normal, 1h=VSYS over-voltage)", (reg >> 6) & 0x01);
+    ESP_LOGI(TAG, "OTG_OVP_STAT: %d (0h=Normal, 1h=OTG over-voltage)", (reg >> 5) & 0x01);
+    ESP_LOGI(TAG, "OTG_UVP_STAT: %d (0h=Normal, 1h=OTG under-voltage)", (reg >> 4) & 0x01);
+    ESP_LOGI(TAG, "TSHUT_STAT: %d (0h=Normal, 1h=Thermal shutdown)", (reg >> 2) & 0x01);
   }
   ESP_LOGI(TAG, "*********");
 }
