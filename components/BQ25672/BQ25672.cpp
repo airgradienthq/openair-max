@@ -26,12 +26,12 @@
 #define REG1B_CHG_STAT 0x1C // Register Address for Charger Status 0
 #define REG2E_ADC_CTRL 0x2E
 #define REG3B_VBAT_ADC 0x3B
+#define REG31_IBUS_ADC 0x31 // Register Address for IBUS ADC
+#define REG33_IBAT_ADC 0x33 // Register Address for IBAT ADC
+#define REG35_VBUS_ADC 0x35 // Register Address for VBUS ADC
 #define REG3D_VSYS_ADC 0x3D
 #define REG3C_BAT_PCT 0x3F
 #define REG3F_TEMP_ADC 0x41
-#define REG33_IBAT_ADC 0x33 // Register Address for IBAT ADC
-#define REG37_VBUS_ADC1 0x37 // Register Address for VBUS ADC1
-#define REG39_VBUS_ADC2 0x39 // Register Address for VBUS ADC2
 #define REG15_MPPT 0x15
 #define REG_SYSTEM_STATUS 0x0A
 #define REG_FAULT_STATUS 0x0B
@@ -178,14 +178,28 @@ esp_err_t BQ25672::getVBUS(uint16_t *output) {
 
 esp_err_t BQ25672::getBatteryCurrent(int16_t *output) {
   uint16_t raw;
-  ESP_RETURN_ON_ERROR(getVBUSRaw(&raw), TAG, "Failed get battery current");
-  int16_t batteryCurrent = (int16_t)(raw * 1.0);
+  ESP_RETURN_ON_ERROR(getIBATRaw(&raw), TAG, "Failed get battery current");
+  int16_t batteryCurrent = (int16_t)raw;
 
   // Convert 2's Complement to signed integer
   if (batteryCurrent & 0x8000) {
     batteryCurrent = batteryCurrent - 0x10000;
   }
   *output = batteryCurrent;
+
+  return ESP_OK;
+}
+
+esp_err_t BQ25672::getBusCurrent(int16_t *output) {
+  uint16_t raw;
+  ESP_RETURN_ON_ERROR(getIBUSRaw(&raw), TAG, "Failed get bus current");
+  int16_t busCurrent = (int16_t)raw;
+
+  // Convert 2's Complement to signed integer
+  if (busCurrent & 0x8000) {
+    busCurrent = busCurrent - 0x10000;
+  }
+  *output = busCurrent;
 
   return ESP_OK;
 }
@@ -259,23 +273,17 @@ esp_err_t BQ25672::getTemperatureRaw(uint16_t *output) {
 }
 
 esp_err_t BQ25672::getVBUSRaw(uint16_t *output) {
-  // First try reading from ADC1
-  uint16_t adc1_value;
-  ESP_RETURN_ON_ERROR(writeReadRegister(REG37_VBUS_ADC1, 2, &adc1_value), TAG, "Failed get VBUS ADC1");
-  
-  // If ADC1 value is >= 1, use it
-  if (adc1_value >= 1000) {
-    *output = adc1_value;
-    return ESP_OK;
-  }
-  
-  // Otherwise, fall back to ADC2
-  ESP_RETURN_ON_ERROR(writeReadRegister(REG39_VBUS_ADC2, 2, output), TAG, "Failed get VBUS ADC2");
+  ESP_RETURN_ON_ERROR(writeReadRegister(REG35_VBUS_ADC, 2, output), TAG, "Failed get VBUS");
   return ESP_OK;
 }
 
 esp_err_t BQ25672::getIBATRaw(uint16_t *output) {
-  ESP_RETURN_ON_ERROR(writeReadRegister(REG39_VBUS_ADC2, 2, output), TAG, "Failed get raw IBAT");
+  ESP_RETURN_ON_ERROR(writeReadRegister(REG33_IBAT_ADC, 2, output), TAG, "Failed get raw IBAT");
+  return ESP_OK;
+}
+
+esp_err_t BQ25672::getIBUSRaw(uint16_t *output) {
+  ESP_RETURN_ON_ERROR(writeReadRegister(REG31_IBUS_ADC, 2, output), TAG, "Failed get raw IBUS");
   return ESP_OK;
 }
 

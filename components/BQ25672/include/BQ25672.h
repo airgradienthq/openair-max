@@ -36,6 +36,7 @@ public:
   esp_err_t getBatteryPercentage(float *output);
   esp_err_t getTemperature(float *output);
   esp_err_t getBatteryCurrent(int16_t *output);
+  esp_err_t getBusCurrent(int16_t *output);
 
   ChargingStatus getChargingStatus();
 
@@ -48,6 +49,7 @@ public:
   esp_err_t getTemperatureRaw(uint16_t *output);
   esp_err_t getVBUSRaw(uint16_t *output);
   esp_err_t getIBATRaw(uint16_t *output);
+  esp_err_t getIBUSRaw(uint16_t *output);
 
   void printSystemStatus();
   void printControlAndConfiguration();
