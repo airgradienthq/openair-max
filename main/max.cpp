@@ -804,10 +804,14 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   } else {
     // Not connected
     ESP_LOGE(TAG, "Failed start airgradient client");
-    if (wakeUpCounter == 0) {
-      // When its a first boot, ensure connection is ready
-      ensureConnectionReady();
+    if (wakeUpCounter > 0) {
+      // Disable again
+      g_ceAgSerial->setDebug(false);
+      return false;
     }
+
+    // When its a first boot, ensure connection is ready
+    ensureConnectionReady();
   }
 
   // Disable again
@@ -874,8 +878,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
 
   do {
     attemptCounter = attemptCounter + 1;
-    postSuccess =
-        g_agClient->httpPostMeasures(payload);
+    postSuccess = g_agClient->httpPostMeasures(payload);
     if (postSuccess) {
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
