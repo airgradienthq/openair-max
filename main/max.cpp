@@ -786,9 +786,11 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   // Enable debugging when CE card initializing
   g_ceAgSerial->setDebug(true);
   // Initialize cellular card and client
-  g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
+  uint32_t warmUpCE = g_configuration.getCellularWarmUpMs();
+  g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER, warmUpCE);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
   g_agClient->setHttpDomain(g_configuration.getHttpDomain());
+  g_agClient->setExtendedPmMeasures(g_configuration.isExtendedPmMeasuresEnabled());
 
   resetExtWatchdog();
 
@@ -802,10 +804,14 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   } else {
     // Not connected
     ESP_LOGE(TAG, "Failed start airgradient client");
-    if (wakeUpCounter == 0) {
-      // When its a first boot, ensure connection is ready
-      ensureConnectionReady();
+    if (wakeUpCounter > 0) {
+      // Disable again
+      g_ceAgSerial->setDebug(false);
+      return false;
     }
+
+    // When its a first boot, ensure connection is ready
+    ensureConnectionReady();
   }
 
   // Disable again
@@ -873,7 +879,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
   do {
     attemptCounter = attemptCounter + 1;
     postSuccess =
-        g_agClient->httpPostMeasures(payload, g_configuration.isExtendedPmMeasuresEnabled());
+        g_agClient->httpPostMeasures(payload);
     if (postSuccess) {
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
@@ -946,7 +952,7 @@ bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
-  bool postSuccess = g_agClient->httpPostMeasures(payload, false);
+  bool postSuccess = g_agClient->httpPostMeasures(payload);
   if (!postSuccess) {
     ESP_LOGE(TAG, "Send measures failed, retry in next schedule");
     // Run failed post led indicator
