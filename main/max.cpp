@@ -804,10 +804,14 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   } else {
     // Not connected
     ESP_LOGE(TAG, "Failed start airgradient client");
-    if (wakeUpCounter == 0) {
-      // When its a first boot, ensure connection is ready
-      ensureConnectionReady();
+    if (wakeUpCounter > 0) {
+      // Disable again
+      g_ceAgSerial->setDebug(false);
+      return false;
     }
+
+    // When its a first boot, ensure connection is ready
+    ensureConnectionReady();
   }
 
   // Disable again
