@@ -105,7 +105,6 @@ bool Sensor::init(Configuration::Model model, int co2ABCDays) {
     float out;
     charger_->getBatteryPercentage(&out);
     ESP_LOGI(TAG, "Battery percentage %.1f%%", out);
-    charger_->getChargingStatus();
   }
 
   if (model == Configuration::O_M_1PPSTON_CE) {
@@ -204,12 +203,28 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
 
   AirgradientClient::MaxSensorPayload iterationData;
 
+  // Check if battery connected before staring measurements
+  isBatteryConnected();
+
   for (int i = 1; i <= iterations; i++) {
     uint32_t startIteration = MILLIS();
 
     if (_chargerAvailable) {
       // Call update schedule for BQ25672
       charger_->update();
+
+      // Get and print charger measurements
+      uint16_t vbus = 0;
+      int16_t ibat = 0, ibus = 0;
+      charger_->getVBUS(&vbus);
+      charger_->getBatteryCurrent(&ibat);
+      charger_->getBusCurrent(&ibus);
+
+      ESP_LOGI(TAG, "VBUS: %d mV, IBAT: %d mA, IBUS: %d mA", vbus, ibat, ibus);
+
+      charger_->printChargerStatus();
+      charger_->printFaultStatus0();
+      charger_->printFaultStatus1();
     }
 
     // Attempt measure each sensor and sum each measures iteration
@@ -230,10 +245,8 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
   // Now calculate the average based on total sum result of each measures
   // iteration
   _calculateMeasuresAverage();
-  // TODO: Validate the averaging always works!
 
-  // TODO: _calculateMeasuresAverage should return if there's one or more
-  // measure data is invalid
+  isBatteryConnected();
 
   return true;
 }
@@ -955,6 +968,9 @@ bool Sensor::isBatteryConnected() {
 
   ESP_LOGI(TAG, "Battery detection: VBAT = %d mV, Battery %s", vbat,
            batteryConnected ? "connected" : "not connected");
+
+  // Wait for the charging is properly enabled
+  vTaskDelay(pdMS_TO_TICKS(500));
 
   return batteryConnected;
 }

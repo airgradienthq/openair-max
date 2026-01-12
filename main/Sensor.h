@@ -24,7 +24,7 @@ public:
   Sensor(i2c_master_bus_handle_t busHandle);
   ~Sensor(){}
   bool init(Configuration::Model model, int co2ABCDays);
-  bool startMeasures(int iterations, int intervalMs);
+  bool startMeasures(int iterations, int intervalMs); // TODO: Add a new param to only printout the charger logs if needed
   void printMeasures();
   AirgradientClient::MaxSensorPayload getLastAverageMeasure();
   bool co2AttemptManualCalibration();
