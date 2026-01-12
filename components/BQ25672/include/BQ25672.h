@@ -55,6 +55,7 @@ public:
   void printControlAndConfiguration();
   void printFaultStatus0();
   void printFaultStatus1();
+  void printChargerStatus();
 
 private:
   const char *const TAG = "BQ25672";

@@ -23,7 +23,6 @@
 #define REG05_INPUT_VOLTAGE_LIMIT 0x05
 #define REG06_INPUT_CURRENT_LIMIT 0x06
 #define REG0F_CHARGER_CONTROL_0 0x0F
-#define REG1B_CHG_STAT 0x1C // Register Address for Charger Status 0
 #define REG2E_ADC_CTRL 0x2E
 #define REG3B_VBAT_ADC 0x3B
 #define REG31_IBUS_ADC 0x31 // Register Address for IBUS ADC
@@ -39,6 +38,9 @@
 #define REG_INPUT_STATUS 0x0D
 #define REG20_FAULT_STATUS_0 0x20
 #define REG21_FAULT_STATUS_1 0x21
+#define REG1B_CHARGER_STATUS_0 0x1B
+#define REG1C_CHARGER_STATUS_1 0x1C
+#define REG1D_CHARGER_STATUS_2 0x1D
 
 BQ25672::BQ25672() {}
 BQ25672::~BQ25672() {}
@@ -207,9 +209,8 @@ esp_err_t BQ25672::getBusCurrent(int16_t *output) {
 }
 
 BQ25672::ChargingStatus BQ25672::getChargingStatus() {
-  // Read Charger Status 0
   uint16_t result;
-  if (writeReadRegister(REG1B_CHG_STAT, 1, &result) != ESP_OK) {
+  if (writeReadRegister(REG1C_CHARGER_STATUS_1, 1, &result) != ESP_OK) {
     ESP_LOGE(TAG, "Failed get charging status raw");
     return ChargingStatus::Unknown;
   }
@@ -217,6 +218,8 @@ BQ25672::ChargingStatus BQ25672::getChargingStatus() {
   // Extract CHG_STAT[2:0] (Bits 2 to 0)
   uint8_t chargingStatus = (uint8_t)result;
   uint8_t status = (chargingStatus >> 5) & 0x07;
+
+  ESP_LOGI(TAG, "Charger Status 1 (0x1C): 0x%02X", chargingStatus);
 
   // Check charging status
   ChargingStatus cs = ChargingStatus::Unknown;
@@ -369,6 +372,34 @@ void BQ25672::printFaultStatus1() {
     ESP_LOGI(TAG, "TSHUT_STAT: %d (0h=Normal, 1h=Thermal shutdown)", (reg >> 2) & 0x01);
   }
   ESP_LOGI(TAG, "*********");
+}
+
+void BQ25672::printChargerStatus() {
+  ESP_LOGI(TAG, "==== CHARGER STATUS ====");
+  uint16_t value;
+
+  // Read REG1B (0x1B) - Charger Status 0
+  if (writeReadRegister(REG1B_CHARGER_STATUS_0, 1, &value) == ESP_OK) {
+    uint8_t reg = (uint8_t)value;
+    ESP_LOGI(TAG, "Charger Status 0 (0x1B): 0x%02X", reg);
+    ESP_LOGI(TAG, "  AC1_PRESENT_STAT (bit 1): %d", (reg >> 1) & 0x01);
+    ESP_LOGI(TAG, "  AC2_PRESENT_STAT (bit 2): %d", (reg >> 2) & 0x01);
+    ESP_LOGI(TAG, "  PG_STAT (bit 3): %d", (reg >> 3) & 0x01);
+  }
+
+  // Charger Status 1
+  getChargingStatus();
+
+  // Read REG1D (0x1D) - Charger Status 2
+  if (writeReadRegister(REG1D_CHARGER_STATUS_2, 1, &value) == ESP_OK) {
+    uint8_t reg = (uint8_t)value;
+    uint8_t treg_stat = (reg >> 5) & 0x01;
+    ESP_LOGI(TAG, "Charger Status 2 (0x1D): 0x%02X", reg);
+    ESP_LOGI(TAG, "  TREG_STAT (bit 5): %d - %s", treg_stat,
+             treg_stat ? "Thermal regulation" : "Normal");
+  }
+
+  ESP_LOGI(TAG, "************************");
 }
 
 esp_err_t BQ25672::writeRegister(uint8_t reg, uint8_t value) {
