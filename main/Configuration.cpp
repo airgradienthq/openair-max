@@ -31,6 +31,8 @@
 #define NVS_KEY_HTTP_DOMAIN "dom"
 #define NVS_KEY_EXT_PM_MEASURES "extPmMeasures"
 #define NVS_KEY_CELLULAR_WARMUP "warmUpCE"
+#define NVS_KEY_CELLULAR_OPERATORS "cellOps"
+#define NVS_KEY_CURRENT_OPERATOR_ID "cellOpId"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -68,6 +70,8 @@ void Configuration::_printConfig() {
   ESP_LOGI(TAG, "httpDomain: %s", _config.httpDomain.c_str());
   ESP_LOGI(TAG, "extendedPmMeasures: %d", _config.extendedPmMeasures);
   ESP_LOGI(TAG, "cellularWarmUpMs: %" PRIu32 "", _config.cellularWarmUpMs);
+  ESP_LOGI(TAG, "cellularOperators: %s", _config.cellularOperators.c_str());
+  ESP_LOGI(TAG, "currentOperatorId: %" PRIu32 "", _config.currentOperatorId);
   ESP_LOGI(TAG, "**** ****");
 }
 
@@ -454,6 +458,32 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get cellularWarmUpMs");
   }
 
+  // Cellular Operators
+  requiredSize = 0;
+  err = nvs_get_str(handle, NVS_KEY_CELLULAR_OPERATORS, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_CELLULAR_OPERATORS, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.cellularOperators = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get cellularOperators");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get cellularOperators");
+  }
+
+  // Current Operator ID
+  uint32_t currentOperatorId;
+  err = nvs_get_u32(handle, NVS_KEY_CURRENT_OPERATOR_ID, &currentOperatorId);
+  if (err == ESP_OK) {
+    _config.currentOperatorId = currentOperatorId;
+  } else {
+    ESP_LOGW(TAG, "Failed to get currentOperatorId");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -559,6 +589,18 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save cellularWarmUpMs");
   }
 
+  // Cellular Operators
+  err = nvs_set_str(handle, NVS_KEY_CELLULAR_OPERATORS, _config.cellularOperators.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save cellularOperators");
+  }
+
+  // Current Operator ID
+  err = nvs_set_u32(handle, NVS_KEY_CURRENT_OPERATOR_ID, _config.currentOperatorId);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save currentOperatorId");
+  }
+
   // Commit changes
   ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
@@ -613,6 +655,10 @@ bool Configuration::isExtendedPmMeasuresEnabled() { return _config.extendedPmMea
 
 uint32_t Configuration::getCellularWarmUpMs() { return _config.cellularWarmUpMs; }
 
+std::string Configuration::getCellularOperators() { return _config.cellularOperators; }
+
+uint32_t Configuration::getCurrentOperatorId() { return _config.currentOperatorId; }
+
 bool Configuration::set(Config config) {
   _config = config;
   _printConfig();
@@ -639,6 +685,12 @@ void Configuration::setAPN(const std::string &apn) {
   _saveConfig();
 }
 
+void Configuration::setCellularOperators(const std::string &operators, uint32_t operatorId) {
+  _config.cellularOperators = operators;
+  _config.currentOperatorId = operatorId;
+  _saveConfig();
+}
+
 void Configuration::resetCO2CalibrationRequest() {
   _config.co2CalibrationRequested = false;
   _saveConfig();
@@ -661,4 +713,6 @@ void Configuration::_setConfigToDefault() {
   _config.httpDomain = AIRGRADIENT_HTTP_DOMAIN;
   _config.extendedPmMeasures = false;
   _config.cellularWarmUpMs = 6000;
+  _config.cellularOperators = "";
+  _config.currentOperatorId = 0;
 }
