@@ -789,13 +789,19 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   uint32_t warmUpCE = g_configuration.getCellularWarmUpMs();
   g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER, warmUpCE);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
-  g_agClient->setHttpDomain(g_configuration.getHttpDomain());
-  g_agClient->setExtendedPmMeasures(g_configuration.isExtendedPmMeasuresEnabled());
 
   resetExtWatchdog();
 
+  // Load and set CE module operators
+  g_cellularCard->setOperators(g_configuration.getCellularOperators(),
+                               g_configuration.getCurrentOperatorId());
+
+  // Setup client configuration
+  g_agClient->setHttpDomain(g_configuration.getHttpDomain());
+  g_agClient->setExtendedPmMeasures(g_configuration.isExtendedPmMeasuresEnabled());
   g_agClient->setNetworkRegistrationTimeoutMs(registrationTimeout);
   g_agClient->setAPN(g_configuration.getAPN());
+
   if (g_agClient->begin(g_serialNumber, getPayloadType())) {
     // Connected
     if (wakeUpCounter == 0) {
@@ -813,6 +819,16 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     // When its a first boot, ensure connection is ready
     ensureConnectionReady();
   }
+
+  if (wakeUpCounter == 0) {
+    // Save list operator available, only do it once on boot and operator is different
+    std::string opList = g_cellularCard->getSerializedOperators();
+    uint32_t opId = g_cellularCard->getCurrentOperatorId();
+    if (g_configuration.getCellularOperators() != opList) {
+      g_configuration.setCellularOperators(opList, opId);
+    }
+  }
+  // g_configuration.setCellularOperators(g_cellularCard, uint32_t operatorId)
 
   // Disable again
   g_ceAgSerial->setDebug(false);
@@ -878,8 +894,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
 
   do {
     attemptCounter = attemptCounter + 1;
-    postSuccess =
-        g_agClient->httpPostMeasures(payload);
+    postSuccess = g_agClient->httpPostMeasures(payload);
     if (postSuccess) {
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
