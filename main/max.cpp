@@ -292,6 +292,19 @@ extern "C" void app_main(void) {
     wakeUpTimeMs = MILLIS();
   }
 
+  // Optimization: copy from LP memory so will not always call from LP memory
+  int wakeUpCounter = xWakeUpCounter;
+
+  // Check if this wake up cycle needs network to be ready
+  bool isSendMeasuresCycle = (wakeUpCounter % SEND_MEASURES_CYCLES) == 0 || (wakeUpCounter == 0);
+  bool isFullTransmitCycle = (wakeUpCounter % FULL_TRANSMISSION_CYCLE) == 0 || (wakeUpCounter == 0);
+  if (isSendMeasuresCycle || isFullTransmitCycle) {
+    ESP_LOGI(TAG, "Time for transmission, initializing network...");
+    if (!initializeNetwork(wakeUpCounter)) {
+      ESP_LOGI(TAG, "Cannot connect to network, will skip transmission");
+    }
+  }
+
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
   vTaskDelay(pdMS_TO_TICKS(2000));
 
@@ -337,9 +350,6 @@ extern "C" void app_main(void) {
   gpio_set_level(EN_PMS2, 0);
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  // Optimization: copy from LP memory so will not always call from LP memory
-  int wakeUpCounter = xWakeUpCounter;
-
   // Define measure interval for current
   float batteryVoltage = sensor.batteryVoltage();
   int measureInterval = getMeasureInterval(batteryVoltage);
@@ -371,21 +381,33 @@ extern "C" void app_main(void) {
     // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
     // Attempt send measures through MQTT if its enabled
     payloadCache.push(&averageMeasures);
-    bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache, measureInterval);
-    if (success) {
-      if (g_configuration.getMqttBrokerUrl().empty()) {
-        ESP_LOGI(TAG, "MQTT is not enabled, skip");
-        payloadCache.clean();
-        xHttpCacheQueueIndex = 0;
-      } else {
-        sendMeasuresUsingMqtt(wakeUpCounter, payloadCache);
+
+    if (isSendMeasuresCycle) {
+      bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache, measureInterval);
+      if (success) {
+        if (g_configuration.getMqttBrokerUrl().empty()) {
+          ESP_LOGI(TAG, "MQTT is not enabled, skip");
+          payloadCache.clean();
+          xHttpCacheQueueIndex = 0;
+        } else {
+          sendMeasuresUsingMqtt(wakeUpCounter, payloadCache);
+        }
       }
+    } else {
+      ESP_LOGI(TAG, "Not the time to send measures, skip");
     }
   } else {
     sendMeasuresByWiFi(wakeUpCounter, averageMeasures);
   }
-  checkRemoteConfiguration(wakeUpCounter);
-  checkForFirmwareUpdate(wakeUpCounter);
+
+  // Only fetch remote configuration and do firmware update check when in full transmission cycle
+  if (isFullTransmitCycle) {
+    checkRemoteConfiguration(wakeUpCounter);
+    checkForFirmwareUpdate(wakeUpCounter);
+  } else {
+    ESP_LOGI(TAG, "Not the time to fetch remote configuration, skip");
+    ESP_LOGI(TAG, "Not the time to check for firmware update, skip");
+  }
 
   // If led test requested, keep led ON until its power cycled
   if (g_configuration.isLedTestRequested()) {
@@ -828,13 +850,9 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
       g_configuration.setCellularOperators(opList, opId);
     }
   }
-  // g_configuration.setCellularOperators(g_cellularCard, uint32_t operatorId)
 
   // Disable again
   g_ceAgSerial->setDebug(false);
-
-  // Wait for a moment for CE card is ready for transmission
-  vTaskDelay(pdMS_TO_TICKS(2000));
 
   return true;
 }
@@ -855,14 +873,8 @@ bool initializeWiFiNetwork(unsigned long wakeUpCounter) {
 
 bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache,
                             int measureInterval) {
-  // Check if pass criteria to post measures
-  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
-    return false;
-  }
-
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip send measures");
     return false;
   }
 
@@ -916,6 +928,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
       g_statusLed.blinkAsync(3000, 500); // Run failed post led indicator
       ESP_LOGE(TAG, "Send measures failed because of client is not ready, ensuring connection...");
       g_ceAgSerial->setDebug(true);
+      // TODO: How about this? when it already run in paralel?
       if (g_agClient->ensureClientConnection(true) == false) {
         ESP_LOGE(TAG, "Failed ensuring client connection, system restart in 5s");
         g_statusLed.blink(5000, 500);
@@ -952,8 +965,8 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
 
 bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
                         AirgradientClient::MaxSensorPayload sensorPayload) {
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip send measures");
     return false;
   }
 
@@ -990,15 +1003,8 @@ bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCac
     return true;
   }
 
-  // Sanity check if its time to send measures
-  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
-    return false;
-  }
-
-  // Make sure network is indeed connected
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip send measures through MQTT");
     return false;
   }
 
@@ -1047,13 +1053,8 @@ bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCac
 }
 
 bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
-  if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to check firmware update, skip");
-    return true;
-  }
-
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check firmware update");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip check firmware update");
     return false;
   }
 
@@ -1088,13 +1089,8 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
 }
 
 bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
-  if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to check remote configuration, skip");
-    return true;
-  }
-
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to network, skip check remote configuration");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip fetch remote configuration");
     return false;
   }
 
