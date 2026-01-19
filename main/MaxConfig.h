@@ -15,6 +15,8 @@ enum class NetworkOption {
   Cellular
 };
 
+#define NETWORKING_TASK_STACK_SIZE 24000
+
 #define MAX_PAYLOAD_CACHE 100
 
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))

@@ -65,11 +65,23 @@ RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
 // Help to check if there's a measure interval change that make previous payload cache invalid
 RTC_DATA_ATTR int xMeasureInterval = 180;
 
+
+// Networking tasks variables
+#define BIT_SENSOR_MEASURES_FINISH (1 << 0)
+#define BIT_TRANSMISSION_FINISH (1 << 1)
+static TaskHandle_t g_handleNetworkTask = NULL;
+static EventGroupHandle_t g_syncGroup;
+static bool g_isSendMeasuresCycle = false;
+static bool g_isFullTransmissionCycle = false;
+static AirgradientClient::MaxSensorPayload g_measuresResult;
+
 // Global Vars
 static const char *const TAG = "APP";
 static std::string g_serialNumber;
 static bool g_networkReady = false;
 static std::string g_fimwareVersion;
+static int g_payloadCacheSize = 0;
+static bool g_doCleanPayloadCache = false;
 static Configuration g_configuration;
 static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
@@ -152,6 +164,8 @@ static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &pa
 static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
                                AirgradientClient::MaxSensorPayload sensorPayload);
 static bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache);
+
+static void networkingTask(void *args);
 
 extern "C" void app_main(void) {
   // Re-initialize console for logging only if it just wake up after deepsleep
@@ -296,13 +310,16 @@ extern "C" void app_main(void) {
   int wakeUpCounter = xWakeUpCounter;
 
   // Check if this wake up cycle needs network to be ready
-  bool isSendMeasuresCycle = (wakeUpCounter % SEND_MEASURES_CYCLES) == 0 || (wakeUpCounter == 0);
-  bool isFullTransmitCycle = (wakeUpCounter % FULL_TRANSMISSION_CYCLE) == 0 || (wakeUpCounter == 0);
-  if (isSendMeasuresCycle || isFullTransmitCycle) {
-    ESP_LOGI(TAG, "Time for transmission, initializing network...");
-    if (!initializeNetwork(wakeUpCounter)) {
-      ESP_LOGI(TAG, "Cannot connect to network, will skip transmission");
-    }
+  // Then run networking task
+  g_isSendMeasuresCycle =
+      (wakeUpCounter % SEND_MEASURES_CYCLES) == 0 || (wakeUpCounter == 0);
+  g_isFullTransmissionCycle =
+      (wakeUpCounter % FULL_TRANSMISSION_CYCLE) == 0 || (wakeUpCounter == 0);
+  if (g_isSendMeasuresCycle || g_isFullTransmissionCycle) {
+    ESP_LOGI(TAG, "Time for transmission, run networking tasks...");
+    g_syncGroup = xEventGroupCreate();
+    xTaskCreate(networkingTask, "NetworkingTask", NETWORKING_TASK_STACK_SIZE,
+                (void *)wakeUpCounter, 5, &g_handleNetworkTask);
   }
 
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
@@ -343,12 +360,12 @@ extern "C" void app_main(void) {
   // Start measure sensor sequence
   sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
   sensor.printMeasures();
-  auto averageMeasures = sensor.getLastAverageMeasure();
+  g_measuresResult = sensor.getLastAverageMeasure();
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
   gpio_set_level(EN_PMS2, 0);
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Define measure interval for current
   float batteryVoltage = sensor.batteryVoltage();
@@ -360,51 +377,36 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Measure interval is set to %d as base line", measureInterval);
   }
 
-  // Load cache
-  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
-
   // If previous measureInterval is different from current measure interval
   /// Then drop previous payloadCache and start over
-  if (measureInterval != xMeasureInterval && payloadCache.getSize() > 0) {
+  if (measureInterval != xMeasureInterval && g_payloadCacheSize > 0) {
     ESP_LOGW(
         TAG,
         "Previous measureInterval (%d) is different from current measureInterval (%d). Dropping "
         "previous payload cache",
         xMeasureInterval, measureInterval);
-    payloadCache.clean();
-    xHttpCacheQueueIndex = 0;
+    g_doCleanPayloadCache = true;
   }
   xMeasureInterval = measureInterval;
 
-  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
-    // Attempt send post through HTTP first
-    // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
-    // Attempt send measures through MQTT if its enabled
-    payloadCache.push(&averageMeasures);
+  // Only set or wait flags when networking task is running
+  if (g_handleNetworkTask != nullptr) {
+    // Notify networking task that sensor measures finish
+    xEventGroupSetBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH);
+    ESP_LOGI(TAG, "BIT_SENSOR_MEASURES_FINISH is set, wait until BIT_TRANSMISSION_FINISH set");
 
-    if (isSendMeasuresCycle) {
-      bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache, measureInterval);
-      if (success) {
-        if (g_configuration.getMqttBrokerUrl().empty()) {
-          ESP_LOGI(TAG, "MQTT is not enabled, skip");
-          payloadCache.clean();
-          xHttpCacheQueueIndex = 0;
-        } else {
-          sendMeasuresUsingMqtt(wakeUpCounter, payloadCache);
-        }
-      }
-    } else {
-      ESP_LOGI(TAG, "Not the time to send measures, skip");
-    }
-  } else {
-    sendMeasuresByWiFi(wakeUpCounter, averageMeasures);
+
+    // Will block until sensor finish measures
+    xEventGroupWaitBits(g_syncGroup, BIT_TRANSMISSION_FINISH, pdTRUE, pdFALSE,
+                        portMAX_DELAY);
+    ESP_LOGI(TAG, "Receive BIT_TRANSMISSION_FINISH, prepare to sleep");
   }
 
-  // Only fetch remote configuration and do firmware update check when in full transmission cycle
-  if (isFullTransmitCycle) {
-    checkRemoteConfiguration(wakeUpCounter);
-    checkForFirmwareUpdate(wakeUpCounter);
-  } else {
+  // Log purposes only
+  if (!g_isSendMeasuresCycle) {
+    ESP_LOGI(TAG, "Not the time to send measures, skip");
+  }
+  if (!g_isFullTransmissionCycle) {
     ESP_LOGI(TAG, "Not the time to fetch remote configuration, skip");
     ESP_LOGI(TAG, "Not the time to check for firmware update, skip");
   }
@@ -413,18 +415,6 @@ extern "C" void app_main(void) {
   if (g_configuration.isLedTestRequested()) {
     g_statusLed.on();
     g_statusLed.holdState();
-  }
-
-  // Turn of network network
-  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
-    // Only poweroff when all transmission attempt is done
-    if (g_ceAgSerial != nullptr || g_networkReady) {
-      g_cellularCard->powerOff();
-    }
-    // Turn OFF Cellular Card load switch
-    gpio_set_level(EN_CE_CARD, 0);
-  } else {
-    g_wifiManager.disconnect(true);
   }
 
   // Get next measurement schedule
@@ -1114,4 +1104,71 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
   }
 
   return true;
+}
+
+void networkingTask(void *args) {
+  // Load cache
+  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
+  g_payloadCacheSize = payloadCache.getSize();
+
+  int wakeUpCounter = (int)args;
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to network, will skip transmission");
+  }
+
+  // Will block until sensor finish measures
+  xEventGroupWaitBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH, pdTRUE, pdFALSE,
+                      portMAX_DELAY);
+
+  // Check if main task ask to clean the cache because of different measure interval
+  if (g_doCleanPayloadCache) {
+    payloadCache.clean();
+    xHttpCacheQueueIndex = 0;
+  }
+
+  // Send measures
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Attempt send post through HTTP first
+    // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
+    // Attempt send measures through MQTT if its enabled
+    payloadCache.push(&g_measuresResult);
+
+    if (g_isSendMeasuresCycle) {
+      bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache, xMeasureInterval);
+      if (success) {
+        if (g_configuration.getMqttBrokerUrl().empty()) {
+          ESP_LOGI(TAG, "MQTT is not enabled, skip");
+          payloadCache.clean();
+          xHttpCacheQueueIndex = 0;
+        } else {
+          sendMeasuresUsingMqtt(wakeUpCounter, payloadCache);
+        }
+      }
+    }
+  } else {
+    sendMeasuresByWiFi(wakeUpCounter, g_measuresResult);
+  }
+
+  // Only fetch remote configuration and do firmware update check when in full transmission cycle
+  if (g_isFullTransmissionCycle) {
+    checkRemoteConfiguration(wakeUpCounter);
+    checkForFirmwareUpdate(wakeUpCounter);
+  }
+
+  // Turn off network network
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Only poweroff when all transmission attempt is done
+    if (g_ceAgSerial != nullptr || g_networkReady) {
+      g_cellularCard->powerOff();
+    }
+    // Turn OFF Cellular Card load switch
+    gpio_set_level(EN_CE_CARD, 0);
+  } else {
+    g_wifiManager.disconnect(true);
+  }
+
+  ESP_LOGI(TAG, "Networking task finish, clean up");
+  vTaskDelay(pdMS_TO_TICKS(100));
+  xEventGroupSetBits(g_syncGroup, BIT_TRANSMISSION_FINISH);
+  vTaskDelete(g_handleNetworkTask);
 }
