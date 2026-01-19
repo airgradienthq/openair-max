@@ -33,7 +33,7 @@ public:
 private:
   const char *const TAG = "Sensor";
 
-  void _measure(AirgradientClient::MaxSensorPayload &data);
+  void _measure(int iteration, AirgradientClient::MaxSensorPayload &data);
   void _applyIteration(AirgradientClient::MaxSensorPayload &data);
   void _calculateMeasuresAverage();
   void _warmUpSensor();
@@ -68,6 +68,7 @@ private:
   bool _co2Available = true;
   AirgradientSerial *agsCO2_ = nullptr;
   Sunlight *co2_ = nullptr;
+  bool _co2ReadTriggered = false;
 
   bool _pms1Available = true;
   AirgradientSerial *agsPM1_ = nullptr;
