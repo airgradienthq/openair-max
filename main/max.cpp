@@ -81,7 +81,7 @@ static std::string g_serialNumber;
 static bool g_networkReady = false;
 static std::string g_fimwareVersion;
 static int g_payloadCacheSize = 0;
-static bool g_doCleanPayloadCache = false;
+static PayloadCache g_payloadCache(MAX_PAYLOAD_CACHE);
 static Configuration g_configuration;
 static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
@@ -361,6 +361,10 @@ extern "C" void app_main(void) {
   sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
   sensor.printMeasures();
   g_measuresResult = sensor.getLastAverageMeasure();
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Only using caching system when network option is cellular
+    g_payloadCache.push(&g_measuresResult);
+  }
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
@@ -379,13 +383,14 @@ extern "C" void app_main(void) {
 
   // If previous measureInterval is different from current measure interval
   /// Then drop previous payloadCache and start over
-  if (measureInterval != xMeasureInterval && g_payloadCacheSize > 0) {
+  if (measureInterval != xMeasureInterval && g_payloadCache.getSize() > 0) {
     ESP_LOGW(
         TAG,
         "Previous measureInterval (%d) is different from current measureInterval (%d). Dropping "
         "previous payload cache",
         xMeasureInterval, measureInterval);
-    g_doCleanPayloadCache = true;
+    g_payloadCache.clean();
+    xHttpCacheQueueIndex = 0;
   }
   xMeasureInterval = measureInterval;
 
@@ -1107,10 +1112,6 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
 }
 
 void networkingTask(void *args) {
-  // Load cache
-  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
-  g_payloadCacheSize = payloadCache.getSize();
-
   int wakeUpCounter = (int)args;
   if (!initializeNetwork(wakeUpCounter)) {
     ESP_LOGI(TAG, "Cannot connect to network, will skip transmission");
@@ -1120,28 +1121,17 @@ void networkingTask(void *args) {
   xEventGroupWaitBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH, pdTRUE, pdFALSE,
                       portMAX_DELAY);
 
-  // Check if main task ask to clean the cache because of different measure interval
-  if (g_doCleanPayloadCache) {
-    payloadCache.clean();
-    xHttpCacheQueueIndex = 0;
-  }
-
   // Send measures
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
-    // Attempt send post through HTTP first
-    // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
-    // Attempt send measures through MQTT if its enabled
-    payloadCache.push(&g_measuresResult);
-
     if (g_isSendMeasuresCycle) {
-      bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache, xMeasureInterval);
+      bool success = sendMeasuresByCellular(wakeUpCounter, g_payloadCache, xMeasureInterval);
       if (success) {
         if (g_configuration.getMqttBrokerUrl().empty()) {
           ESP_LOGI(TAG, "MQTT is not enabled, skip");
-          payloadCache.clean();
+          g_payloadCache.clean();
           xHttpCacheQueueIndex = 0;
         } else {
-          sendMeasuresUsingMqtt(wakeUpCounter, payloadCache);
+          sendMeasuresUsingMqtt(wakeUpCounter, g_payloadCache);
         }
       }
     }
