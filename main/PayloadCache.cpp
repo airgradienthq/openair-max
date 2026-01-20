@@ -21,9 +21,6 @@ PayloadCache::PayloadCache(uint16_t maxSize) {
   maxCacheSize = maxSize;
   head = 0;
   tail = 0;
-
-  // If there's data in RTC, restore it for use
-  restoreFromRTC();
 }
 
 PayloadCache::~PayloadCache() {

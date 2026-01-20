@@ -15,7 +15,7 @@ enum class NetworkOption {
   Cellular
 };
 
-#define NETWORKING_TASK_STACK_SIZE 24000
+#define NETWORKING_TASK_STACK_SIZE 16384
 
 #define MAX_PAYLOAD_CACHE 100
 

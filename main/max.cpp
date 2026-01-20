@@ -80,7 +80,6 @@ static const char *const TAG = "APP";
 static std::string g_serialNumber;
 static bool g_networkReady = false;
 static std::string g_fimwareVersion;
-static int g_payloadCacheSize = 0;
 static PayloadCache g_payloadCache(MAX_PAYLOAD_CACHE);
 static Configuration g_configuration;
 static StatusLed g_statusLed(IO_LED_INDICATOR);
@@ -305,6 +304,9 @@ extern "C" void app_main(void) {
     // Starting time for every cycle should start now because time taken by system settings portal
     wakeUpTimeMs = MILLIS();
   }
+
+  // Restore cache from RTC memory
+  g_payloadCache.restoreFromRTC();
 
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
