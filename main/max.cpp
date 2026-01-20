@@ -409,7 +409,7 @@ extern "C" void app_main(void) {
 
   // Log purposes only
   if (!g_isSendMeasuresCycle) {
-    ESP_LOGI(TAG, "Not the time to send measures, skip");
+    ESP_LOGI(TAG, "Not the time to send measures, skip (cache size: %d)", g_payloadCache.getSize());
   }
   if (!g_isFullTransmissionCycle) {
     ESP_LOGI(TAG, "Not the time to fetch remote configuration, skip");
@@ -837,14 +837,10 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     ensureConnectionReady();
   }
 
-  if (wakeUpCounter == 0) {
-    // Save list operator available, only do it once on boot and operator is different
-    std::string opList = g_cellularCard->getSerializedOperators();
-    uint32_t opId = g_cellularCard->getCurrentOperatorId();
-    if (g_configuration.getCellularOperators() != opList) {
-      g_configuration.setCellularOperators(opList, opId);
-    }
-  }
+  // Ensure operator always up to date
+  std::string opList = g_cellularCard->getSerializedOperators();
+  uint32_t opId = g_cellularCard->getCurrentOperatorId();
+  g_configuration.setCellularOperators(opList, opId);
 
   // Disable again
   g_ceAgSerial->setDebug(false);

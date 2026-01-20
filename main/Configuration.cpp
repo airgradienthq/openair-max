@@ -686,9 +686,22 @@ void Configuration::setAPN(const std::string &apn) {
 }
 
 void Configuration::setCellularOperators(const std::string &operators, uint32_t operatorId) {
-  _config.cellularOperators = operators;
-  _config.currentOperatorId = operatorId;
-  _saveConfig();
+  bool changed = false;
+  if (_config.cellularOperators != operators) {
+    ESP_LOGI(TAG, "Cellular operator list changed, saving it");
+    _config.cellularOperators = operators;
+    changed = true;
+  }
+  if (_config.currentOperatorId != operatorId) {
+    ESP_LOGI(TAG, "Current cellular operator ID changed, saving it");
+    _config.currentOperatorId = operatorId;
+    changed = true;
+  }
+
+  // Only saved to NVS if there's any changes
+  if (changed) {
+    _saveConfig();
+  }
 }
 
 void Configuration::resetCO2CalibrationRequest() {
