@@ -762,6 +762,10 @@ bool initializeNetwork(unsigned long wakeUpCounter) {
 
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     g_networkReady = initializeCellularNetwork(wakeUpCounter);
+    // Ensure operator always up to date
+    std::string opList = g_cellularCard->getSerializedOperators();
+    uint32_t opId = g_cellularCard->getCurrentOperatorId();
+    g_configuration.setCellularOperators(opList, opId);
   } else {
     g_networkReady = initializeWiFiNetwork(wakeUpCounter);
   }
@@ -836,11 +840,6 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
     // When its a first boot, ensure connection is ready
     ensureConnectionReady();
   }
-
-  // Ensure operator always up to date
-  std::string opList = g_cellularCard->getSerializedOperators();
-  uint32_t opId = g_cellularCard->getCurrentOperatorId();
-  g_configuration.setCellularOperators(opList, opId);
 
   // Disable again
   g_ceAgSerial->setDebug(false);
