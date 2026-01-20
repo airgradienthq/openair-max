@@ -363,10 +363,6 @@ extern "C" void app_main(void) {
   sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
   sensor.printMeasures();
   g_measuresResult = sensor.getLastAverageMeasure();
-  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
-    // Only using caching system when network option is cellular
-    g_payloadCache.push(&g_measuresResult);
-  }
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
@@ -396,12 +392,17 @@ extern "C" void app_main(void) {
   }
   xMeasureInterval = measureInterval;
 
+  // Push the new measurement to the cache
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Only using caching system when network option is cellular
+    g_payloadCache.push(&g_measuresResult);
+  }
+
   // Only set or wait flags when networking task is running
   if (g_handleNetworkTask != nullptr) {
     // Notify networking task that sensor measures finish
     xEventGroupSetBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH);
     ESP_LOGI(TAG, "BIT_SENSOR_MEASURES_FINISH is set, wait until BIT_TRANSMISSION_FINISH set");
-
 
     // Will block until sensor finish measures
     xEventGroupWaitBits(g_syncGroup, BIT_TRANSMISSION_FINISH, pdTRUE, pdFALSE,
