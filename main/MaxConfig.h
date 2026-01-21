@@ -15,6 +15,8 @@ enum class NetworkOption {
   Cellular
 };
 
+#define NETWORKING_TASK_STACK_SIZE 16384
+
 #define MAX_PAYLOAD_CACHE 100
 
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
@@ -64,9 +66,9 @@ constexpr gpio_num_t IO_BOOT_BUTTON = GPIO_NUM_9;
 #define IS_NOX_VALID(val) (val >= 0)
 #define IS_VOLT_VALID(val) (val >= 0)
 
-#define TRANSMIT_MEASUREMENTS_CYCLES 3
+#define SEND_MEASURES_CYCLES 3
 #define MEASURE_CYCLE_INTERVAL_SECONDS 180
-#define FIRMWARE_UPDATE_CHECK_CYCLES 30 // 1 hour
+#define FULL_TRANSMISSION_CYCLE 30 // 1 hour
 
 #define DEFAULT_MEASURE_ITERATION_COUNT 20
 #define DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION 2000
