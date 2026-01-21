@@ -35,6 +35,7 @@
  * MIT Licensed as described in the file LICENSE
  */
 #include "include/sht4x.h"
+#include "freertos/projdefs.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -374,7 +375,10 @@ esp_err_t sht4x_get_measurement(sht4x_handle_t handle, float *const temperature,
     /* attempt i2c write transaction */
     ESP_RETURN_ON_ERROR( sht4x_i2c_write(handle, tx, BIT8_UINT8_BUFFER_SIZE), TAG, "unable to write to i2c device handle, get measurement failed");
 	
-	/* delay task - allow time for the sensor to process measurement request */
+    // Allow bus to settle after command transmission
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    /* delay task - allow time for the sensor to process measurement request */
     if(delay_ticks) vTaskDelay(delay_ticks);
 
     /* retry needed - unexpected nack indicates that the sensor is still busy */
