@@ -65,11 +65,22 @@ RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
 // Help to check if there's a measure interval change that make previous payload cache invalid
 RTC_DATA_ATTR int xMeasureInterval = 180;
 
+
+// Networking tasks variables
+#define BIT_SENSOR_MEASURES_FINISH (1 << 0)
+#define BIT_TRANSMISSION_FINISH (1 << 1)
+static TaskHandle_t g_handleNetworkTask = NULL;
+static EventGroupHandle_t g_syncGroup;
+static bool g_isSendMeasuresCycle = false;
+static bool g_isFullTransmissionCycle = false;
+static AirgradientClient::MaxSensorPayload g_measuresResult;
+
 // Global Vars
 static const char *const TAG = "APP";
 static std::string g_serialNumber;
 static bool g_networkReady = false;
 static std::string g_fimwareVersion;
+static PayloadCache g_payloadCache(MAX_PAYLOAD_CACHE);
 static Configuration g_configuration;
 static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
@@ -152,6 +163,8 @@ static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &pa
 static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
                                AirgradientClient::MaxSensorPayload sensorPayload);
 static bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache);
+
+static void networkingTask(void *args);
 
 extern "C" void app_main(void) {
   // Re-initialize console for logging only if it just wake up after deepsleep
@@ -292,6 +305,25 @@ extern "C" void app_main(void) {
     wakeUpTimeMs = MILLIS();
   }
 
+  // Restore cache from RTC memory
+  g_payloadCache.restoreFromRTC();
+
+  // Optimization: copy from LP memory so will not always call from LP memory
+  int wakeUpCounter = xWakeUpCounter;
+
+  // Check if this wake up cycle needs network to be ready
+  // Then run networking task
+  g_isSendMeasuresCycle =
+      (wakeUpCounter % SEND_MEASURES_CYCLES) == 0 || (wakeUpCounter == 0);
+  g_isFullTransmissionCycle =
+      (wakeUpCounter % FULL_TRANSMISSION_CYCLE) == 0 || (wakeUpCounter == 0);
+  if (g_isSendMeasuresCycle || g_isFullTransmissionCycle) {
+    ESP_LOGI(TAG, "Time for transmission, run networking tasks...");
+    g_syncGroup = xEventGroupCreate();
+    xTaskCreate(networkingTask, "NetworkingTask", NETWORKING_TASK_STACK_SIZE,
+                (void *)wakeUpCounter, 5, &g_handleNetworkTask);
+  }
+
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
   vTaskDelay(pdMS_TO_TICKS(2000));
 
@@ -330,15 +362,12 @@ extern "C" void app_main(void) {
   // Start measure sensor sequence
   sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
   sensor.printMeasures();
-  auto averageMeasures = sensor.getLastAverageMeasure();
+  g_measuresResult = sensor.getLastAverageMeasure();
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
   gpio_set_level(EN_PMS2, 0);
-  vTaskDelay(pdMS_TO_TICKS(1000));
-
-  // Optimization: copy from LP memory so will not always call from LP memory
-  int wakeUpCounter = xWakeUpCounter;
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Define measure interval for current
   float batteryVoltage = sensor.batteryVoltage();
@@ -350,59 +379,50 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Measure interval is set to %d as base line", measureInterval);
   }
 
-  // Load cache
-  PayloadCache payloadCache(MAX_PAYLOAD_CACHE);
-
   // If previous measureInterval is different from current measure interval
   /// Then drop previous payloadCache and start over
-  if (measureInterval != xMeasureInterval && payloadCache.getSize() > 0) {
+  if (measureInterval != xMeasureInterval && g_payloadCache.getSize() > 0) {
     ESP_LOGW(
         TAG,
         "Previous measureInterval (%d) is different from current measureInterval (%d). Dropping "
         "previous payload cache",
         xMeasureInterval, measureInterval);
-    payloadCache.clean();
+    g_payloadCache.clean();
     xHttpCacheQueueIndex = 0;
   }
   xMeasureInterval = measureInterval;
 
+  // Push the new measurement to the cache
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
-    // Attempt send post through HTTP first
-    // If success and send measures through MQTT not enabled, then clean the cache while make sure xHttpCacheQueueIndex reset
-    // Attempt send measures through MQTT if its enabled
-    payloadCache.push(&averageMeasures);
-    bool success = sendMeasuresByCellular(wakeUpCounter, payloadCache, measureInterval);
-    if (success) {
-      if (g_configuration.getMqttBrokerUrl().empty()) {
-        ESP_LOGI(TAG, "MQTT is not enabled, skip");
-        payloadCache.clean();
-        xHttpCacheQueueIndex = 0;
-      } else {
-        sendMeasuresUsingMqtt(wakeUpCounter, payloadCache);
-      }
-    }
-  } else {
-    sendMeasuresByWiFi(wakeUpCounter, averageMeasures);
+    // Only using caching system when network option is cellular
+    g_payloadCache.push(&g_measuresResult);
   }
-  checkRemoteConfiguration(wakeUpCounter);
-  checkForFirmwareUpdate(wakeUpCounter);
+
+  // Only set or wait flags when networking task is running
+  if (g_handleNetworkTask != nullptr) {
+    // Notify networking task that sensor measures finish
+    xEventGroupSetBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH);
+    ESP_LOGI(TAG, "BIT_SENSOR_MEASURES_FINISH is set, wait until BIT_TRANSMISSION_FINISH set");
+
+    // Will block until sensor finish measures
+    xEventGroupWaitBits(g_syncGroup, BIT_TRANSMISSION_FINISH, pdTRUE, pdFALSE,
+                        portMAX_DELAY);
+    ESP_LOGI(TAG, "Receive BIT_TRANSMISSION_FINISH, prepare to sleep");
+  }
+
+  // Log purposes only
+  if (!g_isSendMeasuresCycle) {
+    ESP_LOGI(TAG, "Not the time to send measures, skip (cache size: %d)", g_payloadCache.getSize());
+  }
+  if (!g_isFullTransmissionCycle) {
+    ESP_LOGI(TAG, "Not the time to fetch remote configuration, skip");
+    ESP_LOGI(TAG, "Not the time to check for firmware update, skip");
+  }
 
   // If led test requested, keep led ON until its power cycled
   if (g_configuration.isLedTestRequested()) {
     g_statusLed.on();
     g_statusLed.holdState();
-  }
-
-  // Turn of network network
-  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
-    // Only poweroff when all transmission attempt is done
-    if (g_ceAgSerial != nullptr || g_networkReady) {
-      g_cellularCard->powerOff();
-    }
-    // Turn OFF Cellular Card load switch
-    gpio_set_level(EN_CE_CARD, 0);
-  } else {
-    g_wifiManager.disconnect(true);
   }
 
   // Get next measurement schedule
@@ -745,6 +765,10 @@ bool initializeNetwork(unsigned long wakeUpCounter) {
 
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     g_networkReady = initializeCellularNetwork(wakeUpCounter);
+    // Ensure operator always up to date
+    std::string opList = g_cellularCard->getSerializedOperators();
+    uint32_t opId = g_cellularCard->getCurrentOperatorId();
+    g_configuration.setCellularOperators(opList, opId);
   } else {
     g_networkReady = initializeWiFiNetwork(wakeUpCounter);
   }
@@ -786,15 +810,22 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   // Enable debugging when CE card initializing
   g_ceAgSerial->setDebug(true);
   // Initialize cellular card and client
-  g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER);
+  uint32_t warmUpCE = g_configuration.getCellularWarmUpMs();
+  g_cellularCard = new CellularModuleA7672XX(g_ceAgSerial, IO_CE_POWER, warmUpCE);
   g_agClient = new AirgradientCellularClient(g_cellularCard);
-  g_agClient->setHttpDomain(g_configuration.getHttpDomain());
-  g_agClient->setExtendedPmMeasures(g_configuration.isExtendedPmMeasuresEnabled());
 
   resetExtWatchdog();
 
+  // Load and set CE module operators
+  g_cellularCard->setOperators(g_configuration.getCellularOperators(),
+                               g_configuration.getCurrentOperatorId());
+
+  // Setup client configuration
+  g_agClient->setHttpDomain(g_configuration.getHttpDomain());
+  g_agClient->setExtendedPmMeasures(g_configuration.isExtendedPmMeasuresEnabled());
   g_agClient->setNetworkRegistrationTimeoutMs(registrationTimeout);
   g_agClient->setAPN(g_configuration.getAPN());
+
   if (g_agClient->begin(g_serialNumber, getPayloadType())) {
     // Connected
     if (wakeUpCounter == 0) {
@@ -803,17 +834,18 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
   } else {
     // Not connected
     ESP_LOGE(TAG, "Failed start airgradient client");
-    if (wakeUpCounter == 0) {
-      // When its a first boot, ensure connection is ready
-      ensureConnectionReady();
+    if (wakeUpCounter > 0) {
+      // Disable again
+      g_ceAgSerial->setDebug(false);
+      return false;
     }
+
+    // When its a first boot, ensure connection is ready
+    ensureConnectionReady();
   }
 
   // Disable again
   g_ceAgSerial->setDebug(false);
-
-  // Wait for a moment for CE card is ready for transmission
-  vTaskDelay(pdMS_TO_TICKS(2000));
 
   return true;
 }
@@ -834,14 +866,8 @@ bool initializeWiFiNetwork(unsigned long wakeUpCounter) {
 
 bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache,
                             int measureInterval) {
-  // Check if pass criteria to post measures
-  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
-    return false;
-  }
-
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip send measures");
     return false;
   }
 
@@ -895,6 +921,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
       g_statusLed.blinkAsync(3000, 500); // Run failed post led indicator
       ESP_LOGE(TAG, "Send measures failed because of client is not ready, ensuring connection...");
       g_ceAgSerial->setDebug(true);
+      // TODO: How about this? when it already run in paralel?
       if (g_agClient->ensureClientConnection(true) == false) {
         ESP_LOGE(TAG, "Failed ensuring client connection, system restart in 5s");
         g_statusLed.blink(5000, 500);
@@ -931,8 +958,8 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
 
 bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
                         AirgradientClient::MaxSensorPayload sensorPayload) {
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip send measures");
     return false;
   }
 
@@ -969,15 +996,8 @@ bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCac
     return true;
   }
 
-  // Sanity check if its time to send measures
-  if (wakeUpCounter != 0 && (wakeUpCounter % TRANSMIT_MEASUREMENTS_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to post measures by cellular network, skip");
-    return false;
-  }
-
-  // Make sure network is indeed connected
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip send measures");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip send measures through MQTT");
     return false;
   }
 
@@ -1026,13 +1046,8 @@ bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCac
 }
 
 bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
-  if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to check firmware update, skip");
-    return true;
-  }
-
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to cellular network, skip check firmware update");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip check firmware update");
     return false;
   }
 
@@ -1067,13 +1082,8 @@ bool checkForFirmwareUpdate(unsigned long wakeUpCounter) {
 }
 
 bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
-  if (wakeUpCounter != 0 && (wakeUpCounter % FIRMWARE_UPDATE_CHECK_CYCLES) > 0) {
-    ESP_LOGI(TAG, "Not the time to check remote configuration, skip");
-    return true;
-  }
-
-  if (!initializeNetwork(wakeUpCounter)) {
-    ESP_LOGI(TAG, "Cannot connect to network, skip check remote configuration");
+  if (!g_networkReady) {
+    ESP_LOGW(TAG, "Network is not ready, skip fetch remote configuration");
     return false;
   }
 
@@ -1097,4 +1107,56 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
   }
 
   return true;
+}
+
+void networkingTask(void *args) {
+  int wakeUpCounter = (int)args;
+  if (!initializeNetwork(wakeUpCounter)) {
+    ESP_LOGI(TAG, "Cannot connect to network, will skip transmission");
+  }
+
+  // Will block until sensor finish measures
+  xEventGroupWaitBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH, pdTRUE, pdFALSE,
+                      portMAX_DELAY);
+
+  // Send measures
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    if (g_isSendMeasuresCycle) {
+      bool success = sendMeasuresByCellular(wakeUpCounter, g_payloadCache, xMeasureInterval);
+      if (success) {
+        if (g_configuration.getMqttBrokerUrl().empty()) {
+          ESP_LOGI(TAG, "MQTT is not enabled, skip");
+          g_payloadCache.clean();
+          xHttpCacheQueueIndex = 0;
+        } else {
+          sendMeasuresUsingMqtt(wakeUpCounter, g_payloadCache);
+        }
+      }
+    }
+  } else {
+    sendMeasuresByWiFi(wakeUpCounter, g_measuresResult);
+  }
+
+  // Only fetch remote configuration and do firmware update check when in full transmission cycle
+  if (g_isFullTransmissionCycle) {
+    checkRemoteConfiguration(wakeUpCounter);
+    checkForFirmwareUpdate(wakeUpCounter);
+  }
+
+  // Turn off network network
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    // Only poweroff when all transmission attempt is done
+    if (g_ceAgSerial != nullptr || g_networkReady) {
+      g_cellularCard->powerOff();
+    }
+    // Turn OFF Cellular Card load switch
+    gpio_set_level(EN_CE_CARD, 0);
+  } else {
+    g_wifiManager.disconnect(true);
+  }
+
+  ESP_LOGI(TAG, "Networking task finish, clean up");
+  vTaskDelay(pdMS_TO_TICKS(100));
+  xEventGroupSetBits(g_syncGroup, BIT_TRANSMISSION_FINISH);
+  vTaskDelete(g_handleNetworkTask);
 }

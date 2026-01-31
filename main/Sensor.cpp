@@ -213,7 +213,7 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
     }
 
     // Attempt measure each sensor and sum each measures iteration
-    _measure(iterationData);
+    _measure(i, iterationData);
     _applyIteration(iterationData);
 
     int timeSpendMs = MILLIS() - startIteration;
@@ -307,7 +307,7 @@ bool Sensor::co2AttemptManualCalibration() {
   return true;
 }
 
-void Sensor::_measure(AirgradientClient::MaxSensorPayload &data) {
+void Sensor::_measure(int iteration, AirgradientClient::MaxSensorPayload &data) {
   // Set measure data to invalid for indication if respective sensor failed
   data.rco2 = DEFAULT_INVALID_CO2;
   data.atmp = DEFAULT_INVALID_TEMPERATURE;
@@ -335,20 +335,35 @@ void Sensor::_measure(AirgradientClient::MaxSensorPayload &data) {
   if (_co2Available) {
     // Check if sensor is in single mode and trigger measurement if needed
     if (co2_->is_single_mode()) {
-      int triggerResult = co2_->trigger_single_measurement();
-      if (triggerResult == 0) {
-        // Wait for measurement to complete (typically 2-3 seconds for CO2 sensors)
-        vTaskDelay(pdMS_TO_TICKS(3000)); // Wait 3 seconds
-        ESP_LOGD(TAG, "Single measurement triggered, reading CO2 value...");
-      } else {
-        ESP_LOGW(TAG, "Failed to trigger single measurement, trying to read anyway...");
+      // By only operate on odd iteration, it will always have 3s gap between trigger and read
+      //   that defined from the datasheet
+      bool odd = (iteration % 2) == 1;
+
+      // Only read if its already triggered and in odd iteration count
+      if (_co2ReadTriggered && odd) {
+        _co2ReadTriggered = false;
+        data.rco2 = co2_->read_sensor_measurements();
+        ESP_LOGD(TAG, "CO2: %d", data.rco2);
       }
+
+      // Only trigger if it haven't been triggered an in odd iteration count
+      if (!_co2ReadTriggered && odd) {
+        // Trigger single measurement to read on next iteration
+        int triggerResult = co2_->trigger_single_measurement();
+        if (triggerResult == 0) {
+          ESP_LOGD(TAG, "Single measurement triggered, read in next iteration...");
+        } else {
+          ESP_LOGW(TAG, "Failed to trigger single measurement, trying to read anyway...");
+        }
+        _co2ReadTriggered = true;
+      }
+
     } else {
       ESP_LOGD(TAG, "Sensor in continuous mode, reading CO2 value directly...");
+      data.rco2 = co2_->read_sensor_measurements();
+      ESP_LOGD(TAG, "CO2: %d", data.rco2);
     }
 
-    data.rco2 = co2_->read_sensor_measurements();
-    ESP_LOGD(TAG, "CO2: %d", data.rco2);
   }
 
   if (_tempHumAvailable) {
