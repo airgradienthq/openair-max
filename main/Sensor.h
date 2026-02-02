@@ -19,6 +19,11 @@
 #include "AlphaSenseSensor.h"
 #include "Configuration.h"
 
+struct MaxSensorPayload {
+  AirgradientClient::CommonPayload common;
+  AirgradientClient::ExtraPayload extra;
+};
+
 class Sensor {
 public:
   Sensor(i2c_master_bus_handle_t busHandle);
@@ -26,15 +31,15 @@ public:
   bool init(Configuration::Model model, int co2ABCDays);
   bool startMeasures(int iterations, int intervalMs);
   void printMeasures();
-  AirgradientClient::MaxSensorPayload getLastAverageMeasure();
+  MaxSensorPayload getLastAverageMeasure();
   bool co2AttemptManualCalibration();
   float batteryVoltage();
 
 private:
   const char *const TAG = "Sensor";
 
-  void _measure(int iteration, AirgradientClient::MaxSensorPayload &data);
-  void _applyIteration(AirgradientClient::MaxSensorPayload &data);
+  void _measure(int iteration, MaxSensorPayload &data);
+  void _applyIteration(MaxSensorPayload &data);
   void _calculateMeasuresAverage();
   void _warmUpSensor();
   bool _applySunlightMeasurementSample();
@@ -62,7 +67,7 @@ private:
   int _no2WEIterationOkCount = 0;
   int _no2AEIterationOkCount = 0;
   int _afeTempIterationOkCount = 0;
-  AirgradientClient::MaxSensorPayload _averageMeasure;
+  MaxSensorPayload _averageMeasure;
   i2c_master_bus_handle_t _busHandle;
 
   bool _co2Available = true;
