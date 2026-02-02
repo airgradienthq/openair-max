@@ -397,6 +397,9 @@ extern "C" void app_main(void) {
 
   // Only set or wait flags when networking task is running
   if (g_handleNetworkTask != nullptr) {
+    // Ensure watchdog not triggered while wait for transmission to finish
+    resetExtWatchdog();
+
     // Notify networking task that sensor measures finish
     xEventGroupSetBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH);
     ESP_LOGI(TAG, "BIT_SENSOR_MEASURES_FINISH is set, wait until BIT_TRANSMISSION_FINISH set");
