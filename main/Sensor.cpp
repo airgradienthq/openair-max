@@ -246,7 +246,7 @@ void Sensor::printMeasures() {
   ESP_LOGI(TAG, "PM1.0#AE : %.1f", _averageMeasure.common.pm01);
   ESP_LOGI(TAG, "PM2.5#AE : %.1f", _averageMeasure.common.pm25);
   ESP_LOGI(TAG, "PM10.0#AE : %.1f", _averageMeasure.common.pm10);
-  ESP_LOGI(TAG, "PM2.5#SP : %.1f", _averageMeasure.common.pm25);
+  ESP_LOGI(TAG, "PM2.5#SP : %.1f", _averageMeasure.common.pm25Sp);
   ESP_LOGI(TAG, "PM 0.3 count : %d", _averageMeasure.common.particleCount003);
   ESP_LOGI(TAG, "PM 0.5 count : %d", _averageMeasure.common.particleCount005);
   ESP_LOGI(TAG, "PM 1.0 count : %d", _averageMeasure.common.particleCount01);
