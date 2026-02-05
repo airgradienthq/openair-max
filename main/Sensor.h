@@ -49,10 +49,10 @@ private:
   int _atmpIterationOkCount = 0;
   int _rhumIterationOkCount = 0;
   int _pm01IterationOkCount = 0;
-  int _pm25IterationOkCount = 0;
+  int _pm25IterationOkCount[2] = {0, 0};
   int _pm10IterationOkCount = 0;
-  int _pm25SpIterationOkCount = 0;
-  int _pm003CountIterationOkCount = 0;
+  int _pm25SpIterationOkCount[2] = {0, 0};
+  int _pm003CountIterationOkCount[2] = {0, 0};
   int _pm005CountIterationOkCount = 0;
   int _pm01CountIterationOkCount = 0;
   int _pm02CountIterationOkCount = 0;
