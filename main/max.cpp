@@ -317,7 +317,8 @@ extern "C" void app_main(void) {
       (wakeUpCounter % SEND_MEASURES_CYCLES) == 0 || (wakeUpCounter == 0);
   g_isFullTransmissionCycle =
       (wakeUpCounter % FULL_TRANSMISSION_CYCLE) == 0 || (wakeUpCounter == 0);
-  if (g_isSendMeasuresCycle || g_isFullTransmissionCycle) {
+  bool isUsingWifi = g_configuration.getNetworkOption() == NetworkOption::WiFi;
+  if (g_isSendMeasuresCycle || g_isFullTransmissionCycle || isUsingWifi) {
     ESP_LOGI(TAG, "Time for transmission, run networking tasks...");
     g_syncGroup = xEventGroupCreate();
     xTaskCreate(networkingTask, "NetworkingTask", NETWORKING_TASK_STACK_SIZE,
@@ -411,7 +412,7 @@ extern "C" void app_main(void) {
   }
 
   // Log purposes only
-  if (!g_isSendMeasuresCycle) {
+  if (!g_isSendMeasuresCycle && !isUsingWifi) {
     ESP_LOGI(TAG, "Not the time to send measures, skip (cache size: %d)", g_payloadCache.getSize());
   }
   if (!g_isFullTransmissionCycle) {
