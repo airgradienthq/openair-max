@@ -26,7 +26,7 @@ jobs:
       - name: esp-idf build
         uses: espressif/esp-idf-ci-action@v1
         with:
-          esp_idf_version: v5.4
+          esp_idf_version: v5.5.2
           target: esp32c6 
           path: '.'
           command: idf.py merge-bin -o openair-max-merge.bin -f raw

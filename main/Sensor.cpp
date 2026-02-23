@@ -179,30 +179,32 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
 
   // When starting, set all measures average values to invalid
   //  as indication no valid data from every iterations before saving to cache
-  _averageMeasure.rco2 = DEFAULT_INVALID_CO2;
-  _averageMeasure.atmp = DEFAULT_INVALID_TEMPERATURE;
-  _averageMeasure.rhum = DEFAULT_INVALID_HUMIDITY;
-  _averageMeasure.pm01 = DEFAULT_INVALID_PM;
-  _averageMeasure.pm25 = DEFAULT_INVALID_PM;
-  _averageMeasure.pm10 = DEFAULT_INVALID_PM;
-  _averageMeasure.pm25Sp = DEFAULT_INVALID_PM;
-  _averageMeasure.particleCount003 = DEFAULT_INVALID_PM;
-  _averageMeasure.particleCount005 = DEFAULT_INVALID_PM;
-  _averageMeasure.particleCount01 = DEFAULT_INVALID_PM;
-  _averageMeasure.particleCount02 = DEFAULT_INVALID_PM;
-  _averageMeasure.particleCount50 = DEFAULT_INVALID_PM;
-  _averageMeasure.particleCount10 = DEFAULT_INVALID_PM;
-  _averageMeasure.tvocRaw = DEFAULT_INVALID_TVOC;
-  _averageMeasure.noxRaw = DEFAULT_INVALID_NOX;
-  _averageMeasure.vBat = DEFAULT_INVALID_VOLT;
-  _averageMeasure.vPanel = DEFAULT_INVALID_VOLT;
-  _averageMeasure.o3WorkingElectrode = DEFAULT_INVALID_VOLT;
-  _averageMeasure.o3AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
-  _averageMeasure.no2WorkingElectrode = DEFAULT_INVALID_VOLT;
-  _averageMeasure.no2AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
-  _averageMeasure.afeTemp = DEFAULT_INVALID_VOLT;
+  _averageMeasure.common.rco2 = DEFAULT_INVALID_CO2;
+  _averageMeasure.common.atmp = DEFAULT_INVALID_TEMPERATURE;
+  _averageMeasure.common.rhum = DEFAULT_INVALID_HUMIDITY;
+  _averageMeasure.common.pm01 = DEFAULT_INVALID_PM;
+  _averageMeasure.common.pm10 = DEFAULT_INVALID_PM;
+  for (int ch = 0; ch < 2; ch++) {
+    _averageMeasure.common.pm25[ch] = DEFAULT_INVALID_PM;
+    _averageMeasure.common.pm25Sp[ch] = DEFAULT_INVALID_PM;
+    _averageMeasure.common.particleCount003[ch] = DEFAULT_INVALID_PM;
+  }
+  _averageMeasure.common.particleCount005 = DEFAULT_INVALID_PM;
+  _averageMeasure.common.particleCount01 = DEFAULT_INVALID_PM;
+  _averageMeasure.common.particleCount02 = DEFAULT_INVALID_PM;
+  _averageMeasure.common.particleCount50 = DEFAULT_INVALID_PM;
+  _averageMeasure.common.particleCount10 = DEFAULT_INVALID_PM;
+  _averageMeasure.common.tvocRaw = DEFAULT_INVALID_TVOC;
+  _averageMeasure.common.noxRaw = DEFAULT_INVALID_NOX;
+  _averageMeasure.extra.vBat = DEFAULT_INVALID_VOLT;
+  _averageMeasure.extra.vPanel = DEFAULT_INVALID_VOLT;
+  _averageMeasure.extra.o3WorkingElectrode = DEFAULT_INVALID_VOLT;
+  _averageMeasure.extra.o3AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
+  _averageMeasure.extra.no2WorkingElectrode = DEFAULT_INVALID_VOLT;
+  _averageMeasure.extra.no2AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
+  _averageMeasure.extra.afeTemp = DEFAULT_INVALID_VOLT;
 
-  AirgradientClient::MaxSensorPayload iterationData;
+  MaxSensorPayload iterationData;
 
   for (int i = 1; i <= iterations; i++) {
     uint32_t startIteration = MILLIS();
@@ -240,31 +242,34 @@ bool Sensor::startMeasures(int iterations, int intervalMs) {
 
 void Sensor::printMeasures() {
   ESP_LOGI(TAG, "<<< Average Measures >>>");
-  ESP_LOGI(TAG, "CO2 : %d", _averageMeasure.rco2);
-  ESP_LOGI(TAG, "Temperature : %.1f", _averageMeasure.atmp);
-  ESP_LOGI(TAG, "Humidity : %.1f", _averageMeasure.rhum);
-  ESP_LOGI(TAG, "PM1.0#AE : %.1f", _averageMeasure.pm01);
-  ESP_LOGI(TAG, "PM2.5#AE : %.1f", _averageMeasure.pm25);
-  ESP_LOGI(TAG, "PM10.0#AE : %.1f", _averageMeasure.pm10);
-  ESP_LOGI(TAG, "PM2.5#SP : %.1f", _averageMeasure.pm25);
-  ESP_LOGI(TAG, "PM 0.3 count : %d", _averageMeasure.particleCount003);
-  ESP_LOGI(TAG, "PM 0.5 count : %d", _averageMeasure.particleCount005);
-  ESP_LOGI(TAG, "PM 1.0 count : %d", _averageMeasure.particleCount01);
-  ESP_LOGI(TAG, "PM 2.5 count : %d", _averageMeasure.particleCount02);
-  ESP_LOGI(TAG, "PM 5.0 count : %d", _averageMeasure.particleCount50);
-  ESP_LOGI(TAG, "PM 10.0 count : %d", _averageMeasure.particleCount10);
-  ESP_LOGI(TAG, "TVOC Raw : %d", _averageMeasure.tvocRaw);
-  ESP_LOGI(TAG, "NOx Raw : %d", _averageMeasure.noxRaw);
-  ESP_LOGI(TAG, "VBAT : %.2f", _averageMeasure.vBat);
-  ESP_LOGI(TAG, "VPanel : %.2f", _averageMeasure.vPanel);
-  ESP_LOGI(TAG, "O3 WE: %.3fmV", _averageMeasure.o3WorkingElectrode);
-  ESP_LOGI(TAG, "O3 AE: %.3fmV", _averageMeasure.o3AuxiliaryElectrode);
-  ESP_LOGI(TAG, "NO2 WE: %.3fmV", _averageMeasure.no2WorkingElectrode);
-  ESP_LOGI(TAG, "NO2 AE: %.3fmV", _averageMeasure.no2AuxiliaryElectrode);
-  ESP_LOGI(TAG, "AFE Temperature: %.3fmV", _averageMeasure.afeTemp);
+  ESP_LOGI(TAG, "CO2 : %d", _averageMeasure.common.rco2);
+  ESP_LOGI(TAG, "Temperature : %.1f", _averageMeasure.common.atmp);
+  ESP_LOGI(TAG, "Humidity : %.1f", _averageMeasure.common.rhum);
+  ESP_LOGI(TAG, "PM1.0#AE : %.1f", _averageMeasure.common.pm01);
+  ESP_LOGI(TAG, "PM2.5#AE{1} : %.1f", _averageMeasure.common.pm25[0]);
+  ESP_LOGI(TAG, "PM2.5#AE{2} : %.1f", _averageMeasure.common.pm25[1]);
+  ESP_LOGI(TAG, "PM10.0#AE : %.1f", _averageMeasure.common.pm10);
+  ESP_LOGI(TAG, "PM2.5#SP{1} : %.1f", _averageMeasure.common.pm25Sp[0]);
+  ESP_LOGI(TAG, "PM2.5#SP{2} : %.1f", _averageMeasure.common.pm25Sp[1]);
+  ESP_LOGI(TAG, "PM 0.3 count{1} : %d", _averageMeasure.common.particleCount003[0]);
+  ESP_LOGI(TAG, "PM 0.3 count{2} : %d", _averageMeasure.common.particleCount003[1]);
+  ESP_LOGI(TAG, "PM 0.5 count : %d", _averageMeasure.common.particleCount005);
+  ESP_LOGI(TAG, "PM 1.0 count : %d", _averageMeasure.common.particleCount01);
+  ESP_LOGI(TAG, "PM 2.5 count : %d", _averageMeasure.common.particleCount02);
+  ESP_LOGI(TAG, "PM 5.0 count : %d", _averageMeasure.common.particleCount50);
+  ESP_LOGI(TAG, "PM 10.0 count : %d", _averageMeasure.common.particleCount10);
+  ESP_LOGI(TAG, "TVOC Raw : %d", _averageMeasure.common.tvocRaw);
+  ESP_LOGI(TAG, "NOx Raw : %d", _averageMeasure.common.noxRaw);
+  ESP_LOGI(TAG, "VBAT : %.2f", _averageMeasure.extra.vBat);
+  ESP_LOGI(TAG, "VPanel : %.2f", _averageMeasure.extra.vPanel);
+  ESP_LOGI(TAG, "O3 WE: %.3fmV", _averageMeasure.extra.o3WorkingElectrode);
+  ESP_LOGI(TAG, "O3 AE: %.3fmV", _averageMeasure.extra.o3AuxiliaryElectrode);
+  ESP_LOGI(TAG, "NO2 WE: %.3fmV", _averageMeasure.extra.no2WorkingElectrode);
+  ESP_LOGI(TAG, "NO2 AE: %.3fmV", _averageMeasure.extra.no2AuxiliaryElectrode);
+  ESP_LOGI(TAG, "AFE Temperature: %.3fmV", _averageMeasure.extra.afeTemp);
 }
 
-AirgradientClient::MaxSensorPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
+MaxSensorPayload Sensor::getLastAverageMeasure() { return _averageMeasure; }
 
 bool Sensor::co2AttemptManualCalibration() {
   ESP_LOGI(TAG, "Attempt to do manual calibration");
@@ -307,30 +312,32 @@ bool Sensor::co2AttemptManualCalibration() {
   return true;
 }
 
-void Sensor::_measure(int iteration, AirgradientClient::MaxSensorPayload &data) {
+void Sensor::_measure(int iteration, MaxSensorPayload &data) {
   // Set measure data to invalid for indication if respective sensor failed
-  data.rco2 = DEFAULT_INVALID_CO2;
-  data.atmp = DEFAULT_INVALID_TEMPERATURE;
-  data.rhum = DEFAULT_INVALID_HUMIDITY;
-  data.pm01 = DEFAULT_INVALID_PM;
-  data.pm25 = DEFAULT_INVALID_PM;
-  data.pm10 = DEFAULT_INVALID_PM;
-  data.pm25Sp = DEFAULT_INVALID_PM;
-  data.particleCount003 = DEFAULT_INVALID_PM;
-  data.particleCount005 = DEFAULT_INVALID_PM;
-  data.particleCount01 = DEFAULT_INVALID_PM;
-  data.particleCount02 = DEFAULT_INVALID_PM;
-  data.particleCount50 = DEFAULT_INVALID_PM;
-  data.particleCount10 = DEFAULT_INVALID_PM;
-  data.tvocRaw = DEFAULT_INVALID_TVOC;
-  data.noxRaw = DEFAULT_INVALID_NOX;
-  data.vBat = DEFAULT_INVALID_VOLT;
-  data.vPanel = DEFAULT_INVALID_VOLT;
-  data.o3WorkingElectrode = DEFAULT_INVALID_VOLT;
-  data.o3AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
-  data.no2WorkingElectrode = DEFAULT_INVALID_VOLT;
-  data.no2AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
-  data.afeTemp = DEFAULT_INVALID_VOLT;
+  data.common.rco2 = DEFAULT_INVALID_CO2;
+  data.common.atmp = DEFAULT_INVALID_TEMPERATURE;
+  data.common.rhum = DEFAULT_INVALID_HUMIDITY;
+  data.common.pm01 = DEFAULT_INVALID_PM;
+  data.common.pm10 = DEFAULT_INVALID_PM;
+  for (int ch = 0; ch < 2; ch++) {
+    data.common.pm25[ch] = DEFAULT_INVALID_PM;
+    data.common.pm25Sp[ch] = DEFAULT_INVALID_PM;
+    data.common.particleCount003[ch] = DEFAULT_INVALID_PM;
+  }
+  data.common.particleCount005 = DEFAULT_INVALID_PM;
+  data.common.particleCount01 = DEFAULT_INVALID_PM;
+  data.common.particleCount02 = DEFAULT_INVALID_PM;
+  data.common.particleCount50 = DEFAULT_INVALID_PM;
+  data.common.particleCount10 = DEFAULT_INVALID_PM;
+  data.common.tvocRaw = DEFAULT_INVALID_TVOC;
+  data.common.noxRaw = DEFAULT_INVALID_NOX;
+  data.extra.vBat = DEFAULT_INVALID_VOLT;
+  data.extra.vPanel = DEFAULT_INVALID_VOLT;
+  data.extra.o3WorkingElectrode = DEFAULT_INVALID_VOLT;
+  data.extra.o3AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
+  data.extra.no2WorkingElectrode = DEFAULT_INVALID_VOLT;
+  data.extra.no2AuxiliaryElectrode = DEFAULT_INVALID_VOLT;
+  data.extra.afeTemp = DEFAULT_INVALID_VOLT;
 
   if (_co2Available) {
     // Check if sensor is in single mode and trigger measurement if needed
@@ -342,8 +349,8 @@ void Sensor::_measure(int iteration, AirgradientClient::MaxSensorPayload &data) 
       // Only read if its already triggered and in odd iteration count
       if (_co2ReadTriggered && odd) {
         _co2ReadTriggered = false;
-        data.rco2 = co2_->read_sensor_measurements();
-        ESP_LOGD(TAG, "CO2: %d", data.rco2);
+        data.common.rco2 = co2_->read_sensor_measurements();
+        ESP_LOGD(TAG, "CO2: %d", data.common.rco2);
       }
 
       // Only trigger if it haven't been triggered an in odd iteration count
@@ -360,8 +367,8 @@ void Sensor::_measure(int iteration, AirgradientClient::MaxSensorPayload &data) 
 
     } else {
       ESP_LOGD(TAG, "Sensor in continuous mode, reading CO2 value directly...");
-      data.rco2 = co2_->read_sensor_measurements();
-      ESP_LOGD(TAG, "CO2: %d", data.rco2);
+      data.common.rco2 = co2_->read_sensor_measurements();
+      ESP_LOGD(TAG, "CO2: %d", data.common.rco2);
     }
 
   }
@@ -374,8 +381,8 @@ void Sensor::_measure(int iteration, AirgradientClient::MaxSensorPayload &data) 
     } else {
       ESP_LOGD(TAG, "Temperature: %.2f °C", temperature);
       ESP_LOGD(TAG, "Relative humidity: %.2f %c", humidity, '%');
-      data.atmp = temperature;
-      data.rhum = humidity;
+      data.common.atmp = temperature;
+      data.common.rhum = humidity;
     }
   }
 
@@ -383,14 +390,14 @@ void Sensor::_measure(int iteration, AirgradientClient::MaxSensorPayload &data) 
     uint16_t tvocRaw;
     uint16_t noxRaw;
     esp_err_t result =
-        sgp4x_measure_compensated_signals(sgp_dev_hdl, data.atmp, data.rhum, &tvocRaw, &noxRaw);
+        sgp4x_measure_compensated_signals(sgp_dev_hdl, data.common.atmp, data.common.rhum, &tvocRaw, &noxRaw);
     if (result != ESP_OK) {
       ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)", esp_err_to_name(result));
     } else {
       ESP_LOGD(TAG, "SRAW VOC: %u", tvocRaw);
       ESP_LOGD(TAG, "SRAW NOX: %u", noxRaw);
-      data.tvocRaw = tvocRaw;
-      data.noxRaw = noxRaw;
+      data.common.tvocRaw = tvocRaw;
+      data.common.noxRaw = noxRaw;
     }
   }
 
@@ -424,38 +431,41 @@ void Sensor::_measure(int iteration, AirgradientClient::MaxSensorPayload &data) 
     // Average if both success, if not, use only 1 or no data both if both
     // failed
     if (pms1ReadSuccess && pms2ReadSuccess) {
-      data.pm01 = (pmData1.pm_ae_1_0 + pmData2.pm_ae_1_0) / 2.0f;
-      data.pm25 = (pmData1.pm_ae_2_5 + pmData2.pm_ae_2_5) / 2.0f;
-      data.pm10 = (pmData1.pm_ae_10_0 + pmData2.pm_ae_10_0) / 2.0f;
-      data.pm25Sp = (pmData1.pm_sp_2_5 + pmData2.pm_sp_2_5) / 2.0f;
-      data.particleCount003 = (pmData1.pm_raw_0_3 + pmData2.pm_raw_0_3) / 2.0f;
-      data.particleCount005 = (pmData1.pm_raw_0_5 + pmData2.pm_raw_0_5) / 2.0f;
-      data.particleCount01 = (pmData1.pm_raw_1_0 + pmData2.pm_raw_1_0) / 2.0f;
-      data.particleCount02 = (pmData1.pm_raw_2_5 + pmData2.pm_raw_2_5) / 2.0f;
-      data.particleCount50 = (pmData1.pm_raw_5_0 + pmData2.pm_raw_5_0) / 2.0f;
-      data.particleCount10 = (pmData1.pm_raw_10_0 + pmData2.pm_raw_10_0) / 2.0f;
+      data.common.pm01 = (pmData1.pm_ae_1_0 + pmData2.pm_ae_1_0) / 2.0f;
+      data.common.pm10 = (pmData1.pm_ae_10_0 + pmData2.pm_ae_10_0) / 2.0f;
+      data.common.pm25[0] = pmData1.pm_ae_2_5;
+      data.common.pm25[1] = pmData2.pm_ae_2_5;
+      data.common.pm25Sp[0] = pmData1.pm_sp_2_5;
+      data.common.pm25Sp[1] = pmData2.pm_sp_2_5;
+      data.common.particleCount003[0] = pmData1.pm_raw_0_3;
+      data.common.particleCount003[1] = pmData2.pm_raw_0_3;
+      data.common.particleCount005 = (pmData1.pm_raw_0_5 + pmData2.pm_raw_0_5) / 2.0f;
+      data.common.particleCount01 = (pmData1.pm_raw_1_0 + pmData2.pm_raw_1_0) / 2.0f;
+      data.common.particleCount02 = (pmData1.pm_raw_2_5 + pmData2.pm_raw_2_5) / 2.0f;
+      data.common.particleCount50 = (pmData1.pm_raw_5_0 + pmData2.pm_raw_5_0) / 2.0f;
+      data.common.particleCount10 = (pmData1.pm_raw_10_0 + pmData2.pm_raw_10_0) / 2.0f;
     } else if (pms1ReadSuccess) {
-      data.pm01 = pmData1.pm_ae_1_0;
-      data.pm25 = pmData1.pm_ae_2_5;
-      data.pm10 = pmData1.pm_ae_10_0;
-      data.pm25Sp = pmData1.pm_sp_2_5;
-      data.particleCount003 = pmData1.pm_raw_0_3;
-      data.particleCount005 = pmData1.pm_raw_0_5;
-      data.particleCount01 = pmData1.pm_raw_1_0;
-      data.particleCount02 = pmData1.pm_raw_2_5;
-      data.particleCount50 = pmData1.pm_raw_5_0;
-      data.particleCount10 = pmData1.pm_raw_10_0;
+      data.common.pm01 = pmData1.pm_ae_1_0;
+      data.common.pm10 = pmData1.pm_ae_10_0;
+      data.common.pm25[0] = pmData1.pm_ae_2_5;
+      data.common.pm25Sp[0] = pmData1.pm_sp_2_5;
+      data.common.particleCount003[0] = pmData1.pm_raw_0_3;
+      data.common.particleCount005 = pmData1.pm_raw_0_5;
+      data.common.particleCount01 = pmData1.pm_raw_1_0;
+      data.common.particleCount02 = pmData1.pm_raw_2_5;
+      data.common.particleCount50 = pmData1.pm_raw_5_0;
+      data.common.particleCount10 = pmData1.pm_raw_10_0;
     } else if (pms2ReadSuccess) {
-      data.pm01 = pmData2.pm_ae_1_0;
-      data.pm25 = pmData2.pm_ae_2_5;
-      data.pm10 = pmData2.pm_ae_10_0;
-      data.pm25Sp = pmData2.pm_sp_2_5;
-      data.particleCount003 = pmData2.pm_raw_0_3;
-      data.particleCount005 = pmData2.pm_raw_0_5;
-      data.particleCount01 = pmData2.pm_raw_1_0;
-      data.particleCount02 = pmData2.pm_raw_2_5;
-      data.particleCount50 = pmData2.pm_raw_5_0;
-      data.particleCount10 = pmData2.pm_raw_10_0;
+      data.common.pm01 = pmData2.pm_ae_1_0;
+      data.common.pm10 = pmData2.pm_ae_10_0;
+      data.common.pm25[1] = pmData2.pm_ae_2_5;
+      data.common.pm25Sp[1] = pmData2.pm_sp_2_5;
+      data.common.particleCount003[1] = pmData2.pm_raw_0_3;
+      data.common.particleCount005 = pmData2.pm_raw_0_5;
+      data.common.particleCount01 = pmData2.pm_raw_1_0;
+      data.common.particleCount02 = pmData2.pm_raw_2_5;
+      data.common.particleCount50 = pmData2.pm_raw_5_0;
+      data.common.particleCount10 = pmData2.pm_raw_10_0;
     }
   }
 
@@ -465,235 +475,240 @@ void Sensor::_measure(int iteration, AirgradientClient::MaxSensorPayload &data) 
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Charger failed get VBAT");
     } else {
-      data.vBat = output / 1000.0; // Convert from mV to V
-      ESP_LOGD(TAG, "VBAT: %.2fV", data.vBat);
+      data.extra.vBat = output / 1000.0; // Convert from mV to V
+      ESP_LOGD(TAG, "VBAT: %.2fV", data.extra.vBat);
     }
 
     err = charger_->getVBUS(&output);
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Charger failed get VBUS");
     } else {
-      data.vPanel = output / 1000.0; // Convert from mV to V
-      ESP_LOGD(TAG, "VBUS: %.2fV", data.vPanel);
+      data.extra.vPanel = output / 1000.0; // Convert from mV to V
+      ESP_LOGD(TAG, "VBUS: %.2fV", data.extra.vPanel);
     }
   }
 
   if (_alphaSenseGasAvailable) {
-    data.o3WorkingElectrode = alphaSense_->getO3WorkingElectrode();
-    data.o3AuxiliaryElectrode = alphaSense_->getO3AuxiliaryElectrode();
-    data.no2WorkingElectrode = alphaSense_->getNO2WorkingElectrode();
-    data.no2AuxiliaryElectrode = alphaSense_->getNO2AuxiliaryElectrode();
-    ESP_LOGD(TAG, "O3 WE: %.3fmV", data.o3WorkingElectrode);
-    ESP_LOGD(TAG, "O3 AE: %.3fmV", data.o3AuxiliaryElectrode);
-    ESP_LOGD(TAG, "NO2 WE: %.3fmV", data.no2WorkingElectrode);
-    ESP_LOGD(TAG, "NO2 AE: %.3fmV", data.no2AuxiliaryElectrode);
+    data.extra.o3WorkingElectrode = alphaSense_->getO3WorkingElectrode();
+    data.extra.o3AuxiliaryElectrode = alphaSense_->getO3AuxiliaryElectrode();
+    data.extra.no2WorkingElectrode = alphaSense_->getNO2WorkingElectrode();
+    data.extra.no2AuxiliaryElectrode = alphaSense_->getNO2AuxiliaryElectrode();
+    ESP_LOGD(TAG, "O3 WE: %.3fmV", data.extra.o3WorkingElectrode);
+    ESP_LOGD(TAG, "O3 AE: %.3fmV", data.extra.o3AuxiliaryElectrode);
+    ESP_LOGD(TAG, "NO2 WE: %.3fmV", data.extra.no2WorkingElectrode);
+    ESP_LOGD(TAG, "NO2 AE: %.3fmV", data.extra.no2AuxiliaryElectrode);
   }
 
   if (_alphaSenseTempAvailable) {
-    data.afeTemp = alphaSense_->getTemperature();
-    ESP_LOGD(TAG, "AFE Temperature: %.3fmV", data.afeTemp);
+    data.extra.afeTemp = alphaSense_->getTemperature();
+    ESP_LOGD(TAG, "AFE Temperature: %.3fmV", data.extra.afeTemp);
   }
 }
 
-void Sensor::_applyIteration(AirgradientClient::MaxSensorPayload &data) {
-  if (IS_CO2_VALID(data.rco2)) {
-    if (_averageMeasure.rco2 == DEFAULT_INVALID_CO2) {
-      _averageMeasure.rco2 = data.rco2;
+void Sensor::_applyIteration(MaxSensorPayload &data) {
+  if (IS_CO2_VALID(data.common.rco2)) {
+    if (_averageMeasure.common.rco2 == DEFAULT_INVALID_CO2) {
+      _averageMeasure.common.rco2 = data.common.rco2;
     } else {
-      _averageMeasure.rco2 = _averageMeasure.rco2 + data.rco2;
+      _averageMeasure.common.rco2 = _averageMeasure.common.rco2 + data.common.rco2;
     }
     _rco2IterationOkCount = _rco2IterationOkCount + 1;
   }
 
-  if (IS_TEMPERATURE_VALID(data.atmp)) {
-    if (_averageMeasure.atmp == DEFAULT_INVALID_TEMPERATURE) {
-      _averageMeasure.atmp = data.atmp;
+  if (IS_TEMPERATURE_VALID(data.common.atmp)) {
+    if (_averageMeasure.common.atmp == DEFAULT_INVALID_TEMPERATURE) {
+      _averageMeasure.common.atmp = data.common.atmp;
     } else {
-      _averageMeasure.atmp = _averageMeasure.atmp + data.atmp;
+      _averageMeasure.common.atmp = _averageMeasure.common.atmp + data.common.atmp;
     }
     _atmpIterationOkCount = _atmpIterationOkCount + 1;
   }
 
-  if (IS_HUMIDITY_VALID(data.rhum)) {
-    if (_averageMeasure.rhum == DEFAULT_INVALID_HUMIDITY) {
-      _averageMeasure.rhum = data.rhum;
+  if (IS_HUMIDITY_VALID(data.common.rhum)) {
+    if (_averageMeasure.common.rhum == DEFAULT_INVALID_HUMIDITY) {
+      _averageMeasure.common.rhum = data.common.rhum;
     } else {
-      _averageMeasure.rhum = _averageMeasure.rhum + data.rhum;
+      _averageMeasure.common.rhum = _averageMeasure.common.rhum + data.common.rhum;
     }
     _rhumIterationOkCount = _rhumIterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.pm01)) {
-    if (_averageMeasure.pm01 == DEFAULT_INVALID_PM) {
-      _averageMeasure.pm01 = data.pm01;
+  if (IS_PM_VALID(data.common.pm01)) {
+    if (_averageMeasure.common.pm01 == DEFAULT_INVALID_PM) {
+      _averageMeasure.common.pm01 = data.common.pm01;
     } else {
-      _averageMeasure.pm01 = _averageMeasure.pm01 + data.pm01;
+      _averageMeasure.common.pm01 = _averageMeasure.common.pm01 + data.common.pm01;
     }
     _pm01IterationOkCount = _pm01IterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.pm25)) {
-    if (_averageMeasure.pm25 == DEFAULT_INVALID_PM) {
-      _averageMeasure.pm25 = data.pm25;
+  if (IS_PM_VALID(data.common.pm10)) {
+    if (_averageMeasure.common.pm10 == DEFAULT_INVALID_PM) {
+      _averageMeasure.common.pm10 = data.common.pm10;
     } else {
-      _averageMeasure.pm25 = _averageMeasure.pm25 + data.pm25;
-    }
-    _pm25IterationOkCount = _pm25IterationOkCount + 1;
-  }
-
-  if (IS_PM_VALID(data.pm10)) {
-    if (_averageMeasure.pm10 == DEFAULT_INVALID_PM) {
-      _averageMeasure.pm10 = data.pm10;
-    } else {
-      _averageMeasure.pm10 = _averageMeasure.pm10 + data.pm10;
+      _averageMeasure.common.pm10 = _averageMeasure.common.pm10 + data.common.pm10;
     }
     _pm10IterationOkCount = _pm10IterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.pm25Sp)) {
-    if (_averageMeasure.pm25Sp == DEFAULT_INVALID_PM) {
-      _averageMeasure.pm25Sp = data.pm25Sp;
-    } else {
-      _averageMeasure.pm25Sp = _averageMeasure.pm25Sp + data.pm25Sp;
+  // Handle measure that has 2 channel
+  for (int ch = 0; ch < 2; ch++) {
+    // PM2.5 AE
+    if (IS_PM_VALID(data.common.pm25[ch])) {
+      if (_averageMeasure.common.pm25[ch] == DEFAULT_INVALID_PM) {
+        _averageMeasure.common.pm25[ch] = data.common.pm25[ch];
+      } else {
+        _averageMeasure.common.pm25[ch] = _averageMeasure.common.pm25[ch] + data.common.pm25[ch];
+      }
+      _pm25IterationOkCount[ch] = _pm25IterationOkCount[ch] + 1;
     }
-    _pm25SpIterationOkCount = _pm10IterationOkCount + 1;
+    // PM2.5 SP
+    if (IS_PM_VALID(data.common.pm25Sp[ch])) {
+      if (_averageMeasure.common.pm25Sp[ch] == DEFAULT_INVALID_PM) {
+        _averageMeasure.common.pm25Sp[ch] = data.common.pm25Sp[ch];
+      } else {
+        _averageMeasure.common.pm25Sp[ch] = _averageMeasure.common.pm25Sp[ch] + data.common.pm25Sp[ch];
+      }
+      _pm25SpIterationOkCount[ch] = _pm25SpIterationOkCount[ch] + 1;
+    }
+    // Particle Count 0.3
+    if (IS_PM_VALID(data.common.particleCount003[ch])) {
+      if (_averageMeasure.common.particleCount003[ch] == DEFAULT_INVALID_PM) {
+        _averageMeasure.common.particleCount003[ch] = data.common.particleCount003[ch];
+      } else {
+        _averageMeasure.common.particleCount003[ch] =
+            _averageMeasure.common.particleCount003[ch] + data.common.particleCount003[ch];
+      }
+      _pm003CountIterationOkCount[ch] = _pm003CountIterationOkCount[ch] + 1;
+    }
   }
 
-  if (IS_PM_VALID(data.particleCount003)) {
-    if (_averageMeasure.particleCount003 == DEFAULT_INVALID_PM) {
-      _averageMeasure.particleCount003 = data.particleCount003;
+  if (IS_PM_VALID(data.common.particleCount005)) {
+    if (_averageMeasure.common.particleCount005 == DEFAULT_INVALID_PM) {
+      _averageMeasure.common.particleCount005 = data.common.particleCount005;
     } else {
-      _averageMeasure.particleCount003 = _averageMeasure.particleCount003 + data.particleCount003;
-    }
-    _pm003CountIterationOkCount = _pm003CountIterationOkCount + 1;
-  }
-
-  if (IS_PM_VALID(data.particleCount005)) {
-    if (_averageMeasure.particleCount005 == DEFAULT_INVALID_PM) {
-      _averageMeasure.particleCount005 = data.particleCount005;
-    } else {
-      _averageMeasure.particleCount005 = _averageMeasure.particleCount005 + data.particleCount005;
+      _averageMeasure.common.particleCount005 = _averageMeasure.common.particleCount005 + data.common.particleCount005;
     }
     _pm005CountIterationOkCount = _pm005CountIterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.particleCount01)) {
-    if (_averageMeasure.particleCount01 == DEFAULT_INVALID_PM) {
-      _averageMeasure.particleCount01 = data.particleCount01;
+  if (IS_PM_VALID(data.common.particleCount01)) {
+    if (_averageMeasure.common.particleCount01 == DEFAULT_INVALID_PM) {
+      _averageMeasure.common.particleCount01 = data.common.particleCount01;
     } else {
-      _averageMeasure.particleCount01 = _averageMeasure.particleCount01 + data.particleCount01;
+      _averageMeasure.common.particleCount01 = _averageMeasure.common.particleCount01 + data.common.particleCount01;
     }
     _pm01CountIterationOkCount = _pm01CountIterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.particleCount02)) {
-    if (_averageMeasure.particleCount02 == DEFAULT_INVALID_PM) {
-      _averageMeasure.particleCount02 = data.particleCount02;
+  if (IS_PM_VALID(data.common.particleCount02)) {
+    if (_averageMeasure.common.particleCount02 == DEFAULT_INVALID_PM) {
+      _averageMeasure.common.particleCount02 = data.common.particleCount02;
     } else {
-      _averageMeasure.particleCount02 = _averageMeasure.particleCount02 + data.particleCount02;
+      _averageMeasure.common.particleCount02 = _averageMeasure.common.particleCount02 + data.common.particleCount02;
     }
     _pm02CountIterationOkCount = _pm02CountIterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.particleCount50)) {
-    if (_averageMeasure.particleCount50 == DEFAULT_INVALID_PM) {
-      _averageMeasure.particleCount50 = data.particleCount50;
+  if (IS_PM_VALID(data.common.particleCount50)) {
+    if (_averageMeasure.common.particleCount50 == DEFAULT_INVALID_PM) {
+      _averageMeasure.common.particleCount50 = data.common.particleCount50;
     } else {
-      _averageMeasure.particleCount50 = _averageMeasure.particleCount50 + data.particleCount50;
+      _averageMeasure.common.particleCount50 = _averageMeasure.common.particleCount50 + data.common.particleCount50;
     }
     _pm50CountIterationOkCount = _pm50CountIterationOkCount + 1;
   }
 
-  if (IS_PM_VALID(data.particleCount10)) {
-    if (_averageMeasure.particleCount10 == DEFAULT_INVALID_PM) {
-      _averageMeasure.particleCount10 = data.particleCount10;
+  if (IS_PM_VALID(data.common.particleCount10)) {
+    if (_averageMeasure.common.particleCount10 == DEFAULT_INVALID_PM) {
+      _averageMeasure.common.particleCount10 = data.common.particleCount10;
     } else {
-      _averageMeasure.particleCount10 = _averageMeasure.particleCount10 + data.particleCount10;
+      _averageMeasure.common.particleCount10 = _averageMeasure.common.particleCount10 + data.common.particleCount10;
     }
     _pm10CountIterationOkCount = _pm10CountIterationOkCount + 1;
   }
 
-  if (IS_TVOC_VALID(data.tvocRaw)) {
-    if (_averageMeasure.tvocRaw == DEFAULT_INVALID_TVOC) {
-      _averageMeasure.tvocRaw = data.tvocRaw;
+  if (IS_TVOC_VALID(data.common.tvocRaw)) {
+    if (_averageMeasure.common.tvocRaw == DEFAULT_INVALID_TVOC) {
+      _averageMeasure.common.tvocRaw = data.common.tvocRaw;
     } else {
-      _averageMeasure.tvocRaw = _averageMeasure.tvocRaw + data.tvocRaw;
+      _averageMeasure.common.tvocRaw = _averageMeasure.common.tvocRaw + data.common.tvocRaw;
     }
     _tvocIterationOkCount = _tvocIterationOkCount + 1;
   }
 
-  if (IS_NOX_VALID(data.noxRaw)) {
-    if (_averageMeasure.noxRaw == DEFAULT_INVALID_NOX) {
-      _averageMeasure.noxRaw = data.noxRaw;
+  if (IS_NOX_VALID(data.common.noxRaw)) {
+    if (_averageMeasure.common.noxRaw == DEFAULT_INVALID_NOX) {
+      _averageMeasure.common.noxRaw = data.common.noxRaw;
     } else {
-      _averageMeasure.noxRaw = _averageMeasure.noxRaw + data.noxRaw;
+      _averageMeasure.common.noxRaw = _averageMeasure.common.noxRaw + data.common.noxRaw;
     }
     _noxIterationOkCount = _noxIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.vBat)) {
-    if (_averageMeasure.vBat == DEFAULT_INVALID_VOLT) {
-      _averageMeasure.vBat = data.vBat;
+  if (IS_VOLT_VALID(data.extra.vBat)) {
+    if (_averageMeasure.extra.vBat == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.extra.vBat = data.extra.vBat;
     } else {
-      _averageMeasure.vBat = _averageMeasure.vBat + data.vBat;
+      _averageMeasure.extra.vBat = _averageMeasure.extra.vBat + data.extra.vBat;
     }
     _vbatIterationOkCount = _vbatIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.vPanel)) {
-    if (_averageMeasure.vPanel == DEFAULT_INVALID_VOLT) {
-      _averageMeasure.vPanel = data.vPanel;
+  if (IS_VOLT_VALID(data.extra.vPanel)) {
+    if (_averageMeasure.extra.vPanel == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.extra.vPanel = data.extra.vPanel;
     } else {
-      _averageMeasure.vPanel = _averageMeasure.vPanel + data.vPanel;
+      _averageMeasure.extra.vPanel = _averageMeasure.extra.vPanel + data.extra.vPanel;
     }
     _vpanelIterationOkCount = _vpanelIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.o3WorkingElectrode)) {
-    if (_averageMeasure.o3WorkingElectrode == DEFAULT_INVALID_VOLT) {
-      _averageMeasure.o3WorkingElectrode = data.o3WorkingElectrode;
+  if (IS_VOLT_VALID(data.extra.o3WorkingElectrode)) {
+    if (_averageMeasure.extra.o3WorkingElectrode == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.extra.o3WorkingElectrode = data.extra.o3WorkingElectrode;
     } else {
-      _averageMeasure.o3WorkingElectrode =
-          _averageMeasure.o3WorkingElectrode + data.o3WorkingElectrode;
+      _averageMeasure.extra.o3WorkingElectrode =
+          _averageMeasure.extra.o3WorkingElectrode + data.extra.o3WorkingElectrode;
     }
     _o3WEIterationOkCount = _o3WEIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.o3AuxiliaryElectrode)) {
-    if (_averageMeasure.o3AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
-      _averageMeasure.o3AuxiliaryElectrode = data.o3AuxiliaryElectrode;
+  if (IS_VOLT_VALID(data.extra.o3AuxiliaryElectrode)) {
+    if (_averageMeasure.extra.o3AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.extra.o3AuxiliaryElectrode = data.extra.o3AuxiliaryElectrode;
     } else {
-      _averageMeasure.o3AuxiliaryElectrode =
-          _averageMeasure.o3AuxiliaryElectrode + data.o3AuxiliaryElectrode;
+      _averageMeasure.extra.o3AuxiliaryElectrode =
+          _averageMeasure.extra.o3AuxiliaryElectrode + data.extra.o3AuxiliaryElectrode;
     }
     _o3AEIterationOkCount = _o3AEIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.no2WorkingElectrode)) {
-    if (_averageMeasure.no2WorkingElectrode == DEFAULT_INVALID_VOLT) {
-      _averageMeasure.no2WorkingElectrode = data.no2WorkingElectrode;
+  if (IS_VOLT_VALID(data.extra.no2WorkingElectrode)) {
+    if (_averageMeasure.extra.no2WorkingElectrode == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.extra.no2WorkingElectrode = data.extra.no2WorkingElectrode;
     } else {
-      _averageMeasure.no2WorkingElectrode =
-          _averageMeasure.no2WorkingElectrode + data.no2WorkingElectrode;
+      _averageMeasure.extra.no2WorkingElectrode =
+          _averageMeasure.extra.no2WorkingElectrode + data.extra.no2WorkingElectrode;
     }
     _no2WEIterationOkCount = _no2WEIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.no2AuxiliaryElectrode)) {
-    if (_averageMeasure.no2AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
-      _averageMeasure.no2AuxiliaryElectrode = data.no2AuxiliaryElectrode;
+  if (IS_VOLT_VALID(data.extra.no2AuxiliaryElectrode)) {
+    if (_averageMeasure.extra.no2AuxiliaryElectrode == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.extra.no2AuxiliaryElectrode = data.extra.no2AuxiliaryElectrode;
     } else {
-      _averageMeasure.no2AuxiliaryElectrode =
-          _averageMeasure.no2AuxiliaryElectrode + data.no2AuxiliaryElectrode;
+      _averageMeasure.extra.no2AuxiliaryElectrode =
+          _averageMeasure.extra.no2AuxiliaryElectrode + data.extra.no2AuxiliaryElectrode;
     }
     _no2AEIterationOkCount = _no2AEIterationOkCount + 1;
   }
 
-  if (IS_VOLT_VALID(data.afeTemp)) {
-    if (_averageMeasure.afeTemp == DEFAULT_INVALID_VOLT) {
-      _averageMeasure.afeTemp = data.afeTemp;
+  if (IS_VOLT_VALID(data.extra.afeTemp)) {
+    if (_averageMeasure.extra.afeTemp == DEFAULT_INVALID_VOLT) {
+      _averageMeasure.extra.afeTemp = data.extra.afeTemp;
     } else {
-      _averageMeasure.afeTemp = _averageMeasure.afeTemp + data.afeTemp;
+      _averageMeasure.extra.afeTemp = _averageMeasure.extra.afeTemp + data.extra.afeTemp;
     }
     _afeTempIterationOkCount = _afeTempIterationOkCount + 1;
   }
@@ -831,96 +846,101 @@ void Sensor::_printPMData(int ch, PMS::Data &data) {
 
 void Sensor::_calculateMeasuresAverage() {
   if (_rco2IterationOkCount > 0) {
-    _averageMeasure.rco2 = _averageMeasure.rco2 / _rco2IterationOkCount;
+    _averageMeasure.common.rco2 = _averageMeasure.common.rco2 / _rco2IterationOkCount;
   }
 
   if (_atmpIterationOkCount > 0) {
-    _averageMeasure.atmp = _averageMeasure.atmp / _atmpIterationOkCount;
+    _averageMeasure.common.atmp = _averageMeasure.common.atmp / _atmpIterationOkCount;
   }
 
   if (_rhumIterationOkCount > 0) {
-    _averageMeasure.rhum = _averageMeasure.rhum / _rhumIterationOkCount;
+    _averageMeasure.common.rhum = _averageMeasure.common.rhum / _rhumIterationOkCount;
   }
 
   if (_pm01IterationOkCount > 0) {
-    _averageMeasure.pm01 = _averageMeasure.pm01 / _pm01IterationOkCount;
-  }
-
-  if (_pm25IterationOkCount > 0) {
-    _averageMeasure.pm25 = _averageMeasure.pm25 / _pm25IterationOkCount;
+    _averageMeasure.common.pm01 = _averageMeasure.common.pm01 / _pm01IterationOkCount;
   }
 
   if (_pm10IterationOkCount > 0) {
-    _averageMeasure.pm10 = _averageMeasure.pm10 / _pm10IterationOkCount;
+    _averageMeasure.common.pm10 = _averageMeasure.common.pm10 / _pm10IterationOkCount;
   }
 
-  if (_pm25SpIterationOkCount > 0) {
-    _averageMeasure.pm25Sp = _averageMeasure.pm25Sp / _pm25SpIterationOkCount;
-  }
-
-  if (_pm003CountIterationOkCount > 0) {
-    _averageMeasure.particleCount003 =
-        _averageMeasure.particleCount003 / _pm003CountIterationOkCount;
+  // Handle measure that has 2 channel
+  for (int ch = 0; ch < 2; ch++) {
+    // PM2.5 AE
+    if (_pm25IterationOkCount[ch] > 0) {
+      _averageMeasure.common.pm25[ch] = _averageMeasure.common.pm25[ch] / _pm25IterationOkCount[ch];
+    }
+    // PM2.5 SP
+    if (_pm25SpIterationOkCount[ch] > 0) {
+      _averageMeasure.common.pm25Sp[ch] =
+          _averageMeasure.common.pm25Sp[ch] / _pm25SpIterationOkCount[ch];
+    }
+    // Particle Count 0.3
+    if (_pm003CountIterationOkCount[ch] > 0) {
+      _averageMeasure.common.particleCount003[ch] =
+          _averageMeasure.common.particleCount003[ch] / _pm003CountIterationOkCount[ch];
+    }
   }
 
   if (_pm005CountIterationOkCount > 0) {
-    _averageMeasure.particleCount005 =
-        _averageMeasure.particleCount005 / _pm005CountIterationOkCount;
+    _averageMeasure.common.particleCount005 =
+        _averageMeasure.common.particleCount005 / _pm005CountIterationOkCount;
   }
 
   if (_pm01CountIterationOkCount > 0) {
-    _averageMeasure.particleCount01 = _averageMeasure.particleCount01 / _pm01CountIterationOkCount;
+    _averageMeasure.common.particleCount01 = _averageMeasure.common.particleCount01 / _pm01CountIterationOkCount;
   }
 
   if (_pm02CountIterationOkCount > 0) {
-    _averageMeasure.particleCount02 = _averageMeasure.particleCount02 / _pm02CountIterationOkCount;
+    _averageMeasure.common.particleCount02 = _averageMeasure.common.particleCount02 / _pm02CountIterationOkCount;
   }
 
   if (_pm50CountIterationOkCount > 0) {
-    _averageMeasure.particleCount50 = _averageMeasure.particleCount50 / _pm50CountIterationOkCount;
+    _averageMeasure.common.particleCount50 = _averageMeasure.common.particleCount50 / _pm50CountIterationOkCount;
   }
 
   if (_pm10CountIterationOkCount > 0) {
-    _averageMeasure.particleCount10 = _averageMeasure.particleCount10 / _pm10CountIterationOkCount;
+    _averageMeasure.common.particleCount10 = _averageMeasure.common.particleCount10 / _pm10CountIterationOkCount;
   }
 
   if (_tvocIterationOkCount > 0) {
-    _averageMeasure.tvocRaw = _averageMeasure.tvocRaw / _tvocIterationOkCount;
+    _averageMeasure.common.tvocRaw = _averageMeasure.common.tvocRaw / _tvocIterationOkCount;
   }
 
   if (_noxIterationOkCount > 0) {
-    _averageMeasure.noxRaw = _averageMeasure.noxRaw / _noxIterationOkCount;
+    _averageMeasure.common.noxRaw = _averageMeasure.common.noxRaw / _noxIterationOkCount;
   }
 
   if (_vbatIterationOkCount > 0) {
-    _averageMeasure.vBat = _averageMeasure.vBat / _vbatIterationOkCount;
+    _averageMeasure.extra.vBat = _averageMeasure.extra.vBat / _vbatIterationOkCount;
   }
 
   if (_vpanelIterationOkCount > 0) {
-    _averageMeasure.vPanel = _averageMeasure.vPanel / _vpanelIterationOkCount;
+    _averageMeasure.extra.vPanel = _averageMeasure.extra.vPanel / _vpanelIterationOkCount;
   }
 
   if (_o3WEIterationOkCount > 0) {
-    _averageMeasure.o3WorkingElectrode = _averageMeasure.o3WorkingElectrode / _o3WEIterationOkCount;
+    _averageMeasure.extra.o3WorkingElectrode = _averageMeasure.extra.o3WorkingElectrode / _o3WEIterationOkCount;
   }
 
   if (_o3AEIterationOkCount > 0) {
-    _averageMeasure.o3AuxiliaryElectrode =
-        _averageMeasure.o3AuxiliaryElectrode / _o3AEIterationOkCount;
+    _averageMeasure.extra.o3AuxiliaryElectrode =
+        _averageMeasure.extra.o3AuxiliaryElectrode / _o3AEIterationOkCount;
   }
 
   if (_no2WEIterationOkCount > 0) {
-    _averageMeasure.no2WorkingElectrode =
-        _averageMeasure.no2WorkingElectrode / _no2WEIterationOkCount;
+    _averageMeasure.extra.no2WorkingElectrode =
+        _averageMeasure.extra.no2WorkingElectrode / _no2WEIterationOkCount;
   }
 
   if (_no2AEIterationOkCount > 0) {
-    _averageMeasure.no2AuxiliaryElectrode =
-        _averageMeasure.no2AuxiliaryElectrode / _no2AEIterationOkCount;
+    _averageMeasure.extra.no2AuxiliaryElectrode =
+        _averageMeasure.extra.no2AuxiliaryElectrode / _no2AEIterationOkCount;
   }
 
   if (_afeTempIterationOkCount > 0) {
-    _averageMeasure.afeTemp = _averageMeasure.afeTemp / _afeTempIterationOkCount;
+    _averageMeasure.extra.afeTemp = _averageMeasure.extra.afeTemp / _afeTempIterationOkCount;
   }
 }
 
@@ -929,5 +949,5 @@ float Sensor::batteryVoltage() {
     return -1.0;
   }
 
-  return _averageMeasure.vBat;
+  return _averageMeasure.extra.vBat;
 }

@@ -65,7 +65,6 @@ RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
 // Help to check if there's a measure interval change that make previous payload cache invalid
 RTC_DATA_ATTR int xMeasureInterval = 180;
 
-
 // Networking tasks variables
 #define BIT_SENSOR_MEASURES_FINISH (1 << 0)
 #define BIT_TRANSMISSION_FINISH (1 << 1)
@@ -73,7 +72,7 @@ static TaskHandle_t g_handleNetworkTask = NULL;
 static EventGroupHandle_t g_syncGroup;
 static bool g_isSendMeasuresCycle = false;
 static bool g_isFullTransmissionCycle = false;
-static AirgradientClient::MaxSensorPayload g_measuresResult;
+static MaxSensorPayload g_measuresResult;
 
 // Global Vars
 static const char *const TAG = "APP";
@@ -160,8 +159,7 @@ static bool checkRemoteConfiguration(unsigned long wakeUpCounter);
 static bool checkForFirmwareUpdate(unsigned long wakeUpCounter);
 static bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCache,
                                    int measureInterval);
-static bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
-                               AirgradientClient::MaxSensorPayload sensorPayload);
+static bool sendMeasuresByWiFi(unsigned long wakeUpCounter, MaxSensorPayload sensorPayload);
 static bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCache);
 
 static void networkingTask(void *args);
@@ -313,16 +311,15 @@ extern "C" void app_main(void) {
 
   // Check if this wake up cycle needs network to be ready
   // Then run networking task
-  g_isSendMeasuresCycle =
-      (wakeUpCounter % SEND_MEASURES_CYCLES) == 0 || (wakeUpCounter == 0);
+  g_isSendMeasuresCycle = (wakeUpCounter % SEND_MEASURES_CYCLES) == 0 || (wakeUpCounter == 0);
   g_isFullTransmissionCycle =
       (wakeUpCounter % FULL_TRANSMISSION_CYCLE) == 0 || (wakeUpCounter == 0);
   bool isUsingWifi = g_configuration.getNetworkOption() == NetworkOption::WiFi;
   if (g_isSendMeasuresCycle || g_isFullTransmissionCycle || isUsingWifi) {
     ESP_LOGI(TAG, "Time for transmission, run networking tasks...");
     g_syncGroup = xEventGroupCreate();
-    xTaskCreate(networkingTask, "NetworkingTask", NETWORKING_TASK_STACK_SIZE,
-                (void *)wakeUpCounter, 5, &g_handleNetworkTask);
+    xTaskCreate(networkingTask, "NetworkingTask", NETWORKING_TASK_STACK_SIZE, (void *)wakeUpCounter,
+                5, &g_handleNetworkTask);
   }
 
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
@@ -401,13 +398,15 @@ extern "C" void app_main(void) {
 
   // Only set or wait flags when networking task is running
   if (g_handleNetworkTask != nullptr) {
+    // Ensure watchdog not triggered while wait for transmission to finish
+    resetExtWatchdog();
+
     // Notify networking task that sensor measures finish
     xEventGroupSetBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH);
     ESP_LOGI(TAG, "BIT_SENSOR_MEASURES_FINISH is set, wait until BIT_TRANSMISSION_FINISH set");
 
     // Will block until sensor finish measures
-    xEventGroupWaitBits(g_syncGroup, BIT_TRANSMISSION_FINISH, pdTRUE, pdFALSE,
-                        portMAX_DELAY);
+    xEventGroupWaitBits(g_syncGroup, BIT_TRANSMISSION_FINISH, pdTRUE, pdFALSE, portMAX_DELAY);
     ESP_LOGI(TAG, "Receive BIT_TRANSMISSION_FINISH, prepare to sleep");
   }
 
@@ -872,24 +871,29 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
     return false;
   }
 
-  // Retrieve measurements from the cache
-  std::vector<AirgradientClient::MaxSensorPayload> sensorPayload;
+  // Structure payload
+  AirgradientClient::AirgradientPayload payload;
   PayloadCacheType tmp;
   ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
-  /// Define start index of which needs to be included as HTTP post payload
+
+  // Define start index of which needs to be included as HTTP post payload
   int idx = 0;
   if (xHttpCacheQueueIndex > 0) {
     idx = xHttpCacheQueueIndex;
     ESP_LOGI(TAG, "HTTP cache queue index start from %d", idx);
   }
+
+  // Retrieve measurements from the cache
+  payload.bufferCount = 0;
   for (int i = idx; i < payloadCache.getSize(); i++) {
     payloadCache.peekAtIndex(i, &tmp);
-    sensorPayload.push_back(tmp);
+    int element = i - idx; // - idx because it needs to start from 0
+    payload.payloadBuffer[element].common = tmp.common;
+    payload.payloadBuffer[element].ext.extra = tmp.extra; 
+    payload.bufferCount++;
   }
 
-  // Structure payload
-  AirgradientClient::AirgradientPayload payload;
-  payload.sensor = &sensorPayload;
+  // Add other properties value
   payload.measureInterval = measureInterval;
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
@@ -900,7 +904,7 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
 
   do {
     attemptCounter = attemptCounter + 1;
-    postSuccess = g_agClient->httpPostMeasures(payload);
+    postSuccess = g_agClient->coapPostMeasures(payload);
     if (postSuccess) {
       if (wakeUpCounter == 0) {
         // Notify post success only on first boot
@@ -957,20 +961,20 @@ bool sendMeasuresByCellular(unsigned long wakeUpCounter, PayloadCache &payloadCa
   return postSuccess;
 }
 
-bool sendMeasuresByWiFi(unsigned long wakeUpCounter,
-                        AirgradientClient::MaxSensorPayload sensorPayload) {
+bool sendMeasuresByWiFi(unsigned long wakeUpCounter, MaxSensorPayload sensorPayload) {
   if (!g_networkReady) {
     ESP_LOGW(TAG, "Network is not ready, skip send measures");
     return false;
   }
 
-  // Initialize airgrdaient client
+  // Initialize airgradient client
   g_agClient = new AirgradientWifiClient;
   g_agClient->begin(g_serialNumber, getPayloadType());
   g_agClient->setHttpDomain(g_configuration.getHttpDomain());
 
   AirgradientClient::AirgradientPayload payload;
-  payload.sensor = &sensorPayload;
+  payload.payloadBuffer[0].common = sensorPayload.common;
+  payload.payloadBuffer[0].ext.extra = sensorPayload.extra;
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
@@ -1011,18 +1015,21 @@ bool sendMeasuresUsingMqtt(unsigned long wakeUpCounter, PayloadCache &payloadCac
     return false;
   }
 
-  // Retrieve measurements from the cache
-  std::vector<AirgradientClient::MaxSensorPayload> sensorPayload;
+  // Prepare structure
+  AirgradientClient::AirgradientPayload payload;
   PayloadCacheType tmp;
+
+  // Retrieve measurements from the cache
   ESP_LOGI(TAG, "cache size: %d", payloadCache.getSize());
+  payload.bufferCount = 0;
   for (int i = 0; i < payloadCache.getSize(); i++) {
     payloadCache.peekAtIndex(i, &tmp);
-    sensorPayload.push_back(tmp);
+    payload.payloadBuffer[i].common = tmp.common;
+    payload.payloadBuffer[i].ext.extra = tmp.extra;
+    payload.bufferCount++;
   }
 
-  // Structure payload
-  AirgradientClient::AirgradientPayload payload;
-  payload.sensor = &sensorPayload;
+  // Add other properties value
   payload.measureInterval = g_configuration.getConfigSchedule().pm02;
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
@@ -1089,7 +1096,7 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
   }
 
   // Attempt retrieve configuration
-  std::string result = g_agClient->httpFetchConfig();
+  std::string result = g_agClient->coapFetchConfig();
   if (g_agClient->isRegisteredOnAgServer() == false) {
     ESP_LOGW(TAG, "Monitor hasn't registered on AirGradient dashboard yet");
     return false;
@@ -1117,8 +1124,7 @@ void networkingTask(void *args) {
   }
 
   // Will block until sensor finish measures
-  xEventGroupWaitBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH, pdTRUE, pdFALSE,
-                      portMAX_DELAY);
+  xEventGroupWaitBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH, pdTRUE, pdFALSE, portMAX_DELAY);
 
   // Send measures
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
