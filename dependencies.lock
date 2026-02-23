@@ -9,7 +9,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.4.1
+    version: 5.5.2
 direct_dependencies:
 - bblanchon/arduinojson
 - idf

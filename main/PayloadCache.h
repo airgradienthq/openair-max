@@ -10,9 +10,10 @@
 
 #include <cstdint>
 #include "airgradientClient.h"
+#include "Sensor.h"
 #include "MaxConfig.h"
 
-typedef AirgradientClient::MaxSensorPayload PayloadCacheType;
+typedef MaxSensorPayload PayloadCacheType;
 
 class PayloadCache {
 public:
