@@ -361,6 +361,11 @@ extern "C" void app_main(void) {
   sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
   sensor.printMeasures();
   g_measuresResult = sensor.getLastAverageMeasure();
+  // NOTE: Temporary since MAX cannot calculate the index yet. So raw value is assumed index on server.
+  g_measuresResult.common.tvoc = g_measuresResult.common.tvocRaw;
+  g_measuresResult.common.nox = g_measuresResult.common.noxRaw;
+  g_measuresResult.common.tvocRaw = DEFAULT_INVALID_TVOC;
+  g_measuresResult.common.noxRaw = DEFAULT_INVALID_NOX;
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
