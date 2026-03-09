@@ -980,6 +980,7 @@ bool sendMeasuresByWiFi(unsigned long wakeUpCounter, MaxSensorPayload sensorPayl
   AirgradientClient::AirgradientPayload payload;
   payload.payloadBuffer[0].common = sensorPayload.common;
   payload.payloadBuffer[0].ext.extra = sensorPayload.extra;
+  payload.bufferCount = 1;
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
@@ -1101,7 +1102,14 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
   }
 
   // Attempt retrieve configuration
-  std::string result = g_agClient->coapFetchConfig();
+  std::string result;
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    result = g_agClient->coapFetchConfig();
+  }
+  else {
+    result = g_agClient->httpFetchConfig();
+  }
+
   if (g_agClient->isRegisteredOnAgServer() == false) {
     ESP_LOGW(TAG, "Monitor hasn't registered on AirGradient dashboard yet");
     return false;
