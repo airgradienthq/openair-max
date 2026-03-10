@@ -17,7 +17,7 @@ enum class NetworkOption {
 
 #define NETWORKING_TASK_STACK_SIZE 16384
 
-#define MAX_PAYLOAD_CACHE 100
+#define MAX_PAYLOAD_CACHE 75
 
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 
