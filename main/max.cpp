@@ -361,6 +361,11 @@ extern "C" void app_main(void) {
   sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
   sensor.printMeasures();
   g_measuresResult = sensor.getLastAverageMeasure();
+  // NOTE: Temporary since MAX cannot calculate the index yet. So raw value is assumed index on server.
+  g_measuresResult.common.tvoc = g_measuresResult.common.tvocRaw;
+  g_measuresResult.common.nox = g_measuresResult.common.noxRaw;
+  g_measuresResult.common.tvocRaw = DEFAULT_INVALID_TVOC;
+  g_measuresResult.common.noxRaw = DEFAULT_INVALID_NOX;
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
@@ -975,6 +980,7 @@ bool sendMeasuresByWiFi(unsigned long wakeUpCounter, MaxSensorPayload sensorPayl
   AirgradientClient::AirgradientPayload payload;
   payload.payloadBuffer[0].common = sensorPayload.common;
   payload.payloadBuffer[0].ext.extra = sensorPayload.extra;
+  payload.bufferCount = 1;
   payload.signal = getNetworkSignalStrength();
   ESP_LOGI(TAG, "Signal strength: %d", payload.signal);
 
@@ -1096,7 +1102,14 @@ bool checkRemoteConfiguration(unsigned long wakeUpCounter) {
   }
 
   // Attempt retrieve configuration
-  std::string result = g_agClient->coapFetchConfig();
+  std::string result;
+  if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
+    result = g_agClient->coapFetchConfig();
+  }
+  else {
+    result = g_agClient->httpFetchConfig();
+  }
+
   if (g_agClient->isRegisteredOnAgServer() == false) {
     ESP_LOGW(TAG, "Monitor hasn't registered on AirGradient dashboard yet");
     return false;
