@@ -45,6 +45,7 @@ public:
     uint32_t cellularWarmUpMs;
     std::string cellularOperators;
     uint32_t currentOperatorId;
+    uint32_t cellularRegFailCount;
   };
 
   Configuration() {}
@@ -72,6 +73,7 @@ public:
   uint32_t getCellularWarmUpMs();
   std::string getCellularOperators();
   uint32_t getCurrentOperatorId();
+  uint32_t getCellularRegFailCount();
 
   // Setter
   bool set(Config config);
@@ -79,7 +81,8 @@ public:
   void setIsWifiConfigured(bool state);
   void setRunSystemSettings(bool state);
   void setAPN(const std::string &apn);
-  void setCellularOperators(const std::string &operators, uint32_t operatorId);
+  void setCellularOperators(const std::string &operators, uint32_t operatorId,
+                            uint32_t regFailCount);
 
   void resetCO2CalibrationRequest();
 

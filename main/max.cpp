@@ -770,10 +770,11 @@ bool initializeNetwork(unsigned long wakeUpCounter) {
 
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     g_networkReady = initializeCellularNetwork(wakeUpCounter);
-    // Ensure operator always up to date
+    // Persist operator state and fail counter (library manages the clearing logic)
     std::string opList = g_cellularCard->getSerializedOperators();
     uint32_t opId = g_cellularCard->getCurrentOperatorId();
-    g_configuration.setCellularOperators(opList, opId);
+    uint32_t failCount = g_cellularCard->getRegistrationFailCount();
+    g_configuration.setCellularOperators(opList, opId, failCount);
   } else {
     g_networkReady = initializeWiFiNetwork(wakeUpCounter);
   }
@@ -821,9 +822,10 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
 
   resetExtWatchdog();
 
-  // Load and set CE module operators
+  // Load and set CE module operators (including persisted fail counter)
   g_cellularCard->setOperators(g_configuration.getCellularOperators(),
-                               g_configuration.getCurrentOperatorId());
+                               g_configuration.getCurrentOperatorId(),
+                               g_configuration.getCellularRegFailCount());
 
   // Setup client configuration
   g_agClient->setHttpDomain(g_configuration.getHttpDomain());
