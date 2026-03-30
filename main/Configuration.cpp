@@ -29,6 +29,7 @@
 #define NVS_KEY_APN "apn"
 #define NVS_KEY_MQTT_HOST "mqtt"
 #define NVS_KEY_HTTP_DOMAIN "dom"
+#define NVS_KEY_COAP_DOMAIN "coapDom"
 #define NVS_KEY_EXT_PM_MEASURES "extPmMeasures"
 #define NVS_KEY_CELLULAR_WARMUP "warmUpCE"
 #define NVS_KEY_CELLULAR_OPERATORS "cellOps"
@@ -69,6 +70,7 @@ void Configuration::_printConfig() {
   ESP_LOGI(TAG, "apn: %s", _config.apn.c_str());
   ESP_LOGI(TAG, "mqttBrokerUrl: %s", _config.mqttBrokerUrl.c_str());
   ESP_LOGI(TAG, "httpDomain: %s", _config.httpDomain.c_str());
+  ESP_LOGI(TAG, "coapDomain: %s", _config.coapDomain.c_str());
   ESP_LOGI(TAG, "extendedPmMeasures: %d", _config.extendedPmMeasures);
   ESP_LOGI(TAG, "cellularWarmUpMs: %" PRIu32 "", _config.cellularWarmUpMs);
   ESP_LOGI(TAG, "cellularOperators: %s", _config.cellularOperators.c_str());
@@ -443,6 +445,23 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get httpDomain");
   }
 
+  // CoAP Domain
+  requiredSize = 0;
+  err = nvs_get_str(handle, NVS_KEY_COAP_DOMAIN, NULL, &requiredSize);
+  if (err == ESP_OK) {
+    char *data = new char[requiredSize + 1];
+    memset(data, 0, requiredSize + 1);
+    err = nvs_get_str(handle, NVS_KEY_COAP_DOMAIN, data, &requiredSize);
+    if (err == ESP_OK) {
+      _config.coapDomain = data;
+    } else {
+      ESP_LOGW(TAG, "Failed to get coapDomain");
+    }
+    delete[] data;
+  } else {
+    ESP_LOGW(TAG, "Failed to get coapDomain");
+  }
+
   uint8_t extendedPmMeasures;
   err = nvs_get_u8(handle, NVS_KEY_EXT_PM_MEASURES, &extendedPmMeasures);
   if (err == ESP_OK) {
@@ -588,6 +607,12 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save httpDomain");
   }
 
+  // CoAP Domain
+  err = nvs_set_str(handle, NVS_KEY_COAP_DOMAIN, _config.coapDomain.c_str());
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save coapDomain");
+  }
+
   // Extended PM measures
   err = nvs_set_u8(handle, NVS_KEY_EXT_PM_MEASURES, _config.extendedPmMeasures);
   if (err != ESP_OK) {
@@ -667,6 +692,8 @@ std::string Configuration::getAPN() { return _config.apn; }
 std::string Configuration::getMqttBrokerUrl() { return _config.mqttBrokerUrl; }
 
 std::string Configuration::getHttpDomain() { return _config.httpDomain; }
+
+std::string Configuration::getCoapDomain() { return _config.coapDomain; }
 
 bool Configuration::isExtendedPmMeasuresEnabled() { return _config.extendedPmMeasures; }
 
@@ -749,6 +776,7 @@ void Configuration::_setConfigToDefault() {
   _config.apn = DEFAULT_AIRGRADIENT_APN;
   _config.mqttBrokerUrl = "";
   _config.httpDomain = AIRGRADIENT_HTTP_DOMAIN;
+  _config.coapDomain = AIRGRADIENT_COAP_IP;
   _config.extendedPmMeasures = false;
   _config.cellularWarmUpMs = 6000;
   _config.cellularOperators = "";
