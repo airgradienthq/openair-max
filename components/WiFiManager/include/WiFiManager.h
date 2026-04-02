@@ -43,6 +43,7 @@ struct SettingsForm {
   std::string password;
   std::string apn;
   std::string httpDomain;
+  std::string coapDomain;
   // Add more here
 };
 

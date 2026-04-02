@@ -41,6 +41,7 @@ public:
     bool runSystemSettings;
     std::string apn;
     std::string httpDomain;
+    std::string coapDomain;
     bool extendedPmMeasures;
     uint32_t cellularWarmUpMs;
     std::string cellularOperators;
@@ -69,6 +70,7 @@ public:
   std::string getAPN();
   std::string getMqttBrokerUrl();
   std::string getHttpDomain();
+  std::string getCoapDomain();
   bool isExtendedPmMeasuresEnabled();
   uint32_t getCellularWarmUpMs();
   std::string getCellularOperators();

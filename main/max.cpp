@@ -257,6 +257,7 @@ extern "C" void app_main(void) {
     }
     settings.apn = g_configuration.getAPN();
     settings.httpDomain = g_configuration.getHttpDomain();
+    settings.coapDomain = g_configuration.getCoapDomain();
     g_wifiManager.setSettings(settings);
 
     // Run portal
@@ -281,6 +282,7 @@ extern "C" void app_main(void) {
     config.runSystemSettings = false;
     settings = g_wifiManager.getSettings();
     config.httpDomain = settings.httpDomain;
+    config.coapDomain = settings.coapDomain;
     if (settings.networkMode == NETWORK_MODE_CELLULAR_STR) {
       config.networkOption = NetworkOption::Cellular;
       config.apn = settings.apn;
@@ -829,6 +831,7 @@ bool initializeCellularNetwork(unsigned long wakeUpCounter) {
 
   // Setup client configuration
   g_agClient->setHttpDomain(g_configuration.getHttpDomain());
+  g_agClient->setCoapDomain(g_configuration.getCoapDomain());
   g_agClient->setExtendedPmMeasures(g_configuration.isExtendedPmMeasuresEnabled());
   g_agClient->setNetworkRegistrationTimeoutMs(registrationTimeout);
   g_agClient->setAPN(g_configuration.getAPN());
