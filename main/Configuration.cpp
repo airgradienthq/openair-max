@@ -33,6 +33,7 @@
 #define NVS_KEY_CELLULAR_WARMUP "warmUpCE"
 #define NVS_KEY_CELLULAR_OPERATORS "cellOps"
 #define NVS_KEY_CURRENT_OPERATOR_ID "cellOpId"
+#define NVS_KEY_CELLULAR_REG_FAIL_COUNT "cellRegFail"
 
 bool Configuration::load() {
   // At first, set every configuration to default
@@ -72,6 +73,7 @@ void Configuration::_printConfig() {
   ESP_LOGI(TAG, "cellularWarmUpMs: %" PRIu32 "", _config.cellularWarmUpMs);
   ESP_LOGI(TAG, "cellularOperators: %s", _config.cellularOperators.c_str());
   ESP_LOGI(TAG, "currentOperatorId: %" PRIu32 "", _config.currentOperatorId);
+  ESP_LOGI(TAG, "cellularRegFailCount: %" PRIu32 "", _config.cellularRegFailCount);
   ESP_LOGI(TAG, "**** ****");
 }
 
@@ -484,6 +486,15 @@ bool Configuration::_loadConfig() {
     ESP_LOGW(TAG, "Failed to get currentOperatorId");
   }
 
+  // Cellular Registration Fail Count
+  uint32_t cellularRegFailCount;
+  err = nvs_get_u32(handle, NVS_KEY_CELLULAR_REG_FAIL_COUNT, &cellularRegFailCount);
+  if (err == ESP_OK) {
+    _config.cellularRegFailCount = cellularRegFailCount;
+  } else {
+    ESP_LOGW(TAG, "Failed to get cellularRegFailCount");
+  }
+
   // Close NVS
   nvs_close(handle);
 
@@ -601,6 +612,12 @@ bool Configuration::_saveConfig() {
     ESP_LOGW(TAG, "Failed to save currentOperatorId");
   }
 
+  // Cellular Registration Fail Count
+  err = nvs_set_u32(handle, NVS_KEY_CELLULAR_REG_FAIL_COUNT, _config.cellularRegFailCount);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to save cellularRegFailCount");
+  }
+
   // Commit changes
   ESP_LOGI(TAG, "Commit changes to NVS");
   err = nvs_commit(handle);
@@ -659,6 +676,8 @@ std::string Configuration::getCellularOperators() { return _config.cellularOpera
 
 uint32_t Configuration::getCurrentOperatorId() { return _config.currentOperatorId; }
 
+uint32_t Configuration::getCellularRegFailCount() { return _config.cellularRegFailCount; }
+
 bool Configuration::set(Config config) {
   _config = config;
   _printConfig();
@@ -685,7 +704,8 @@ void Configuration::setAPN(const std::string &apn) {
   _saveConfig();
 }
 
-void Configuration::setCellularOperators(const std::string &operators, uint32_t operatorId) {
+void Configuration::setCellularOperators(const std::string &operators, uint32_t operatorId,
+                                          uint32_t regFailCount) {
   bool changed = false;
   if (_config.cellularOperators != operators) {
     ESP_LOGI(TAG, "Cellular operator list changed, saving it");
@@ -695,6 +715,11 @@ void Configuration::setCellularOperators(const std::string &operators, uint32_t 
   if (_config.currentOperatorId != operatorId) {
     ESP_LOGI(TAG, "Current cellular operator ID changed, saving it");
     _config.currentOperatorId = operatorId;
+    changed = true;
+  }
+  if (_config.cellularRegFailCount != regFailCount) {
+    ESP_LOGI(TAG, "Cellular registration fail count changed to %" PRIu32, regFailCount);
+    _config.cellularRegFailCount = regFailCount;
     changed = true;
   }
 
@@ -728,4 +753,5 @@ void Configuration::_setConfigToDefault() {
   _config.cellularWarmUpMs = 6000;
   _config.cellularOperators = "";
   _config.currentOperatorId = 0;
+  _config.cellularRegFailCount = 0;
 }
