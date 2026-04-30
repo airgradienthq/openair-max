@@ -45,6 +45,9 @@
 #include "cellularModuleA7672xx.h"
 #include "airgradientOtaCellular.h"
 #include "WiFiManager.h"
+#ifdef AG_DEBUG_UDP_LOG
+#include "UdpLogger.h"
+#endif
 
 #define CONSOLE_MAX_CMDLINE_ARGS 8
 #define CONSOLE_MAX_CMDLINE_LENGTH 256
@@ -64,6 +67,10 @@ RTC_DATA_ATTR unsigned long xHttpCacheQueueIndex = 0;
 // Hold the previous wake up cycle measure interval
 // Help to check if there's a measure interval change that make previous payload cache invalid
 RTC_DATA_ATTR int xMeasureInterval = 180;
+
+// True after the first successful GNSS cold start. Subsequent wakes use hot
+// start. Reset to false on power loss (variable lives in RTC RAM only).
+RTC_DATA_ATTR bool xGnssColdStartIssued = false;
 
 // Networking tasks variables
 #define BIT_SENSOR_MEASURES_FINISH (1 << 0)
@@ -236,6 +243,14 @@ extern "C" void app_main(void) {
   g_serialNumber = buildSerialNumber();
   ESP_LOGI(TAG, "Serial number: %s", g_serialNumber.c_str());
 
+#ifdef AG_DEBUG_UDP_LOG
+  // Bring up the diagnostic Wi-Fi mirror as early as possible so all subsequent
+  // logs (cellular registration, GNSS poll, etc.) reach the dashboard. Wi-Fi
+  // connection is async — the sender task buffers logs until the link is up.
+  UdpLogger::start(g_serialNumber.c_str(), AG_DEBUG_UDP_SSID, AG_DEBUG_UDP_PASSWORD,
+                   AG_DEBUG_UDP_HOST, AG_DEBUG_UDP_PORT);
+#endif
+
   // Load configuration that saved on NVS
   g_configuration.load();
 
@@ -317,6 +332,14 @@ extern "C" void app_main(void) {
   g_isFullTransmissionCycle =
       (wakeUpCounter % FULL_TRANSMISSION_CYCLE) == 0 || (wakeUpCounter == 0);
   bool isUsingWifi = g_configuration.getNetworkOption() == NetworkOption::WiFi;
+#ifdef GNSS_TEST
+  // GNSS bench-test mode: always run the networking task so the CE card
+  // initializes and the GNSS sequence executes on every wake-up. Skip
+  // measurement upload entirely.
+  g_isSendMeasuresCycle = true;
+  g_isFullTransmissionCycle = false;
+  ESP_LOGI(TAG, "GNSS_TEST: forcing networking task on every wake (no transmission)");
+#endif
   if (g_isSendMeasuresCycle || g_isFullTransmissionCycle || isUsingWifi) {
     ESP_LOGI(TAG, "Time for transmission, run networking tasks...");
     g_syncGroup = xEventGroupCreate();
@@ -324,6 +347,7 @@ extern "C" void app_main(void) {
                 5, &g_handleNetworkTask);
   }
 
+#ifndef GNSS_TEST
   ESP_LOGI(TAG, "Wait for sensors to warmup before initialization");
   vTaskDelay(pdMS_TO_TICKS(2000));
 
@@ -402,6 +426,17 @@ extern "C" void app_main(void) {
     // Only using caching system when network option is cellular
     g_payloadCache.push(&g_measuresResult);
   }
+#else
+  // GNSS_TEST: skip all sensor initialization, measurement, and caching.
+  // Use the configured measurement interval to drive the deep-sleep schedule
+  // so the test cycles repeatedly without battery/sensor dependencies.
+  ESP_LOGI(TAG, "GNSS_TEST: skipping sensor init, measurement, and payload caching");
+  int measureInterval = g_configuration.getConfigSchedule().pm02;
+  if (measureInterval <= 0) {
+    measureInterval = MEASURE_CYCLE_INTERVAL_SECONDS;
+  }
+  xMeasureInterval = measureInterval;
+#endif
 
   // Only set or wait flags when networking task is running
   if (g_handleNetworkTask != nullptr) {
@@ -777,6 +812,52 @@ bool initializeNetwork(unsigned long wakeUpCounter) {
     uint32_t opId = g_cellularCard->getCurrentOperatorId();
     uint32_t failCount = g_cellularCard->getRegistrationFailCount();
     g_configuration.setCellularOperators(opList, opId, failCount);
+
+    if (g_networkReady) {
+      // GNSS sequence per A76XX GNSS Application Note V1.03 §5.1:
+      //   1. AT+CGNSSPWR=1,1,1 → wait for "+CGNSSPWR: READY!"
+      //   2. AT+CGPSCOLD on first device boot ("first time used" /
+      //      ephemeris lost). Subsequent wakes use AT+CGPSHOT for fast TTFF.
+      //   3. poll AT+CGNSSINFO until fix or timeout.
+      g_ceAgSerial->setDebug(true);
+      if (g_cellularCard->gnssPowerOn(/*useHotStart=*/true)) {
+        if (!xGnssColdStartIssued) {
+          if (g_cellularCard->gnssColdStart()) {
+            xGnssColdStartIssued = true;
+          }
+        } else {
+          g_cellularCard->gnssHotStart();
+        }
+        resetExtWatchdog();
+        // Up to 30 minutes for the first fix. Kick the external HW watchdog
+        // every 5 minutes during the wait — the per-poll callback fires once
+        // per second, so we throttle to every 300th invocation.
+        auto fixResult = g_cellularCard->gnssGetFix(
+            /*fixTimeoutMs=*/30 * 60 * 1000,
+            /*onTick=*/[]() {
+              static uint32_t tickCount = 0;
+              if (++tickCount >= 5 * 60) {
+                resetExtWatchdog();
+                tickCount = 0;
+              }
+            });
+        if (fixResult.status == CellReturnStatus::Ok && fixResult.data.valid) {
+          ESP_LOGI(TAG,
+                   "GNSS fix: lat=%.6f lon=%.6f alt=%.1fm date=%s utc=%s",
+                   fixResult.data.latitude, fixResult.data.longitude,
+                   fixResult.data.altitudeMeters,
+                   fixResult.data.dateUTC, fixResult.data.timeUTC);
+        } else {
+          ESP_LOGW(TAG, "GNSS: no fix within timeout");
+        }
+        // Save AP-Flash hot-start cache so next wake's fix is faster.
+        g_cellularCard->gnssPowerOff(/*saveHotStartCache=*/true);
+      } else {
+        ESP_LOGW(TAG, "GNSS: power-on failed, skipping fix");
+      }
+      g_ceAgSerial->setDebug(false);
+      resetExtWatchdog();
+    }
   } else {
     g_networkReady = initializeWiFiNetwork(wakeUpCounter);
   }
@@ -1144,6 +1225,7 @@ void networkingTask(void *args) {
   // Will block until sensor finish measures
   xEventGroupWaitBits(g_syncGroup, BIT_SENSOR_MEASURES_FINISH, pdTRUE, pdFALSE, portMAX_DELAY);
 
+#ifndef GNSS_TEST
   // Send measures
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {
     if (g_isSendMeasuresCycle) {
@@ -1167,6 +1249,9 @@ void networkingTask(void *args) {
     checkRemoteConfiguration(wakeUpCounter);
     checkForFirmwareUpdate(wakeUpCounter);
   }
+#else
+  ESP_LOGI(TAG, "GNSS_TEST: skipping send-measures, remote config fetch, and OTA check");
+#endif
 
   // Turn off network network
   if (g_configuration.getNetworkOption() == NetworkOption::Cellular) {

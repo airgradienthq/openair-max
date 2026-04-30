@@ -23,7 +23,8 @@ set (
   WiFiManager
   AirgradientClient
   AirgradientOTA
-  console 
+  UdpLogger
+  console
   arduinojson
   esp_driver_usb_serial_jtag
 )

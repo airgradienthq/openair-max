@@ -7,3 +7,5 @@ build
 .clangd
 sdkconfig.old
 managed_components/
+doc/
+.claude/

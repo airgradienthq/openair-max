@@ -81,4 +81,21 @@ constexpr gpio_num_t IO_BOOT_BUTTON = GPIO_NUM_9;
 
 #define MAX_SLEEP_TIME 300 // This is maximum it able to sleep before ext HW watchdog reset
 
+// GNSS bench-test mode: when defined, skip all sensor measurement and
+// transmission paths and only exercise the CE-card lifecycle:
+//   modem on -> network register -> GNSS on -> getFix -> GNSS off+cache -> sleep
+// Must be paired with a Cellular network configuration.
+// #define GNSS_TEST
+
+// UDP debug log mirror. When defined, the device joins the diagnostic Wi-Fi AP
+// in parallel with cellular and unicasts every ESP_LOG line as a UDP datagram
+// to AG_DEBUG_UDP_HOST:AG_DEBUG_UDP_PORT. Pair with the Max-data-loger
+// dashboard. Only safe when network mode is Cellular (ESP32-C6 has a single
+// Wi-Fi radio).
+#define AG_DEBUG_UDP_LOG
+#define AG_DEBUG_UDP_SSID "ag-diamond_2.4GHz"
+#define AG_DEBUG_UDP_PASSWORD "0505563014466"
+#define AG_DEBUG_UDP_HOST "192.168.100.70"
+#define AG_DEBUG_UDP_PORT 5514
+
 #endif
