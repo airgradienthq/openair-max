@@ -156,6 +156,15 @@ static std::string getFirmwareVersion();
 
 static AirgradientClient::PayloadType getPayloadType();
 
+/**
+ * Read raw NMEA bytes from the cellular UART for `durationMs` and try to
+ * extract a valid (non-1980-dummy) UTC date/time from $GNRMC or $GPRMC.
+ * NMEA streaming must already be enabled. Returns true if a fresh time was
+ * captured; outputs are NMEA-format DDMMYY and HHMMSS.sss strings.
+ */
+static bool tryParseRmcTime(uint32_t durationMs, char *outDate, size_t outDateSz,
+                            char *outTime, size_t outTimeSz);
+
 static void ensureConnectionReady();
 static int getNetworkSignalStrength();
 static bool initializeNetwork(unsigned long wakeUpCounter);
@@ -697,6 +706,54 @@ std::string buildSerialNumber() {
   return sn;
 }
 
+static bool tryParseRmcTime(uint32_t durationMs, char *outDate, size_t outDateSz,
+                            char *outTime, size_t outTimeSz) {
+  if (g_ceAgSerial == nullptr) return false;
+  uint32_t start = MILLIS();
+  char line[128];
+  size_t lineLen = 0;
+  while ((MILLIS() - start) < durationMs) {
+    int b = g_ceAgSerial->read();
+    if (b < 0) {
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
+    }
+    char c = static_cast<char>(b);
+    if (c == '\r') continue;
+    if (c != '\n') {
+      if (lineLen < sizeof(line) - 1) line[lineLen++] = c;
+      continue;
+    }
+    line[lineLen] = '\0';
+    // Match $GNRMC / $GPRMC. Field layout: $xxRMC, UTC, status, lat, NS, lon,
+    // EW, speed, track, date(DDMMYY), magvar, magvarEW, mode, navStatus
+    bool isRmc = (lineLen >= 6 && line[0] == '$' &&
+                  (memcmp(line + 1, "GNRMC", 5) == 0 ||
+                   memcmp(line + 1, "GPRMC", 5) == 0));
+    lineLen = 0;
+    if (!isRmc) continue;
+    // Locate the UTC time (field 1) and date (field 9) by counting commas.
+    // Need 11 slots so the 10th comma is consumed and terminates fields[9]
+    // — otherwise fields[9] would point at "010526,,,A,V*xx" without a '\0'
+    // and the strlen check below would always reject it.
+    const char *fields[11] = {nullptr};
+    int fIdx = 0;
+    fields[fIdx++] = line;
+    for (char *p = line; *p && fIdx < 11; ++p) {
+      if (*p == ',') { *p = '\0'; fields[fIdx++] = p + 1; }
+    }
+    if (fIdx < 11 || fields[1] == nullptr || fields[9] == nullptr) continue;
+    if (fields[1][0] == '\0' || strlen(fields[9]) != 6) continue;
+    // Reject AG3352 dummy date: DDMMYY where YY=80 → 1980.
+    int yy = (fields[9][4] - '0') * 10 + (fields[9][5] - '0');
+    if (yy == 80) continue;
+    std::snprintf(outDate, outDateSz, "%s", fields[9]);
+    std::snprintf(outTime, outTimeSz, "%s", fields[1]);
+    return true;
+  }
+  return false;
+}
+
 std::string getFirmwareVersion() {
   const esp_app_desc_t *app_desc = esp_app_get_description();
   return app_desc->version;
@@ -829,24 +886,91 @@ bool initializeNetwork(unsigned long wakeUpCounter) {
           g_cellularCard->gnssHotStart();
         }
         resetExtWatchdog();
-        // Up to 30 minutes for the first fix. Kick the external HW watchdog
-        // every 5 minutes during the wait — the per-poll callback fires once
-        // per second, so we throttle to every 300th invocation.
-        auto fixResult = g_cellularCard->gnssGetFix(
-            /*fixTimeoutMs=*/30 * 60 * 1000,
-            /*onTick=*/[]() {
-              static uint32_t tickCount = 0;
-              if (++tickCount >= 5 * 60) {
-                resetExtWatchdog();
-                tickCount = 0;
-              }
-            });
+#ifdef AG_GNSS_NMEA_DUMP_S
+        // Diagnostic: stream raw NMEA for AG_GNSS_NMEA_DUMP_S seconds before
+        // the regular CGNSSINFO poll. Watch for $GPGSV in the UDP log — the
+        // 4th–7th fields per satellite-block are PRN, elevation, azimuth, SNR
+        // (dB-Hz). Any SNR value >=25 means the antenna is receiving signal.
+        ESP_LOGI(TAG, "GNSS NMEA dump for %ds (look for $GPGSV SNR)",
+                 AG_GNSS_NMEA_DUMP_S);
+        if (g_cellularCard->gnssEnableNmea(true)) {
+          for (int i = 0; i < AG_GNSS_NMEA_DUMP_S; ++i) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            // Kick HW watchdog every 30s while NMEA streams.
+            if ((i + 1) % 30 == 0) resetExtWatchdog();
+          }
+          g_cellularCard->gnssEnableNmea(false);
+        }
+        ESP_LOGI(TAG, "GNSS NMEA dump done, starting fix poll");
+        resetExtWatchdog();
+#endif
+        // Up to 30 minutes for the first fix.
+        CellResult<CellularModule::GnssFix> fixResult{};
+        fixResult.status = CellReturnStatus::Failed;
+        fixResult.data.valid = false;
+        fixResult.data.hasPosition = false;
+        constexpr uint32_t kTotalFixMs = 30u * 60u * 1000u;
+        auto onTickWdt = []() {
+          static uint32_t tickCount = 0;
+          if (++tickCount >= 5 * 60) {
+            resetExtWatchdog();
+            tickCount = 0;
+          }
+        };
+#ifdef AG_GNSS_GSV_INTERVAL_S
+        // Slice the fix wait into 1-min chunks; between chunks, dump NMEA
+        // for 3s so $GPGSV reaches the UDP log periodically.
+        constexpr uint32_t kSliceMs = AG_GNSS_GSV_INTERVAL_S * 1000u;
+        constexpr uint32_t kNmeaWinMs = 3000u;
+        const int kSlices = kTotalFixMs / kSliceMs;
+        for (int slice = 0; slice < kSlices; ++slice) {
+          fixResult = g_cellularCard->gnssGetFix(kSliceMs, onTickWdt);
+          if (fixResult.status == CellReturnStatus::Ok && fixResult.data.valid) {
+            break;
+          }
+          resetExtWatchdog();
+          ESP_LOGI(TAG, "GNSS: %d/%d min elapsed, no fix; sampling NMEA %ums",
+                   slice + 1, kSlices, (unsigned)kNmeaWinMs);
+          if (g_cellularCard->gnssEnableNmea(true)) {
+            // Stream window doubles as time-lock detector: $GNRMC date field
+            // gives real UTC date as soon as the receiver demodulates one
+            // satellite, which is well before a 4-SV position fix.
+            char dateBuf[7] = {0};
+            char timeBuf[10] = {0};
+            bool gotTime = tryParseRmcTime(kNmeaWinMs, dateBuf, sizeof(dateBuf),
+                                           timeBuf, sizeof(timeBuf));
+            g_cellularCard->gnssEnableNmea(false);
+            vTaskDelay(pdMS_TO_TICKS(500));  // drain stragglers
+            if (gotTime) {
+              ESP_LOGI(TAG,
+                       "GNSS time-only fix from NMEA RMC: date=%s utc=%s",
+                       dateBuf, timeBuf);
+              fixResult.status = CellReturnStatus::Ok;
+              fixResult.data.valid = true;
+              fixResult.data.hasPosition = false;
+              std::snprintf(fixResult.data.dateUTC,
+                            sizeof(fixResult.data.dateUTC), "%s", dateBuf);
+              std::snprintf(fixResult.data.timeUTC,
+                            sizeof(fixResult.data.timeUTC), "%s", timeBuf);
+              break;
+            }
+          }
+          resetExtWatchdog();
+        }
+#else
+        fixResult = g_cellularCard->gnssGetFix(kTotalFixMs, onTickWdt);
+#endif
         if (fixResult.status == CellReturnStatus::Ok && fixResult.data.valid) {
-          ESP_LOGI(TAG,
-                   "GNSS fix: lat=%.6f lon=%.6f alt=%.1fm date=%s utc=%s",
-                   fixResult.data.latitude, fixResult.data.longitude,
-                   fixResult.data.altitudeMeters,
-                   fixResult.data.dateUTC, fixResult.data.timeUTC);
+          if (fixResult.data.hasPosition) {
+            ESP_LOGI(TAG,
+                     "GNSS fix: date=%s utc=%s lat=%.6f lon=%.6f alt=%.1fm",
+                     fixResult.data.dateUTC, fixResult.data.timeUTC,
+                     fixResult.data.latitude, fixResult.data.longitude,
+                     fixResult.data.altitudeMeters);
+          } else {
+            ESP_LOGI(TAG, "GNSS time-only fix: date=%s utc=%s",
+                     fixResult.data.dateUTC, fixResult.data.timeUTC);
+          }
         } else {
           ESP_LOGW(TAG, "GNSS: no fix within timeout");
         }

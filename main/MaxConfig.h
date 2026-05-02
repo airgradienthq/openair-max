@@ -87,15 +87,30 @@ constexpr gpio_num_t IO_BOOT_BUTTON = GPIO_NUM_9;
 // Must be paired with a Cellular network configuration.
 // #define GNSS_TEST
 
+// GNSS NMEA dump diagnostic: when defined to N, enable raw NMEA streaming
+// (AT+CGNSSTST=1) for N seconds after GNSS power-on, before the CGNSSINFO
+// poll loop begins. Use to inspect $GPGSV (satellite SNR per SV) when fixes
+// are not arriving — confirms whether the antenna is receiving any signal.
+// All NMEA bytes are mirrored to the UDP debug log via setDebug. Comment
+// out for production builds.
+#define AG_GNSS_NMEA_DUMP_S 60
+
+// Periodic GSV check during fix poll: when defined to N, the 30-min fix wait
+// is broken into N-second slices; between slices, NMEA streams for 3s so a
+// fresh $GPGSV / $GLGSV / $GAGSV / $GBGSV reaches the UDP log. Lets you
+// monitor antenna signal continuously while waiting for a fix. Comment out
+// for production builds.
+#define AG_GNSS_GSV_INTERVAL_S 60
+
 // UDP debug log mirror. When defined, the device joins the diagnostic Wi-Fi AP
 // in parallel with cellular and unicasts every ESP_LOG line as a UDP datagram
 // to AG_DEBUG_UDP_HOST:AG_DEBUG_UDP_PORT. Pair with the Max-data-loger
 // dashboard. Only safe when network mode is Cellular (ESP32-C6 has a single
-// Wi-Fi radio).
+// Wi-Fi radio). Credentials live in `main/secrets.h` (gitignored); see
+// `main/secrets.h.example` for the template.
 #define AG_DEBUG_UDP_LOG
-#define AG_DEBUG_UDP_SSID "ag-diamond_2.4GHz"
-#define AG_DEBUG_UDP_PASSWORD "0505563014466"
-#define AG_DEBUG_UDP_HOST "192.168.100.70"
-#define AG_DEBUG_UDP_PORT 5514
+#ifdef AG_DEBUG_UDP_LOG
+#include "secrets.h"
+#endif
 
 #endif

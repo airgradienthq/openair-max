@@ -60,17 +60,11 @@ int AirgradientUART::available() {
 }
 
 void AirgradientUART::print(const char *str) {
-  if (isDebug) {
+  if (isDebug && str) {
 #ifdef ARDUINO
     Serial.print(str);
 #else
-    // Prevent carriage return to stdout so its not go back to beginning of the line on webserial API
-    // Specific for ATCommandHandler, it call this function for \r\n always in separate call
-    if (strcmp(str, "\r\n") == 0) {
-      printf("\n");
-    } else {
-      printf("%s", str);
-    }
+    _appendDebug(_dbgTxBuf, _dbgTxLen, "AT_TX", str, strlen(str));
 #endif
   }
 
@@ -104,14 +98,41 @@ int AirgradientUART::read() {
 
   if (isDebug) {
 #ifdef ARDUINO
-    Serial.print(str);
+    Serial.print((char)b);
 #else
-    // Prevent carriage return to stdout so its not go back to beginning of the line on webserial API
-    if (b != '\r') {
-      printf("%c", b);
-    }
+    char c = static_cast<char>(b);
+    _appendDebug(_dbgRxBuf, _dbgRxLen, "AT_RX", &c, 1);
 #endif
   }
 
   return b;
+}
+
+void AirgradientUART::_flushDebugLine(char *buf, size_t &len, const char *tag) {
+  if (len == 0) return;
+  // Strip trailing \r so log doesn't carry the modem's CR into the message.
+  while (len > 0 && (buf[len - 1] == '\r' || buf[len - 1] == '\n')) {
+    len--;
+  }
+  buf[len] = '\0';
+  if (len > 0) {
+    ESP_LOGI(tag, "%s", buf);
+  }
+  len = 0;
+}
+
+void AirgradientUART::_appendDebug(char *buf, size_t &len, const char *tag,
+                                   const char *src, size_t srcLen) {
+  for (size_t i = 0; i < srcLen; ++i) {
+    char c = src[i];
+    if (c == '\n') {
+      _flushDebugLine(buf, len, tag);
+      continue;
+    }
+    if (len >= DBG_LINE_BUF - 1) {
+      // Overflow guard: flush partial line before continuing.
+      _flushDebugLine(buf, len, tag);
+    }
+    buf[len++] = c;
+  }
 }
