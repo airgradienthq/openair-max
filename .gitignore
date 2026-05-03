@@ -10,3 +10,4 @@ managed_components/
 doc/
 .claude/
 main/secrets.h
+CLAUDE.md
