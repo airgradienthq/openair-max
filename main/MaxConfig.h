@@ -85,7 +85,7 @@ constexpr gpio_num_t IO_BOOT_BUTTON = GPIO_NUM_9;
 // transmission paths and only exercise the CE-card lifecycle:
 //   modem on -> network register -> GNSS on -> getFix -> GNSS off+cache -> sleep
 // Must be paired with a Cellular network configuration.
-// #define GNSS_TEST
+#define GNSS_TEST
 
 // GNSS NMEA dump diagnostic: when defined to N, enable raw NMEA streaming
 // (AT+CGNSSTST=1) for N seconds after GNSS power-on, before the CGNSSINFO

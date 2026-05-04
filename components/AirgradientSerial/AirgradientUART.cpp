@@ -90,7 +90,7 @@ int AirgradientUART::read() {
     return -1;
   }
 
-  int b;
+  uint8_t b = 0;
   int len = uart_read_bytes(_port_num, &b, 1, 10 / portTICK_PERIOD_MS);
   if (len <= 0) {
     return -1;
@@ -105,7 +105,7 @@ int AirgradientUART::read() {
 #endif
   }
 
-  return b;
+  return static_cast<int>(b);
 }
 
 void AirgradientUART::_flushDebugLine(char *buf, size_t &len, const char *tag) {

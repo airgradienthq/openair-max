@@ -163,7 +163,9 @@ static AirgradientClient::PayloadType getPayloadType();
  * captured; outputs are NMEA-format DDMMYY and HHMMSS.sss strings.
  */
 static bool tryParseRmcTime(uint32_t durationMs, char *outDate, size_t outDateSz,
-                            char *outTime, size_t outTimeSz);
+                            char *outTime, size_t outTimeSz,
+                            double *outLat = nullptr, double *outLon = nullptr,
+                            float *outAlt = nullptr, bool *outHasPos = nullptr);
 
 static void ensureConnectionReady();
 static int getNetworkSignalStrength();
@@ -706,13 +708,54 @@ std::string buildSerialNumber() {
   return sn;
 }
 
+// Convert NMEA ddmm.mmmmmm / dddmm.mmmmmm to decimal degrees.
+static bool nmeaCoordToDecimal(const char *nmea, char hemi, double &decimal) {
+  if (!nmea || !nmea[0]) return false;
+  const char *dot = strchr(nmea, '.');
+  if (!dot || (dot - nmea) < 3) return false;
+  size_t degLen = static_cast<size_t>(dot - nmea) - 2;
+  if (degLen > 3) return false;
+  char degBuf[5] = {0};
+  memcpy(degBuf, nmea, degLen);
+  char *endp;
+  double deg = strtod(degBuf, &endp);
+  if (endp == degBuf) return false;
+  double minutes = strtod(nmea + degLen, &endp);
+  if (endp == nmea + degLen) return false;
+  decimal = deg + minutes / 60.0;
+  if (hemi == 'S' || hemi == 'W') decimal = -decimal;
+  return true;
+}
+
 static bool tryParseRmcTime(uint32_t durationMs, char *outDate, size_t outDateSz,
-                            char *outTime, size_t outTimeSz) {
+                            char *outTime, size_t outTimeSz,
+                            double *outLat, double *outLon,
+                            float *outAlt, bool *outHasPos) {
   if (g_ceAgSerial == nullptr) return false;
+  if (outHasPos) *outHasPos = false;
   uint32_t start = MILLIS();
+  uint32_t lastWdtKickMs = start;
+  uint32_t lastProgressMs = start;
   char line[128];
   size_t lineLen = 0;
+  bool gotTime = false;
   while ((MILLIS() - start) < durationMs) {
+    uint32_t now = MILLIS();
+    // Kick external HW watchdog every ~5 minutes. The MAX_SLEEP_TIME limit is
+    // not enforced here — we're awake — but the WDT IC needs a periodic poke.
+    if (now - lastWdtKickMs >= 5u * 60u * 1000u) {
+      resetExtWatchdog();
+      lastWdtKickMs = now;
+    }
+    // Periodic progress log every 60 s so user can see we're alive.
+    if (now - lastProgressMs >= 60u * 1000u) {
+      ESP_LOGI(TAG, "GNSS NMEA: %u/%u min elapsed, gotTime=%d hasPos=%d",
+               (unsigned)((now - start) / 60000u),
+               (unsigned)(durationMs / 60000u),
+               gotTime ? 1 : 0,
+               (outHasPos && *outHasPos) ? 1 : 0);
+      lastProgressMs = now;
+    }
     int b = g_ceAgSerial->read();
     if (b < 0) {
       vTaskDelay(pdMS_TO_TICKS(5));
@@ -725,33 +768,72 @@ static bool tryParseRmcTime(uint32_t durationMs, char *outDate, size_t outDateSz
       continue;
     }
     line[lineLen] = '\0';
-    // Match $GNRMC / $GPRMC. Field layout: $xxRMC, UTC, status, lat, NS, lon,
-    // EW, speed, track, date(DDMMYY), magvar, magvarEW, mode, navStatus
     bool isRmc = (lineLen >= 6 && line[0] == '$' &&
                   (memcmp(line + 1, "GNRMC", 5) == 0 ||
                    memcmp(line + 1, "GPRMC", 5) == 0));
+    bool isGga = (lineLen >= 6 && line[0] == '$' && !isRmc &&
+                  (memcmp(line + 1, "GNGGA", 5) == 0 ||
+                   memcmp(line + 1, "GPGGA", 5) == 0));
     lineLen = 0;
-    if (!isRmc) continue;
-    // Locate the UTC time (field 1) and date (field 9) by counting commas.
-    // Need 11 slots so the 10th comma is consumed and terminates fields[9]
-    // — otherwise fields[9] would point at "010526,,,A,V*xx" without a '\0'
-    // and the strlen check below would always reject it.
-    const char *fields[11] = {nullptr};
-    int fIdx = 0;
-    fields[fIdx++] = line;
-    for (char *p = line; *p && fIdx < 11; ++p) {
-      if (*p == ',') { *p = '\0'; fields[fIdx++] = p + 1; }
+
+    if (isRmc) {
+      // $xxRMC: UTC(1), status(2), lat(3), NS(4), lon(5), EW(6), ..., date(9)
+      // Need 11 slots so field[9] is null-terminated before checksum.
+      const char *fields[11] = {nullptr};
+      int fIdx = 0;
+      fields[fIdx++] = line;
+      for (char *p = line; *p && fIdx < 11; ++p) {
+        if (*p == ',') { *p = '\0'; fields[fIdx++] = p + 1; }
+      }
+      if (fIdx < 11 || !fields[1] || !fields[9]) continue;
+      if (fields[1][0] == '\0' || strlen(fields[9]) != 6) continue;
+      int yy = (fields[9][4] - '0') * 10 + (fields[9][5] - '0');
+      if (yy == 80) continue;  // AG3352 dummy 1980 date
+      std::snprintf(outDate, outDateSz, "%s", fields[9]);
+      std::snprintf(outTime, outTimeSz, "%s", fields[1]);
+      gotTime = true;
+      // If caller wants position and GGA hasn't provided it yet, try from RMC.
+      // RMC status field[2]=="A" means active/valid.
+      if (outLat && outLon && outHasPos && !(*outHasPos) &&
+          fields[2] && fields[2][0] == 'A' &&
+          fields[3] && fields[4] && fields[5] && fields[6]) {
+        double lat = 0.0, lon = 0.0;
+        if (nmeaCoordToDecimal(fields[3], fields[4][0], lat) &&
+            nmeaCoordToDecimal(fields[5], fields[6][0], lon)) {
+          *outLat = lat;
+          *outLon = lon;
+          *outHasPos = true;
+        }
+      }
+      // Return immediately if we have time and either don't need position or
+      // already have it. Otherwise keep reading for a GGA sentence.
+      if (!outHasPos || *outHasPos) return true;
+    } else if (isGga && outLat && outLon && outHasPos && !(*outHasPos)) {
+      // $xxGGA: UTC(1), lat(2), NS(3), lon(4), EW(5), quality(6), ..., alt(9)
+      const char *fields[11] = {nullptr};
+      int fIdx = 0;
+      fields[fIdx++] = line;
+      for (char *p = line; *p && fIdx < 11; ++p) {
+        if (*p == ',') { *p = '\0'; fields[fIdx++] = p + 1; }
+      }
+      if (fIdx < 11) continue;
+      if (!fields[6] || fields[6][0] == '\0' || fields[6][0] == '0') continue;
+      if (!fields[2] || !fields[3] || !fields[4] || !fields[5]) continue;
+      double lat = 0.0, lon = 0.0;
+      if (nmeaCoordToDecimal(fields[2], fields[3][0], lat) &&
+          nmeaCoordToDecimal(fields[4], fields[5][0], lon)) {
+        *outLat = lat;
+        *outLon = lon;
+        if (outAlt && fields[9] && fields[9][0]) {
+          char *endp;
+          float a = strtof(fields[9], &endp);
+          if (endp != fields[9]) *outAlt = a;
+        }
+        *outHasPos = true;
+      }
     }
-    if (fIdx < 11 || fields[1] == nullptr || fields[9] == nullptr) continue;
-    if (fields[1][0] == '\0' || strlen(fields[9]) != 6) continue;
-    // Reject AG3352 dummy date: DDMMYY where YY=80 → 1980.
-    int yy = (fields[9][4] - '0') * 10 + (fields[9][5] - '0');
-    if (yy == 80) continue;
-    std::snprintf(outDate, outDateSz, "%s", fields[9]);
-    std::snprintf(outTime, outTimeSz, "%s", fields[1]);
-    return true;
   }
-  return false;
+  return gotTime;
 }
 
 std::string getFirmwareVersion() {
@@ -910,56 +992,35 @@ bool initializeNetwork(unsigned long wakeUpCounter) {
         fixResult.data.valid = false;
         fixResult.data.hasPosition = false;
         constexpr uint32_t kTotalFixMs = 30u * 60u * 1000u;
-        auto onTickWdt = []() {
-          static uint32_t tickCount = 0;
-          if (++tickCount >= 5 * 60) {
-            resetExtWatchdog();
-            tickCount = 0;
+        // NMEA-only fix path: AT+CGNSSINFO is unreliable on this A7671G unit
+        // (returns empty even when NMEA shows a valid 3D fix). Stream NMEA
+        // continuously for the whole fix window and parse $GNGGA/$GNRMC.
+        ESP_LOGI(TAG, "GNSS: NMEA-only fix mode (timeout %u min)",
+                 (unsigned)(kTotalFixMs / 60000u));
+        if (g_cellularCard->gnssEnableNmea(true)) {
+          char dateBuf[7] = {0};
+          char timeBuf[10] = {0};
+          double nmLat = 0.0, nmLon = 0.0;
+          float nmAlt = 0.0f;
+          bool nmHasPos = false;
+          bool gotTime = tryParseRmcTime(kTotalFixMs, dateBuf, sizeof(dateBuf),
+                                         timeBuf, sizeof(timeBuf),
+                                         &nmLat, &nmLon, &nmAlt, &nmHasPos);
+          g_cellularCard->gnssEnableNmea(false);
+          vTaskDelay(pdMS_TO_TICKS(500));  // drain stragglers
+          if (gotTime) {
+            fixResult.status = CellReturnStatus::Ok;
+            fixResult.data.valid = true;
+            fixResult.data.hasPosition = nmHasPos;
+            fixResult.data.latitude = nmLat;
+            fixResult.data.longitude = nmLon;
+            fixResult.data.altitudeMeters = nmAlt;
+            std::snprintf(fixResult.data.dateUTC,
+                          sizeof(fixResult.data.dateUTC), "%s", dateBuf);
+            std::snprintf(fixResult.data.timeUTC,
+                          sizeof(fixResult.data.timeUTC), "%s", timeBuf);
           }
-        };
-#ifdef AG_GNSS_GSV_INTERVAL_S
-        // Slice the fix wait into 1-min chunks; between chunks, dump NMEA
-        // for 3s so $GPGSV reaches the UDP log periodically.
-        constexpr uint32_t kSliceMs = AG_GNSS_GSV_INTERVAL_S * 1000u;
-        constexpr uint32_t kNmeaWinMs = 3000u;
-        const int kSlices = kTotalFixMs / kSliceMs;
-        for (int slice = 0; slice < kSlices; ++slice) {
-          fixResult = g_cellularCard->gnssGetFix(kSliceMs, onTickWdt);
-          if (fixResult.status == CellReturnStatus::Ok && fixResult.data.valid) {
-            break;
-          }
-          resetExtWatchdog();
-          ESP_LOGI(TAG, "GNSS: %d/%d min elapsed, no fix; sampling NMEA %ums",
-                   slice + 1, kSlices, (unsigned)kNmeaWinMs);
-          if (g_cellularCard->gnssEnableNmea(true)) {
-            // Stream window doubles as time-lock detector: $GNRMC date field
-            // gives real UTC date as soon as the receiver demodulates one
-            // satellite, which is well before a 4-SV position fix.
-            char dateBuf[7] = {0};
-            char timeBuf[10] = {0};
-            bool gotTime = tryParseRmcTime(kNmeaWinMs, dateBuf, sizeof(dateBuf),
-                                           timeBuf, sizeof(timeBuf));
-            g_cellularCard->gnssEnableNmea(false);
-            vTaskDelay(pdMS_TO_TICKS(500));  // drain stragglers
-            if (gotTime) {
-              ESP_LOGI(TAG,
-                       "GNSS time-only fix from NMEA RMC: date=%s utc=%s",
-                       dateBuf, timeBuf);
-              fixResult.status = CellReturnStatus::Ok;
-              fixResult.data.valid = true;
-              fixResult.data.hasPosition = false;
-              std::snprintf(fixResult.data.dateUTC,
-                            sizeof(fixResult.data.dateUTC), "%s", dateBuf);
-              std::snprintf(fixResult.data.timeUTC,
-                            sizeof(fixResult.data.timeUTC), "%s", timeBuf);
-              break;
-            }
-          }
-          resetExtWatchdog();
         }
-#else
-        fixResult = g_cellularCard->gnssGetFix(kTotalFixMs, onTickWdt);
-#endif
         if (fixResult.status == CellReturnStatus::Ok && fixResult.data.valid) {
           if (fixResult.data.hasPosition) {
             ESP_LOGI(TAG,
