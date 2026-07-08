@@ -35,6 +35,7 @@
 #include "MaxConfig.h"
 #include "Configuration.h"
 #include "PayloadCache.h"
+#include "GasIndex.h"
 #include "StatusLed.h"
 #include "Sensor.h"
 #include "AirgradientSerial.h"
@@ -80,6 +81,7 @@ static std::string g_serialNumber;
 static bool g_networkReady = false;
 static std::string g_fimwareVersion;
 static PayloadCache g_payloadCache(MAX_PAYLOAD_CACHE);
+static GasIndex g_gasIndex;
 static Configuration g_configuration;
 static StatusLed g_statusLed(IO_LED_INDICATOR);
 static AirgradientSerial *g_ceAgSerial = nullptr;
@@ -308,6 +310,10 @@ extern "C" void app_main(void) {
   // Restore cache from RTC memory
   g_payloadCache.restoreFromRTC();
 
+  // Initialize gas index algorithm (VOC & NOx). On wake from sleep the states
+  // are already restored from RTC memory, so init only runs on first boot.
+  g_gasIndex.init(xWakeUpCounter == 0);
+
   // Optimization: copy from LP memory so will not always call from LP memory
   int wakeUpCounter = xWakeUpCounter;
 
@@ -363,11 +369,14 @@ extern "C" void app_main(void) {
   sensor.startMeasures(DEFAULT_MEASURE_ITERATION_COUNT, DEFAULT_MEASURE_INTERVAL_MS_PER_ITERATION);
   sensor.printMeasures();
   g_measuresResult = sensor.getLastAverageMeasure();
-  // NOTE: Temporary since MAX cannot calculate the index yet. So raw value is assumed index on server.
-  g_measuresResult.common.tvoc = g_measuresResult.common.tvocRaw;
-  g_measuresResult.common.nox = g_measuresResult.common.noxRaw;
-  g_measuresResult.common.tvocRaw = DEFAULT_INVALID_TVOC;
-  g_measuresResult.common.noxRaw = DEFAULT_INVALID_NOX;
+  // Calculate VOC/NOx index from the averaged raw signals. Raw values are kept
+  // and sent alongside the calculated index.
+  int tvocIndex = DEFAULT_INVALID_TVOC;
+  int noxIndex = DEFAULT_INVALID_NOX;
+  g_gasIndex.process(g_measuresResult.common.tvocRaw, g_measuresResult.common.noxRaw, &tvocIndex,
+                     &noxIndex);
+  g_measuresResult.common.tvoc = tvocIndex;
+  g_measuresResult.common.nox = noxIndex;
 
   // Turn OFF PM sensor load switch
   gpio_set_level(EN_PMS1, 0);
