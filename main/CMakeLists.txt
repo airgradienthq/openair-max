@@ -3,6 +3,7 @@ set(srcs
   "StatusLed.cpp"
   "Sensor.cpp"
   "PayloadCache.cpp"
+  "GasIndex.cpp"
   "Configuration.cpp"
   "AlphaSenseSensor.cpp"
 )

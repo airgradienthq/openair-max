@@ -17,7 +17,9 @@ enum class NetworkOption {
 
 #define NETWORKING_TASK_STACK_SIZE 16384
 
-#define MAX_PAYLOAD_CACHE 75
+// Reduced from 75: traded 4 cache entries (~464 B) for the two RTC-persisted
+// gas index algorithm states (VOC + NOx) used to calculate TVOC/NOx index.
+#define MAX_PAYLOAD_CACHE 71
 
 #define MILLIS() ((uint32_t)(esp_timer_get_time() / 1000))
 

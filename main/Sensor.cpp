@@ -387,10 +387,15 @@ void Sensor::_measure(int iteration, MaxSensorPayload &data) {
   }
 
   if (_tvocNoxAvailable) {
+    // SGP4x requires valid compensation; fall back to sensor defaults
+    // (25C/50%RH) when SHT read is unavailable/failed, otherwise the raw read
+    // is rejected as out of range.
+    float compT = IS_TEMPERATURE_VALID(data.common.atmp) ? data.common.atmp : 25.0f;
+    float compRh = IS_HUMIDITY_VALID(data.common.rhum) ? data.common.rhum : 50.0f;
     uint16_t tvocRaw;
     uint16_t noxRaw;
     esp_err_t result =
-        sgp4x_measure_compensated_signals(sgp_dev_hdl, data.common.atmp, data.common.rhum, &tvocRaw, &noxRaw);
+        sgp4x_measure_compensated_signals(sgp_dev_hdl, compT, compRh, &tvocRaw, &noxRaw);
     if (result != ESP_OK) {
       ESP_LOGE(TAG, "sgp4x device conditioning failed (%s)", esp_err_to_name(result));
     } else {
