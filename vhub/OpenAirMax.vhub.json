@@ -1,0 +1,1032 @@
+{
+  "schema_version": "1.0",
+  "rev": "17f574d",
+  "product": {
+    "slug": "max",
+    "name": "Open Air Max",
+    "variants": [
+      "MAX"
+    ]
+  },
+  "tests": [
+    {
+      "id": "boot.first-boot.cold-boot-counter-zero",
+      "category": "Boot & Sleep Lifecycle",
+      "sub_category": "First Boot",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Cold power-on starts the wake-up counter at zero",
+      "expected_result": "Serial logs 'Wakeup count: 0' on the first boot; the counter is not incremented for the initial power-on.",
+      "notes": "Requires: serial console. Cold boot = fully remove power (battery + USB) then re-apply, not the reset button. xWakeUpCounter is RTC-persisted and only clears on full power loss."
+    },
+    {
+      "id": "boot.wakeup.counter-increments",
+      "category": "Boot & Sleep Lifecycle",
+      "sub_category": "Wake-up",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Each measurement-cycle deep-sleep wake-up increments the wake-up counter",
+      "expected_result": "After a measurement-cycle timer wake-up, serial logs 'Wakeup count: N' with N incremented by 1 versus the previous measurement cycle.",
+      "notes": "Counter lives in RTC memory (RTC_DATA_ATTR), so it survives deep sleep but resets on power loss."
+    },
+    {
+      "id": "boot.wakeup.console-reinit",
+      "category": "Boot & Sleep Lifecycle",
+      "sub_category": "Wake-up",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Serial console is re-initialized after a deep-sleep wake-up",
+      "expected_result": "Logging resumes after every deep-sleep timer wake-up. On measurement-cycle wake-ups, 'Wakeup count: N' appears after roughly a 1s post-wake delay. Fragmented-sleep wake-ups log sleep scheduling and return to sleep without 'Wakeup count'.",
+      "notes": "Console re-init runs only when the wake cause is not UNDEFINED; on cold boot the console is already up so this path is skipped."
+    },
+    {
+      "id": "boot.wakeup.deep-sleep-after-cycle",
+      "category": "Boot & Sleep Lifecycle",
+      "sub_category": "Wake-up",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Device enters deep sleep after the measurement and transmission cycle completes",
+      "expected_result": "At end of cycle serial logs 'Next measurements is in <N> seconds' then 'Sleeping for for <N> seconds' (literal double 'for'), the LED turns off, then the device deep-sleeps.",
+      "notes": "Per-chunk sleep is capped at 300s; a longer schedule re-wakes for fragmented sleep (see boot.fragmented-sleep.*)."
+    },
+    {
+      "id": "boot.wakeup.ext-watchdog-reset",
+      "category": "Boot & Sleep Lifecycle",
+      "sub_category": "Wake-up",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "External hardware watchdog is kicked at boot and before each sleep",
+      "expected_result": "Serial logs 'Watchdog reset' at boot and again before every deep sleep.",
+      "notes": "Requires: serial console. The external WDT forces a reset if not kicked within its window; fragmented sleep exists specifically to kick it during long idle periods."
+    },
+    {
+      "id": "boot.fragmented-sleep.long-schedule-chunked",
+      "category": "Boot & Sleep Lifecycle",
+      "sub_category": "Fragmented Sleep",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "A sleep longer than 5 minutes is split into chunks no longer than 300s",
+      "expected_result": "When the next measurement is more than 300s away, serial logs 'Next measurement is scheduled in more than 5 minutes. Will do fragmented sleep to reset the external watchdog timer before returning to sleep again', then sleeps 300s and wakes only to kick the watchdog.",
+      "notes": "Easiest to trigger on low battery, where the measure interval becomes 1800s or 3600s (see Power Management). MAX_SLEEP_TIME (300s) is the external-watchdog ceiling."
+    },
+    {
+      "id": "boot.fragmented-sleep.no-counter-increment",
+      "category": "Boot & Sleep Lifecycle",
+      "sub_category": "Fragmented Sleep",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Fragmented-sleep wake-ups do not increment the wake-up counter",
+      "expected_result": "During fragmented sleep serial logs 'Next measurements is in <N> seconds' and 'Sleeping for <N> seconds' then re-sleeps, with no 'Wakeup count' line for that intermediate wake-up.",
+      "notes": "Guarded by xMeasurementLeadTimeSeconds>0; the device re-enters deep sleep before reaching the counter-increment step, so only real measurement wake-ups are counted."
+    },
+    {
+      "id": "led.first-boot.solid-on-at-power-on",
+      "category": "LED Notification",
+      "sub_category": "First Boot",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "LED turns solid ON shortly after cold power-on",
+      "expected_result": "The LED indicator turns solid ON shortly after firmware starts and status LED initialization completes, and stays on until the next notification in the boot sequence.",
+      "notes": "Cold boot only (gated by wake-up counter == 0); the LED is not turned solid-on for deep-sleep wake-ups."
+    },
+    {
+      "id": "led.first-boot.network-init-quick-2x",
+      "category": "LED Notification",
+      "sub_category": "First Boot",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Quick blink 2x when network initialization starts",
+      "expected_result": "2 quick blinks (~100ms interval over 400ms) when the networking task begins network initialization. Serial logs 'Time for transmission, run networking tasks...' before the task is started.",
+      "notes": "First boot only. Applies to both cellular (CE card) and WiFi init paths."
+    },
+    {
+      "id": "led.first-boot.network-connected-quick-3x",
+      "category": "LED Notification",
+      "sub_category": "First Boot",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Quick blink 3x on successful network connection",
+      "expected_result": "3 quick blinks (~100ms interval over 600ms) on successful network connection; on the ensure-connection path serial logs 'Client connection is ready'.",
+      "notes": "Cellular mode (the default network option); the WiFi path does not emit this 3x indicator."
+    },
+    {
+      "id": "led.first-boot.first-post-success-quick-4x",
+      "category": "LED Notification",
+      "sub_category": "First Boot",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Quick blink 4x after first successful measurement post",
+      "expected_result": "4 quick blinks (~100ms interval over 800ms) after the first measurement is posted to the server successfully.",
+      "notes": "First boot only. Fires on both cellular (CoAP) and WiFi (HTTP) post-success paths."
+    },
+    {
+      "id": "led.wakeup.off-unless-error",
+      "category": "LED Notification",
+      "sub_category": "Wake-up",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "LED stays off during a normal wake-up cycle",
+      "expected_result": "On a normal deep-sleep wake-up the LED stays off for the entire cycle (no solid-on, no blink) unless an error indication fires.",
+      "notes": "Contrast with cold boot, where the LED is solid-on; the success-sequence blinks are first-boot only."
+    },
+    {
+      "id": "led.portal.trigger-blink-5x",
+      "category": "LED Notification",
+      "sub_category": "System Settings Portal",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Blink 5x when toggling the System Settings Portal via boot button",
+      "expected_result": "5 blinks (~200ms interval over 2000ms) then the device restarts; serial logs 'Restarting in 2s...'.",
+      "notes": "Triggered by a 3s+ boot-button hold (see Boot Button category); toggles the portal on or off."
+    },
+    {
+      "id": "led.portal.active-continuous",
+      "category": "LED Notification",
+      "sub_category": "System Settings Portal",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Continuous quick blink while the portal is active",
+      "expected_result": "The LED blinks continuously (~100ms interval, no end) the whole time the System Settings Portal is running.",
+      "notes": "Indefinite blink (duration 0); stops when the portal exits, saves, or is aborted."
+    },
+    {
+      "id": "led.error.sensor-init-fail-slow-2x",
+      "category": "LED Notification",
+      "sub_category": "Error Codes",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Slow blink 2x when one or more sensors fail to initialize",
+      "expected_result": "2 slow blinks (~500ms interval over 2000ms); serial logs 'One or more sensor were failed to initialize, will not measure those on this iteration'.",
+      "notes": "Fires on first boot and on every wake-up (not cycle-gated). Reproduce by disconnecting a sensor before boot."
+    },
+    {
+      "id": "led.error.post-failed-slow-3x",
+      "category": "LED Notification",
+      "sub_category": "Error Codes",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Slow blink 3x when a measurement post fails",
+      "expected_result": "3 slow blinks (~500ms interval over 3000ms) when posting measures fails.",
+      "notes": "Requires: network, WiFi, or cellular post failure. On wake-up cycles serial logs 'Send measures failed, retry in next schedule'; on first boot when the client is not ready it logs 'Send measures failed because of client is not ready, ensuring connection...'."
+    },
+    {
+      "id": "led.error.server-issue-slow-4x",
+      "category": "LED Notification",
+      "sub_category": "Error Codes",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Slow blink 4x when a post fails due to a server issue",
+      "expected_result": "4 slow blinks (~500ms interval over 4000ms); serial logs 'Send measures failed because of server issue, retry in next schedule'.",
+      "notes": "Cellular first boot only. Requires server-side rejection or registration/server issue path; hard to reproduce."
+    },
+    {
+      "id": "led.error.ensure-conn-failed-slow-5x",
+      "category": "LED Notification",
+      "sub_category": "Error Codes",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Slow blink 5x when ensuring connection fails after a failed post",
+      "expected_result": "5 slow blinks (~500ms interval over 5000ms) then the device restarts; serial logs 'Failed ensuring client connection, system restart in 5s'.",
+      "notes": "Requires: network failure on first boot (hard to reproduce); cellular path only."
+    },
+    {
+      "id": "led.error.give-up-slow-6x",
+      "category": "LED Notification",
+      "sub_category": "Error Codes",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Slow blink 6x after giving up post retries on first boot",
+      "expected_result": "6 slow blinks (~500ms interval over 6000ms) then the device restarts; serial logs 'Give up after 3 attempts of failed post measures because of network reasons, restart systems in 6s'.",
+      "notes": "Requires: persistent network failure on first boot (hard to reproduce); fires after 3 failed post attempts with the client not ready."
+    },
+    {
+      "id": "led.error.network-connect-fail-slow-10x",
+      "category": "LED Notification",
+      "sub_category": "Error Codes",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Slow blink 10x while retrying network connection on first boot",
+      "expected_result": "10 slow blinks (~500ms interval over 10000ms) between connection retries; serial logs 'Airgradient client still not connected, retry in 10s'.",
+      "notes": "Requires: no cellular coverage on first boot (hard to reproduce); part of the ensure-connection loop that runs up to 1 hour."
+    },
+    {
+      "id": "boot-button.first-boot.hold-3s-toggles-portal",
+      "category": "Boot Button",
+      "sub_category": "First Boot",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Holding the boot button longer than 3s then releasing toggles the System Settings Portal",
+      "expected_result": "On release after a >3s hold, serial logs 'Restarting in 2s...', the LED blinks 5x (~200ms over 2s), then the device restarts and boots into the System Settings Portal.",
+      "notes": "First boot / normal-run only. The trigger fires on button RELEASE after holding >3s, not while held. The portal is off by default, so the first such hold enables it. NOTE: README and the old template said 5s, but firmware uses >3000ms."
+    },
+    {
+      "id": "boot-button.first-boot.hold-again-aborts-portal",
+      "category": "Boot Button",
+      "sub_category": "First Boot",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Holding the boot button longer than 3s again while the portal is active disables the portal setting and restarts",
+      "expected_result": "A second >3s hold-and-release while the portal is running logs 'Restarting in 2s...', toggles `runSystemSettings` off, restarts, and the device boots normally with the portal disabled.",
+      "notes": "Applies when the portal was enabled by the previous boot-button hold. This is a boot-button toggle/restart path, not the WiFiManager Exit button abort path."
+    },
+    {
+      "id": "boot-button.wakeup.no-op",
+      "category": "Boot Button",
+      "sub_category": "Wake-up",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Boot button has no effect after a deep-sleep wake-up",
+      "expected_result": "Pressing or holding the boot button on any wake-up cycle produces no portal toggle, no restart, and no LED change.",
+      "notes": "The button ISR and handler task are installed only on first boot (wake-up counter == 0); on later wake-ups they are never registered."
+    },
+    {
+      "id": "portal.ap.ssid-and-password",
+      "category": "System Settings Portal",
+      "sub_category": "AP & Access",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Portal AP broadcasts the expected SSID and password",
+      "expected_result": "The AP SSID is 'airgradient-<serial>' (hyphen, lowercase 12-hex serial) with password 'cleanair'; serial logs 'Connect to WiFi network: airgradient-<serial>'.",
+      "notes": "Serial = lowercase WiFi-STA MAC (12 hex chars). The old template said 'airgradient_<SERIAL>' with an underscore, which is incorrect."
+    },
+    {
+      "id": "portal.ap.captive-portal-redirect",
+      "category": "System Settings Portal",
+      "sub_category": "AP & Access",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Captive-portal detection redirects clients to the portal",
+      "expected_result": "Known captive-portal probe routes respond as implemented: /generate_204 returns 204, /ncsi.txt returns 'Microsoft NCSI', and /hotspot-detect.html plus /fwlink return 302 redirect to '/'.",
+      "notes": "Captive pop-up behavior depends on OS/device. On Android the pop-up may not appear; open http://192.168.4.1 manually."
+    },
+    {
+      "id": "portal.ap.manual-ip-access",
+      "category": "System Settings Portal",
+      "sub_category": "AP & Access",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Portal home page reachable at 192.168.4.1",
+      "expected_result": "Browsing to http://192.168.4.1 serves the 'Device Portal' home page; serial logs 'Open browser to: http://192.168.4.1'.",
+      "notes": "192.168.4.1 is the AP gateway IP; works regardless of whether the captive pop-up triggered."
+    },
+    {
+      "id": "portal.ap.timeout-restart-rerun",
+      "category": "System Settings Portal",
+      "sub_category": "AP & Access",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Portal times out after 180s, restarts, and re-runs the portal",
+      "expected_result": "With no save or exit, after 180s serial logs 'Config portal timeout', the device restarts, and the portal runs again.",
+      "notes": "Timeout leaves runSystemSettings unchanged, so a boot-button-enabled portal re-runs after restart. If the portal is running because WiFi mode is unconfigured, it can also re-run due to isWifiConfigured=false."
+    },
+    {
+      "id": "portal.home.exit-button",
+      "category": "System Settings Portal",
+      "sub_category": "Home Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Exit button closes the portal and the device runs normally",
+      "expected_result": "Pressing Exit serves 'Exiting WiFi Manager', the device restarts and boots into the normal flow with the portal disabled.",
+      "notes": "Applies when the portal was enabled by runSystemSettings/boot button. If the portal is running because WiFi mode is selected but not configured, the portal may re-run until WiFi is configured."
+    },
+    {
+      "id": "portal.home.info-button",
+      "category": "System Settings Portal",
+      "sub_category": "Home Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Info button shows device information",
+      "expected_result": "The 'Info' link opens /info and displays the device/ESP32 information page.",
+      "notes": "Served from handleInfo."
+    },
+    {
+      "id": "portal.home.settings-button",
+      "category": "System Settings Portal",
+      "sub_category": "Home Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "System Settings button opens the settings form",
+      "expected_result": "The 'System Settings' link opens /settings (the configuration form page).",
+      "notes": "Served from handleSettings."
+    },
+    {
+      "id": "portal.home.connection-status",
+      "category": "System Settings Portal",
+      "sub_category": "Home Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Home page shows live WiFi connection status",
+      "expected_result": "The home page auto-fetches /status and shows 'Connected to: <ssid> / IP Address: <ip>' when connected, or 'Not connected to: <saved_ssid>' / 'No WiFi configured' otherwise.",
+      "notes": "Most meaningful in WiFi mode after a save attempt."
+    },
+    {
+      "id": "portal.settings.prefill-saved-values",
+      "category": "System Settings Portal",
+      "sub_category": "Settings Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Settings form is prefilled with the saved configuration",
+      "expected_result": "Opening the settings page prefills net_mode, HTTP URL Domain, CoAP Host, SSID, and APN from the current config (fetched from /fetch-settings).",
+      "notes": "max.cpp seeds these via setSettings() before the portal starts (networkMode, apn, httpDomain, coapDomain)."
+    },
+    {
+      "id": "portal.settings.scan-shows-networks",
+      "category": "System Settings Portal",
+      "sub_category": "Settings Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "WiFi section lists available networks",
+      "expected_result": "In WiFi mode the 'Available Networks' list populates from a scan (/scan); networks below 8% signal quality are filtered out.",
+      "notes": "CONFIG_WM_MIN_SIGNAL_QUALITY = 8; duplicate SSIDs may be removed depending on CONFIG_WM_REMOVE_DUP_APS."
+    },
+    {
+      "id": "portal.settings.refresh-rescans",
+      "category": "System Settings Portal",
+      "sub_category": "Settings Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Refresh link re-scans for networks",
+      "expected_result": "Clicking 'Refresh' triggers a new /scan and updates the Available Networks list.",
+      "notes": "Calls loadNetworks() in settings.html."
+    },
+    {
+      "id": "portal.settings.mode-toggle-shows-form",
+      "category": "System Settings Portal",
+      "sub_category": "Settings Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Network-mode toggle shows the matching settings section",
+      "expected_result": "Selecting WiFi shows the WiFi section (SSID/password); selecting Cellular shows the Cellular section (APN + CoAP Host).",
+      "notes": "toggleNetworkSettings() hides/shows the two form sections."
+    },
+    {
+      "id": "portal.settings.ssid-select-autofill",
+      "category": "System Settings Portal",
+      "sub_category": "Settings Page",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Selecting a scanned network fills SSID and focuses password",
+      "expected_result": "Clicking a network in the list fills the SSID field with its name and moves keyboard focus to the password field.",
+      "notes": "selectNetwork() sets #s value and calls #p.focus()."
+    },
+    {
+      "id": "portal.wifi-save.attempts-connect",
+      "category": "System Settings Portal",
+      "sub_category": "WiFi Save",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Saving in WiFi mode starts a connection attempt",
+      "expected_result": "On Save with mode=WiFi the page shows 'Connecting...' and auto-returns to home after 5s; serial logs 'Attempting to connect to WiFi...'.",
+      "notes": "Empty SSID is rejected with 'Error: SSID required'."
+    },
+    {
+      "id": "portal.wifi-save.success-runs-normal",
+      "category": "System Settings Portal",
+      "sub_category": "WiFi Save",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Successful WiFi connection sets WiFi mode and continues without restart",
+      "expected_result": "On success serial logs 'STA got IP: <ip>'; the portal closes, network mode is set to WiFi (isWifiConfigured=true), and the device continues the normal flow WITHOUT restarting.",
+      "notes": "Contrast with cellular save, which restarts. WiFi success continues in-place (g_networkReady set true)."
+    },
+    {
+      "id": "portal.wifi-save.fail-restarts-reruns-portal",
+      "category": "System Settings Portal",
+      "sub_category": "WiFi Save",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Failed WiFi connection times out, restarts, and re-runs the portal",
+      "expected_result": "If the connection fails within ~30s, serial logs 'STA connection timeout', startConfigPortal returns failure, the device restarts, and the portal runs again because WiFi is still not configured or runSystemSettings remains enabled.",
+      "notes": "Connect timeout CONFIG_WM_DEFAULT_CONNECT_TIMEOUT = 30s; state goes to START_PORTAL, the blocking portal loop exits with failure, and max.cpp restarts the device."
+    },
+    {
+      "id": "portal.cellular-save.shows-wait-message",
+      "category": "System Settings Portal",
+      "sub_category": "Cellular Save",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Saving in cellular mode shows the wait-and-check message",
+      "expected_result": "On Save with mode=Cellular the page shows 'Configuration Saved!' with 'Please wait and check if device able to communicate with our server'.",
+      "notes": "Non-empty APN shows the success/wait message. Empty APN sends 'Error: APN required for cellular network', but this path should be treated as an implementation edge case."
+    },
+    {
+      "id": "portal.cellular-save.sets-mode-and-restarts",
+      "category": "System Settings Portal",
+      "sub_category": "Cellular Save",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Cellular save persists APN, sets cellular mode, and restarts into normal flow",
+      "expected_result": "After cellular save the network mode is set to Cellular, the new APN is persisted, and the device restarts into the normal flow; the saved APN is then used for cellular registration.",
+      "notes": "Cellular path restarts (max.cpp esp_restart), unlike WiFi which continues in-place. Verify APN use via serial AT logs / successful registration."
+    },
+    {
+      "id": "portal.cellular-save.coap-host-field",
+      "category": "System Settings Portal",
+      "sub_category": "Cellular Save",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Cellular section exposes a CoAP Host field whose value is saved",
+      "expected_result": "The Cellular section shows a 'CoAP Host (IP or Domain)' field (placeholder 128.140.49.53); the entered value persists after Save and is used as the CoAP target on the next boot.",
+      "notes": "NEW since the old template: the CoAP-domain field was recently moved into the cellular settings section. Transmission effect is covered in the Transmission - Configuration category."
+    },
+    {
+      "id": "logs.serial-number",
+      "category": "Logs",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Serial number is printed at boot",
+      "expected_result": "Serial logs 'Serial number: <serial>' where <serial> is the 12-hex-char lowercase WiFi-STA MAC.",
+      "notes": "Used as the device identifier for transmission and the portal AP SSID."
+    },
+    {
+      "id": "logs.firmware-version",
+      "category": "Logs",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Firmware version is printed at boot",
+      "expected_result": "Serial logs 'Firmware version: <version>' matching the flashed build's app description version.",
+      "notes": "Sourced from the app description; cross-check against the released version under test."
+    },
+    {
+      "id": "logs.reset-reason",
+      "category": "Logs",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "ESP reset reason is printed at boot",
+      "expected_result": "Serial logs 'Reset reason: ESP_RST_POWERON' on cold boot and 'Reset reason: ESP_RST_SW' after a software restart (e.g. a portal save or post-failure restart).",
+      "notes": "Handled reasons print their enum names, including ESP_RST_POWERON, ESP_RST_SW, ESP_RST_WDT, and ESP_RST_BROWNOUT. Any unhandled reset reason prints 'Reset reason: unknown'."
+    },
+    {
+      "id": "logs.wakeup-reason",
+      "category": "Logs",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "ESP wake-up reason is printed at boot",
+      "expected_result": "Serial logs 'Wakeup caused by timer' on a timer wake-up; on cold boot it logs 'Wakeup was not caused by deep sleep: <n>'.",
+      "notes": "Deep-sleep wake on the MAX is timer-based; EXT0/EXT1/touch/ULP causes are not used."
+    },
+    {
+      "id": "logs.every-wakeup-cycle",
+      "category": "Logs",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Boot diagnostics are re-printed on every wake-up cycle",
+      "expected_result": "Each measurement-cycle wake-up re-prints 'Wakeup count: N', the reset and wake-up reason lines, and the '**** CONFIGURATION ****' block.",
+      "notes": "Confirms the console is re-initialized each cycle; the config block comes from Configuration::load() which runs every boot."
+    },
+    {
+      "id": "sensor.init.failed-excluded",
+      "category": "Sensors",
+      "sub_category": "Initialization",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "A sensor that fails to initialize or is not connected is excluded from the measurement sequence",
+      "expected_result": "On init failure the matching log prints (e.g. 'Failed open serial for Sunlight', 'Failed init temperature and humidity sensor', 'Failed init TVOC & NOx sensor', 'Failed init charger', 'PMS1 is not connected') and that sensor's values remain at invalid defaults instead of being included in averaging.",
+      "notes": "Each sensor read is guarded by its availability flag; a failed sensor keeps its iteration OK-count at 0 so it is skipped in averaging. Reproduce by disconnecting one sensor."
+    },
+    {
+      "id": "sensor.init.o3no2-model-gating",
+      "category": "Sensors",
+      "sub_category": "Initialization",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "O3/NO2 sensor is only initialized on the O3/NO2-capable model",
+      "expected_result": "On the O-M-1PPSTON-CE model the AlphaSense O3/NO2 sensor is initialized and contributes O3/NO2 values when available; on the base model serial logs 'Skip O3/NO2 sensor, not supported on this model' and O3/NO2/AFE values remain invalid defaults.",
+      "notes": "Requires checking both models: O-M-1PPSTON-CE (with O3/NO2) and O-M-1PPST-CE (without). Model comes from remote config; default is O-M-1PPSTON-CE."
+    },
+    {
+      "id": "sensor.init.co2-single-mode-once",
+      "category": "Sensors",
+      "sub_category": "Initialization",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "CO2 sensor single-mode configuration runs once and is skipped on later boots",
+      "expected_result": "On first configuration serial logs 'Setting measurement mode to single mode...'; on subsequent boots it logs 'Configuration already completed, skipping setup...'.",
+      "notes": "Tracked by an RTC-memory flag (rtc_samples_configured), so it persists across deep sleep after successful first configuration. If the first configuration does not save the flag, setup may run again."
+    },
+    {
+      "id": "sensor.measure.warmup-first",
+      "category": "Sensors",
+      "sub_category": "Measurement Sequence",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "PM and SGP sensors run a warm-up sequence before measurements",
+      "expected_result": "Before the measurement loop serial logs a countdown 'Warming up PMS and/or SGP41 sensors 10' down to '...0' (about 11s).",
+      "notes": "The countdown log runs every init. PMS passive-mode calls and SGP41 conditioning only run for sensors marked available; SGP41 also runs a self-test first."
+    },
+    {
+      "id": "sensor.measure.iterations-20",
+      "category": "Sensors",
+      "sub_category": "Measurement Sequence",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Measurement sequence runs 20 iterations before averaging",
+      "expected_result": "Serial logs 'Start measures with 20 iterations and interval in between 2000ms' followed by 20 'Iteration <n> took ...' lines, then the average is computed.",
+      "notes": "DEFAULT_MEASURE_ITERATION_COUNT=20, 2000ms target interval per iteration; the average uses only iterations with valid data per sensor."
+    },
+    {
+      "id": "sensor.measure.co2-9-samples",
+      "category": "Sensors",
+      "sub_category": "Measurement Sequence",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "CO2 is sampled 9 times across the 20-iteration sequence",
+      "expected_result": "Across the 20 iterations the CO2 sensor is read 9 times (debug 'CO2: <n>' read lines at odd iterations 3,5,7,9,11,13,15,17,19).",
+      "notes": "CO2 runs in single mode: a trigger on one odd iteration is read on the next odd iteration (3s settle), so the first odd iteration only triggers. Requires DEBUG-level serial output (init sets the Sensor tag to DEBUG)."
+    },
+    {
+      "id": "sensor.measure.dual-pm-averaging",
+      "category": "Sensors",
+      "sub_category": "Measurement Sequence",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Two PM sensors are averaged, with single-sensor fallback",
+      "expected_result": "When both PMS read successfully, PM1.0/PM10 and shared particle counts except PM0.3 are averaged across the two; PM2.5 and PM0.3 particle count are kept per channel. If only one PMS reads, its values are used; if a PMS fails it logs '{1} PMS no data' or '{2} PMS no data'.",
+      "notes": "Reproduce single-sensor mode by disconnecting one PMS."
+    },
+    {
+      "id": "sensor.measure.average-logged",
+      "category": "Sensors",
+      "sub_category": "Measurement Sequence",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Averaged measurements are logged after the sequence",
+      "expected_result": "After averaging, serial logs an '<<< Average Measures >>>' block listing CO2, Temperature, Humidity, PM, particle counts, TVOC/NOx Raw, VBAT, VPanel, O3/NO2 electrodes, and AFE temperature.",
+      "notes": "O3/NO2 and AFE lines are always printed; on the base model or when AlphaSense is unavailable they remain invalid defaults."
+    },
+    {
+      "id": "power.ce-card-only-on-transmission",
+      "category": "Power Management",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Cellular CE card is powered only on transmission cycles",
+      "expected_result": "On a non-transmission cellular wake-up the CE card stays powered off and no networking task starts; serial logs 'Not the time to send measures, skip'. On transmission cycles the CE card is powered for the transmission then powered off afterward.",
+      "notes": "Send-measures runs every 3rd wake-up (SEND_MEASURES_CYCLES=3) and full transmission every 30th (FULL_TRANSMISSION_CYCLE=30). WiFi mode connects every cycle instead."
+    },
+    {
+      "id": "power.co2-alphasense-held-on",
+      "category": "Power Management",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "CO2 and AlphaSense load switches stay powered across deep sleep",
+      "expected_result": "EN_CO2 and EN_ALPHASENSE are driven ON at first boot and latched via gpio_hold so they remain powered through deep sleep and every subsequent wake-up.",
+      "notes": "Re-driven only on first boot; on later wake-ups they are excluded from GPIO reconfiguration to keep the held state. Old template observed ~5.1V on this rail during sleep."
+    },
+    {
+      "id": "power.pm-off-before-sleep",
+      "category": "Power Management",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "PM sensors are powered off after measurement before sleeping",
+      "expected_result": "After the measurement sequence the PM load switches (EN_PMS1/EN_PMS2) are turned off before the device enters deep sleep.",
+      "notes": "PM sensors are powered only during warm-up and measurement; the CE card is enabled in parallel by the networking task rather than after PM shutdown."
+    },
+    {
+      "id": "power.interval-scales-with-battery",
+      "category": "Power Management",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Measurement interval lengthens as battery voltage drops",
+      "expected_result": "The measure interval follows battery voltage: at 10V or above it uses the configured pm02 interval (default 180s), 9.5V to under 10V uses 1800s (30 min), and under 9.5V uses 3600s (60 min); the chosen interval drives the next-measurement schedule.",
+      "notes": "Requires varying battery voltage (hard to reproduce). First boot logs 'Measure interval is set to <N> as base line'. If battery voltage is invalid (<0), the configured pm02 interval is used."
+    },
+    {
+      "id": "power.sleep-compensates-awake-time",
+      "category": "Power Management",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Sleep duration is reduced by the time spent awake to keep a consistent cadence",
+      "expected_result": "The next-measurement schedule equals the measure interval minus the time spent awake this cycle, clamped to 0 seconds; serial logs 'Next measurements is in <N> seconds' reflecting that compensation.",
+      "notes": "Each sleep chunk is capped at 300s; longer waits use fragmented sleep (see Boot & Sleep Lifecycle)."
+    },
+    {
+      "id": "power.panel-voltage-source-priority",
+      "category": "Power Management",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Panel/VBUS voltage prefers the solar input over USB-C",
+      "expected_result": "The panel voltage (VPanel in the average-measures log) is read from ADC1 (solar) when its reading is >= 1000 mV, otherwise it falls back to ADC2 (USB-C).",
+      "notes": "Requires switching between solar and USB-C power (hard to reproduce). Reflected in the 'VPanel' value of the '<<< Average Measures >>>' log."
+    },
+    {
+      "id": "transmission.config.fetch-periodicity",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Remote configuration is fetched on first boot and every full-transmission cycle",
+      "expected_result": "Remote config is fetched on first boot and then every 30th wake-up (~90 min at the default 180s interval) when the network/client is ready. On other cycles serial logs 'Not the time to fetch remote configuration, skip'.",
+      "notes": "FULL_TRANSMISSION_CYCLE=30; wall-clock spacing grows when the measure interval increases on low battery. CORRECTION: the old template said 'every 1 hour' - actual baseline is ~90 min."
+    },
+    {
+      "id": "transmission.config.applied-next-wakeup",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Fetched persisted configuration changes take effect on the next wake-up",
+      "expected_result": "When a persisted config change is fetched, serial logs 'Changed configuration will be applied on next wakeup cycle onwards'; those persisted values are used from the next wake-up, not the current measurement/transmission flow.",
+      "notes": "Excludes volatile one-shot fields such as ledBarTestRequested, which is not persisted to NVS. Changes are saved to NVS during fetch; the running cycle keeps the config it loaded at its own boot."
+    },
+    {
+      "id": "transmission.config.persists-power-off",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Configuration persists across a full power cycle",
+      "expected_result": "After power-off then power-on, the previously fetched/saved settings are still active, visible in the '**** CONFIGURATION ****' block.",
+      "notes": "Stored in NVS (flash), unlike RTC memory which clears on power loss."
+    },
+    {
+      "id": "transmission.config.co2-manual-calibration",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "co2CalibrationRequested triggers a one-time CO2 manual calibration",
+      "expected_result": "When co2CalibrationRequested is set, the device runs CO2 manual calibration on the next boot (serial logs 'Attempt to do manual calibration') then clears the request so it does not repeat.",
+      "notes": "Set from the dashboard; the request is reset after the attempt regardless of success."
+    },
+    {
+      "id": "transmission.config.led-test-keeps-led-on",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "ledBarTestRequested keeps the status LED solid ON",
+      "expected_result": "When ledBarTestRequested is set, after the measurement cycle the LED is turned solid ON and latched (gpio_hold) so it stays lit until the device is power-cycled; serial logs 'Led test is requested' when the field is parsed.",
+      "notes": "The JSON field is 'ledBarTestRequested'. This request is not persisted to NVS."
+    },
+    {
+      "id": "transmission.config.mqtt-enable-disable",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "mqttBrokerUrl enables or disables MQTT publishing",
+      "expected_result": "When mqttBrokerUrl is set, measures are also published via MQTT after a successful cellular post. When the field is absent during config fetch, any saved MQTT URL is cleared; on subsequent successful cellular send cycles with an empty MQTT URL, serial logs 'MQTT is not enabled, skip'.",
+      "notes": "Removing the field logs 'Previously mqtt is enabled. Disabling it because now its not found'. MQTT is attempted only on the cellular send path, after HTTP/CoAP success."
+    },
+    {
+      "id": "transmission.config.custom-domains",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Configured HTTP and CoAP domains are used as transmission targets",
+      "expected_result": "HTTP requests go to the configured httpDomain and cellular CoAP measures go to the configured coapDomain instead of the defaults.",
+      "notes": "Both are set via the System Settings Portal (not remote config) and persisted in NVS; defaults are AIRGRADIENT_HTTP_DOMAIN / AIRGRADIENT_COAP_IP. Verify via serial logs or server receipt."
+    },
+    {
+      "id": "transmission.config.cellular-warmup",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "cellularWarmUpMs controls modem warm-up after registration",
+      "expected_result": "On the normal cellular registration path, the modem warm-up duration after successful network registration follows the configured cellularWarmUpMs value.",
+      "notes": "Cellular only. Parsing logs 'cellularWarmUpMs value changed from <a> to <b>'; precise duration is hard to observe directly. Reconnection/ensure-client paths may also use fixed warm-up delays."
+    },
+    {
+      "id": "transmission.config.co2-abc",
+      "category": "Transmission",
+      "sub_category": "Configuration",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "abcDays controls CO2 automatic background calibration",
+      "expected_result": "abcDays > 0 enables ABC with a period of abcDays*24 hours; abcDays <= 0 disables ABC. Serial logs 'CO2 ABC status: <0|1>' at sensor init.",
+      "notes": "Combines the old separate ABC-value and ABC-toggle tests. Parsing logs 'abcDays value changed from <a> to <b>'."
+    },
+    {
+      "id": "transmission.ota.check-periodicity",
+      "category": "Transmission",
+      "sub_category": "OTA",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Firmware update is checked on first boot and every full-transmission cycle",
+      "expected_result": "An OTA check runs on first boot and then every 30th wake-up (~90 min at the default 180s interval) when the network/client is ready. On other cycles serial logs 'Not the time to check for firmware update, skip'.",
+      "notes": "Same FULL_TRANSMISSION_CYCLE=30 gating as config fetch. CORRECTION: the old template said 'every 1 hour' - actual baseline is ~90 min."
+    },
+    {
+      "id": "transmission.ota.already-up-to-date",
+      "category": "Transmission",
+      "sub_category": "OTA",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "No update is applied when firmware is already the latest",
+      "expected_result": "When the running firmware is current the server check returns HTTP 304; serial logs 'Firmware is already up to date' then 'Firmware version already up to date', and the device continues without updating.",
+      "notes": "Reproduce by running the version the dashboard is targeting for this device."
+    },
+    {
+      "id": "transmission.ota.server-declined-skipped",
+      "category": "Transmission",
+      "sub_category": "OTA",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Update is skipped when the server declines the request",
+      "expected_result": "When the server returns a non-200/304 status (e.g. 400), serial logs 'Firmware update skipped, the server returned <code>' then 'Firmware update is skipped', and no update is applied.",
+      "notes": "Distinct from a transport failure; the request reached the server but was declined."
+    },
+    {
+      "id": "transmission.ota.failed-retries",
+      "category": "Transmission",
+      "sub_category": "OTA",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "A failed update is retried on a later cycle without restarting",
+      "expected_result": "When the download or connection fails, serial logs 'Firmware update failed', the device does NOT restart, and the check is retried on the next full-transmission cycle.",
+      "notes": "Reproduce by targeting an available firmware then interrupting connectivity during download (hard to reproduce reliably)."
+    },
+    {
+      "id": "transmission.ota.success-restarts",
+      "category": "Transmission",
+      "sub_category": "OTA",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "A successful update restarts into the new firmware",
+      "expected_result": "On a successful update serial logs 'Firmware update success, will restart in 3s...', the device restarts after ~3s, and the post-boot 'Firmware version: <version>' log shows the new version.",
+      "notes": "Reproduce by targeting a different available firmware version on the dashboard (e.g. a downgrade)."
+    },
+    {
+      "id": "transmission.wifi.connect-every-wakeup",
+      "category": "Transmission",
+      "sub_category": "Send Measures (WiFi)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "In WiFi mode the device connects on every wake-up",
+      "expected_result": "When network mode is WiFi, the networking task runs every wake-up cycle and reconnects to WiFi each time, regardless of the send/full-transmission cycle counters.",
+      "notes": "Requires: device configured to WiFi mode via the System Settings Portal (default is Cellular). Unlike cellular, WiFi is not gated by SEND_MEASURES_CYCLES."
+    },
+    {
+      "id": "transmission.wifi.send-after-measurement",
+      "category": "Transmission",
+      "sub_category": "Send Measures (WiFi)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "WiFi measures are sent directly after the measurement sequence",
+      "expected_result": "After each measurement sequence the device posts a single measurement set over HTTP; on successful posts, a new reading appears on the dashboard every wake-up (~3 min at the default 180s interval).",
+      "notes": "Requires: WiFi mode. Each post contains exactly one measurement set (no batching)."
+    },
+    {
+      "id": "transmission.wifi.no-caching",
+      "category": "Transmission",
+      "sub_category": "Send Measures (WiFi)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "WiFi mode does not cache or resend failed measurements",
+      "expected_result": "If WiFi is connected but the HTTP post fails, serial logs 'Send measures failed, retry in next schedule' and that measurement set is dropped; the next cycle sends fresh data only, never the previously failed payload.",
+      "notes": "Requires: WiFi mode. Caching is cellular-only; the 'retry' wording means a new measurement next cycle, not a resend of the failed one. If WiFi connection fails before posting, the skip log is 'Network is not ready, skip send measures'."
+    },
+    {
+      "id": "transmission.wifi.disconnect-after-send",
+      "category": "Transmission",
+      "sub_category": "Send Measures (WiFi)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "WiFi is disconnected after the transmission cycle",
+      "expected_result": "Once the networking task finishes, serial logs 'Disconnecting from WiFi..' then 'Wi-Fi disconnected successfully' before the device sleeps.",
+      "notes": "Requires: WiFi mode. The station connection is disconnected before sleep; current implementation does not explicitly stop/deinit the WiFi driver."
+    },
+    {
+      "id": "transmission.cellular.scan-when-no-operator-list",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Operators are scanned when no cached operator list exists",
+      "expected_result": "When the saved operator list is empty, serial logs 'No operator list available, continue to: SCAN_OPERATOR' then 'Scanning for available operators'; with a cached list it logs 'Operator list available (<n> operators)' and skips scanning.",
+      "notes": "Requires: cellular mode. The list is empty on first boot or after a full registration failure clears it."
+    },
+    {
+      "id": "transmission.cellular.iterate-operator-list",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Registration walks the operator list until one succeeds",
+      "expected_result": "The module tries operators in order, logging 'Configuring manual operator: <id> with AcT: <n> (index <i> of <m>)' for each, and stops at the first that registers.",
+      "notes": "Requires: cellular mode with multiple reachable operators to observe more than one attempt."
+    },
+    {
+      "id": "transmission.cellular.max-3-iterations",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Registration gives up after 3 full passes through the operator list",
+      "expected_result": "Each full exhaustion logs 'Operator list exhausted (attempt <n> of 3)' and resets the module between passes; after the 3rd pass it logs 'Failed after 3 full iterations through operator list', clears the list, and fails registration.",
+      "notes": "Requires: no operator able to register (hard to reproduce). MAX_REGISTRATION_FAILURES=3."
+    },
+    {
+      "id": "transmission.cellular.reject-low-csq",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Operators with CSQ below 10 are skipped",
+      "expected_result": "When a registered operator reports CSQ < 10, serial logs 'This operator <id> has really low signal <n> (csq), moving on..' and the module advances to the next operator.",
+      "notes": "Requires: a weak-signal operator (hard to reproduce). Valid CSQ range checked is 1-31; below 10 is rejected."
+    },
+    {
+      "id": "transmission.cellular.fast-fail-registration-denied",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Registration-denied/emergency-only operators fail fast after a 10s confirmation",
+      "expected_result": "On registration status 3 or 11, serial logs 'Registration denied or emergency only (status=<n>), confirming for 10 seconds'; if still denied after 10s it logs 'Registration still denied/emergency (status=<n>) after 10s, trying next operator'.",
+      "notes": "Requires: an operator that denies registration (hard to reproduce). If status changes to registered during the 10s window it proceeds instead."
+    },
+    {
+      "id": "transmission.cellular.persist-last-operator",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "The last used operator is remembered and tried first on later wake-ups",
+      "expected_result": "On a subsequent wake-up the saved operator ID/list is loaded. Firmware either logs 'Found current operator at index <i>' while loading the cached list, or logs 'Searching for saved operator <id> in list' and 'Found saved operator at index <i>, trying it first'; the saved operator is attempted before starting from a fresh scan.",
+      "notes": "Requires: cellular mode across at least two wake-ups. The operator id/list is persisted to NVS via the configuration after each registration."
+    },
+    {
+      "id": "transmission.cellular.send-every-3-cycles",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Measures are transmitted every 3rd wake-up",
+      "expected_result": "Each measurement-cycle wake-up caches a measurement. Cellular transmission happens on first boot and then on wake-up counts that are multiples of SEND_MEASURES_CYCLES=3; on in-between cycles serial logs 'Not the time to send measures, skip (cache size: <n>)'.",
+      "notes": "Requires: cellular mode. At the default 180s interval this is roughly every 9 minutes, sending the 3 accumulated sets."
+    },
+    {
+      "id": "transmission.cellular.cache-on-failure",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Failed transmissions are cached and resent on the next cycle",
+      "expected_result": "When a CoAP post fails the cached measurements are retained (not cleared) and resent together with new readings on the next send cycle, so a payload may contain more than 3 sets after a missed transmission.",
+      "notes": "Requires: cellular mode with an induced transmission failure. The cache is volatile (RTC-backed) and is lost on full power loss."
+    },
+    {
+      "id": "transmission.cellular.mqtt-after-http-success",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "MQTT publish is attempted only after a successful CoAP post and only when enabled",
+      "expected_result": "After a successful CoAP post, if mqttBrokerUrl is set the device also publishes via MQTT; if it is not set serial logs 'MQTT is not enabled, skip' and the cache is cleared.",
+      "notes": "Requires: cellular mode. MQTT is never attempted when the CoAP post failed."
+    },
+    {
+      "id": "transmission.cellular.http-retry-mechanism",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Cellular first boot can retry post failures caused by client/network readiness",
+      "expected_result": "On first boot, if posting fails because the client is not ready, firmware attempts to ensure the client connection and can retry within the cycle, up to 3 post attempts. Server-side post failure breaks the loop. On later wake-ups, a failed post logs 'Send measures failed, retry in next schedule' and defers to the next send cycle.",
+      "notes": "Requires: cellular mode with an induced failure. First-boot retries also drive the slow-blink LED error codes (see LED Notification)."
+    },
+    {
+      "id": "transmission.cellular.mqtt-fail-no-http-resend",
+      "category": "Transmission",
+      "sub_category": "Send Measures (Cellular)",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "An MQTT failure does not cause HTTP to resend already-sent measures",
+      "expected_result": "If MQTT publish fails, serial logs 'Retry publish on next schedule' and xHttpCacheQueueIndex is advanced to the current cache size, so already-sent measures are not re-posted over HTTP/CoAP on the next send cycle. The retained cache remains available for the next MQTT publish attempt.",
+      "notes": "Requires: cellular mode with MQTT enabled and an induced MQTT failure. Tracked by xHttpCacheQueueIndex."
+    },
+    {
+      "id": "lab.co2-accuracy",
+      "category": "Optional Lab Verification",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "CO2 reading tracks a reference instrument",
+      "expected_result": "The averaged CO2 value (serial 'CO2 : <n>' and dashboard rco2) tracks a co-located reference CO2 instrument within the agreed tolerance across a few measurement cycles.",
+      "notes": "Requires: reference CO2 instrument; optional, skippable on rapid releases. Fresh-air baseline is ~400-420 ppm; allow warm-up. Manual calibration is available via co2CalibrationRequested."
+    },
+    {
+      "id": "lab.pm-accuracy",
+      "category": "Optional Lab Verification",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "PM2.5 reading tracks a reference instrument",
+      "expected_result": "Averaged PM values (serial 'PM2.5#AE{1}/{2}' and dashboard pm25) track a co-located reference PM instrument within the agreed tolerance.",
+      "notes": "Requires: reference PM instrument and a controlled aerosol source; optional, skippable. Two PMS channels are averaged - both should read consistently."
+    },
+    {
+      "id": "lab.temp-humidity-accuracy",
+      "category": "Optional Lab Verification",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "Temperature and humidity track a reference instrument",
+      "expected_result": "Averaged temperature ('Temperature : <n>', atmp) and humidity ('Humidity : <n>', rhum) track a co-located reference within the agreed tolerance.",
+      "notes": "Requires: reference temp/humidity instrument; optional, skippable. Allow thermal settling; self-heating can bias temperature."
+    },
+    {
+      "id": "lab.o3-no2-accuracy",
+      "category": "Optional Lab Verification",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "O3/NO2 AlphaSense electrode readings are plausible",
+      "expected_result": "On the O3/NO2 model the O3/NO2 working/auxiliary electrode voltages (serial 'O3 WE/AE', 'NO2 WE/AE' in mV) read within the sensor's expected baseline range and respond to gas exposure.",
+      "notes": "Requires: O-M-1PPSTON-CE model and gas reference setup (hard to source); optional, skippable. Base model has no O3/NO2 sensor."
+    }
+  ]
+}
