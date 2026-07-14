@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "rev": "17f574d",
+  "rev": "22ed9e2",
   "product": {
     "slug": "max",
     "name": "Open Air Max",
@@ -607,7 +607,18 @@
       ],
       "description": "Averaged measurements are logged after the sequence",
       "expected_result": "After averaging, serial logs an '<<< Average Measures >>>' block listing CO2, Temperature, Humidity, PM, particle counts, TVOC/NOx Raw, VBAT, VPanel, O3/NO2 electrodes, and AFE temperature.",
-      "notes": "O3/NO2 and AFE lines are always printed; on the base model or when AlphaSense is unavailable they remain invalid defaults."
+      "notes": "O3/NO2 and AFE lines are always printed; on the base model or when AlphaSense is unavailable they remain invalid defaults. The average block logs raw SGP41 values only; calculated TVOC/NOx indexes are logged after averaging."
+    },
+    {
+      "id": "sensor.measure.sgp41-gas-index",
+      "category": "Sensors",
+      "sub_category": "Measurement Sequence",
+      "applies_to": [
+        "MAX"
+      ],
+      "description": "SGP41 raw VOC/NOx values are converted to calculated gas-index values",
+      "expected_result": "After measurement, serial logs 'TVOC Raw : <n>' and 'NOx Raw : <n>' in the average block, then logs 'TVOC index: <n>' and 'NOx index: <n>'. With valid SGP41 readings, transmission includes both raw and calculated index values.",
+      "notes": "Requires SGP41 available. If SHT temperature/humidity is invalid, firmware uses default 25°C / 50%RH compensation so SGP41 raw reads can continue. The gas-index algorithm state is stored in RTC memory so it continues learning across deep sleep."
     },
     {
       "id": "power.ce-card-only-on-transmission",
